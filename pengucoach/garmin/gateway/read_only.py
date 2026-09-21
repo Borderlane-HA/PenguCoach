@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import date
 from typing import Any
 
-from garminconnect import ActivityDownloadFormat, Garmin
+from garminconnect import Garmin
 
 
 class GarminReadOnlyGateway:
@@ -114,4 +114,4 @@ class GarminReadOnlyGateway:
 
     def download_activity_fit(self, activity_id: int) -> bytes:
         # Garmin ORIGINAL is normally a zip containing the FIT file.
-        return self.__client.download_activity(activity_id, dl_fmt=ActivityDownloadFormat.ORIGINAL)
+        return self.__client.download_activity(activity_id, dl_fmt=Garmin.ActivityDownloadFormat.ORIGINAL)
