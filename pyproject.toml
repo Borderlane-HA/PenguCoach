@@ -1,10 +1,14 @@
+[build-system]
+requires = ["setuptools>=77", "wheel"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "pengucoach"
 version = "0.1.0-alpha.1"
 description = "Self-hosted AI training and health coach"
 readme = "README.md"
 requires-python = ">=3.12"
-license = {text = "MIT"}
+license = "MIT"
 dependencies = [
   "fastapi>=0.116,<1",
   "uvicorn[standard]>=0.35,<1",
@@ -45,3 +49,9 @@ select = ["E9"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 pythonpath = ["."]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["pengucoach*", "apps.api*", "worker*"]
+exclude = ["tests*", "docs*", "docker*", "install*", "db*"]
+namespaces = true
