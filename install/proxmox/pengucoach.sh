@@ -58,6 +58,7 @@ pct create "$CTID" "$TEMPLATE_VOL" \
   --rootfs "$ROOTFS_STORAGE:$DISK" \
   --net0 "name=eth0,bridge=$BRIDGE,ip=dhcp,type=veth" \
   --unprivileged 1 \
+  --features nesting=1 \
   --onboot 1 --ostype debian
 
 pct start "$CTID"

@@ -17,11 +17,11 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/Borderlane-HA/PenguCoach
 The script:
 
 1. downloads a Debian 13 template if needed,
-2. creates an unprivileged LXC,
+2. creates an unprivileged LXC with `nesting=1` (required by Debian 13/systemd services such as Redis),
 3. configures DHCP networking,
 4. clones `Borderlane-HA/PenguCoach`,
-5. installs PostgreSQL and Redis,
-6. creates a Python virtual environment,
+5. configures `en_US.UTF-8` and installs PostgreSQL/Redis,
+6. creates the PenguCoach database explicitly as UTF-8 and creates a Python virtual environment,
 7. generates JWT and encryption secrets,
 8. applies Alembic migrations,
 9. builds the Next.js frontend,
@@ -36,6 +36,7 @@ The script:
 - 512 MB swap
 - 32 GB root disk
 - unprivileged LXC
+- `nesting=1`
 - `onboot=1`
 
 A larger FIT history can later be mounted below `/var/lib/pengucoach`.
@@ -52,6 +53,7 @@ Inside the LXC:
 pengucoach-status
 pengucoach-update
 pengucoach-backup
+pengucoach-db-utf8
 ```
 
 From the Proxmox host:
@@ -60,6 +62,7 @@ From the Proxmox host:
 pct exec <CTID> -- pengucoach-status
 pct exec <CTID> -- pengucoach-update
 pct exec <CTID> -- pengucoach-backup
+pct exec <CTID> -- pengucoach-db-utf8
 ```
 
 ## Logs
@@ -82,3 +85,19 @@ PENGUCOACH_BRANCH=develop bash -c "$(curl -fsSL https://raw.githubusercontent.co
 ## Reverse proxy
 
 PenguCoach serves HTTP on port 80 inside the LXC. An external Nginx Proxy Manager, NPMPlus, Traefik or another reverse proxy can terminate HTTPS. After HTTPS is configured, set `PENGUCOACH_COOKIE_SECURE=true` in `/etc/pengucoach/pengucoach.env` and restart the API.
+
+## Upgrading an early alpha database
+
+Early `0.1.0-alpha.1` Proxmox installs could create PostgreSQL with `SQL_ASCII` when the requested UTF-8 locale was missing. This can fail on Garmin JSON containing Unicode escapes. After updating the source, check with `pengucoach-status`. If the active database is not UTF-8, run:
+
+```bash
+pengucoach-db-utf8
+```
+
+If this is the first update from `0.1.0-alpha.1` and the helper has not yet been copied to `/usr/local/bin`, run the repository script directly once:
+
+```bash
+bash /opt/pengucoach/install/proxmox/pengucoach-db-utf8.sh
+```
+
+The repair command creates a PostgreSQL custom-format backup, restores into a new UTF-8 database, keeps the old SQL_ASCII database under a timestamped name, restarts PenguCoach, and performs an API health check. Do not delete the retained old database until the application and Garmin history have been verified.

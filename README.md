@@ -8,7 +8,7 @@ PenguCoach is designed as a local-first, multi-user platform that reads Garmin C
 
 ## Current alpha scope
 
-`v0.1.0-alpha.1` provides the first end-to-end deployment baseline:
+`v0.1.0-alpha.2` is the hardened first end-to-end deployment baseline:
 
 - German and English web UI
 - first-run administrator setup
@@ -29,8 +29,8 @@ PenguCoach is designed as a local-first, multi-user platform that reads Garmin C
 - basic evidence-constrained Coach chat using local Garmin/FIT facts
 - PostgreSQL + Redis/Celery
 - Alembic schema baseline
-- native Proxmox LXC installer
-- `pengucoach-update`, `pengucoach-backup`, `pengucoach-status`
+- native Proxmox LXC installer with Debian 13 `nesting=1`, UTF-8 locale/database setup and explicit Nginx reload
+- `pengucoach-update`, `pengucoach-backup`, `pengucoach-status`, `pengucoach-db-utf8`
 - Docker Compose for development/alternative deployments
 
 Training-plan generation, advanced baselines, correlation explorer and the full LangGraph multi-agent workflow remain planned work; the UI intentionally marks unfinished areas instead of pretending they are complete.
@@ -88,6 +88,12 @@ Manual backup:
 
 ```bash
 pct exec <CTID> -- pengucoach-backup
+```
+
+Early alpha installations that still use a PostgreSQL `SQL_ASCII` database can be migrated safely with:
+
+```bash
+pct exec <CTID> -- pengucoach-db-utf8
 ```
 
 ## Docker development quick start

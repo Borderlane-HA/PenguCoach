@@ -41,6 +41,19 @@ cd "$APP"; .venv/bin/alembic -c alembic.ini upgrade head
 echo "[PenguCoach] Rebuilding frontend"
 cd "$APP/apps/web"; npm install --no-audit --no-fund; NEXT_PUBLIC_API_BASE_URL=/api/v1 npm run build
 chown -R pengucoach:pengucoach "$APP"
+
+# Refresh helper commands on every update so fixes to installer utilities reach /usr/local/bin.
+install -m 0755 "$APP/install/proxmox/pengucoach-update.sh" /usr/local/bin/pengucoach-update
+install -m 0755 "$APP/install/proxmox/pengucoach-backup.sh" /usr/local/bin/pengucoach-backup
+install -m 0755 "$APP/install/proxmox/pengucoach-status.sh" /usr/local/bin/pengucoach-status
+install -m 0755 "$APP/install/proxmox/pengucoach-db-utf8.sh" /usr/local/bin/pengucoach-db-utf8
+
+DB_ENCODING="$(runuser -u postgres -- psql -d postgres -Atqc "SELECT pg_encoding_to_char(encoding) FROM pg_database WHERE datname='pengucoach'" 2>/dev/null || true)"
+if [[ -n "$DB_ENCODING" && "$DB_ENCODING" != "UTF8" ]]; then
+  echo "[PenguCoach] WARNING: database encoding is $DB_ENCODING, expected UTF8." >&2
+  echo "[PenguCoach] Run 'pengucoach-db-utf8' after this update before starting a historical Garmin import." >&2
+fi
+
 systemctl restart pengucoach-api pengucoach-worker pengucoach-scheduler pengucoach-web
 sleep 3
 curl -fsS http://127.0.0.1/healthz >/dev/null

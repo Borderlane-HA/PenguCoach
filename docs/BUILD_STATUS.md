@@ -1,4 +1,4 @@
-# Build status — 0.1.0-alpha.1
+# Build status — 0.1.0-alpha.2
 
 PenguCoach is an alpha development project. This repository contains the first installable foundation for real Proxmox/Garmin testing; it is not yet the finished product described in the long-term roadmap.
 
@@ -20,8 +20,8 @@ PenguCoach is an alpha development project. This repository contains the first i
 - Personal Today/Health views foundation
 - Ollama, OpenAI, Anthropic and OpenAI-compatible provider administration foundation
 - Cloud-health-AI opt-in; local-only mode
-- Native Proxmox LXC installer
-- `pengucoach-update`, `pengucoach-backup`, `pengucoach-status`
+- Native Proxmox LXC installer with Debian 13 nesting and UTF-8 database initialization
+- `pengucoach-update`, `pengucoach-backup`, `pengucoach-status`, `pengucoach-db-utf8`
 - Docker Compose development/alternative deployment
 
 ## Intentionally still alpha / next iterations

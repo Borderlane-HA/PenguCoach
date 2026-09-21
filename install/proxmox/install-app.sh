@@ -7,15 +7,24 @@ DATA_DIR=/var/lib/pengucoach
 APP_USER=pengucoach
 
 info(){ echo "[PenguCoach] $*"; }
-[[ $EUID -eq 0 ]] || { echo "Run as root" >&2; exit 1; }
+die(){ echo "[PenguCoach] ERROR: $*" >&2; exit 1; }
+[[ $EUID -eq 0 ]] || die "Run as root"
 [[ -f "$APP_DIR/pyproject.toml" ]] || { echo "Repository missing at $APP_DIR" >&2; exit 1; }
 
-info "Installing system packages"
+info "Preparing UTF-8 locale"
 apt-get update -qq
+apt-get install -y -qq locales ca-certificates curl
+sed -i 's/^# *en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen
+locale-gen en_US.UTF-8 >/dev/null
+update-locale LANG=en_US.UTF-8
+export LANG=en_US.UTF-8
+export LC_ALL=en_US.UTF-8
+
+info "Installing system packages"
 apt-get install -y -qq \
   python3 python3-venv python3-dev build-essential libpq-dev \
   postgresql postgresql-contrib redis-server nginx \
-  nodejs npm git curl ca-certificates unzip jq openssl
+  nodejs npm git unzip jq openssl
 
 NODE_MAJOR="$(node -p 'process.versions.node.split(".")[0]' 2>/dev/null || echo 0)"
 if (( NODE_MAJOR < 20 )); then
@@ -29,6 +38,14 @@ mkdir -p "$ENV_DIR" "$DATA_DIR"/{fit,parquet,backups,exports}
 chown -R "$APP_USER:$APP_USER" "$DATA_DIR" "$APP_DIR"
 chmod 750 "$DATA_DIR" "$ENV_DIR"
 
+# Install helper commands early as well as after the final build. This keeps
+# recovery/status tools available even if a later installation step aborts.
+info "Installing helper commands"
+install -m 0755 "$APP_DIR/install/proxmox/pengucoach-update.sh" /usr/local/bin/pengucoach-update
+install -m 0755 "$APP_DIR/install/proxmox/pengucoach-backup.sh" /usr/local/bin/pengucoach-backup
+install -m 0755 "$APP_DIR/install/proxmox/pengucoach-status.sh" /usr/local/bin/pengucoach-status
+install -m 0755 "$APP_DIR/install/proxmox/pengucoach-db-utf8.sh" /usr/local/bin/pengucoach-db-utf8
+
 info "Configuring PostgreSQL"
 systemctl enable --now postgresql >/dev/null
 DB_PASS="$(openssl rand -hex 24)"
@@ -38,7 +55,16 @@ else
   runuser -u postgres -- psql -v ON_ERROR_STOP=1 -c "ALTER ROLE pengucoach WITH PASSWORD '$DB_PASS';"
 fi
 if ! runuser -u postgres -- psql -tAc "SELECT 1 FROM pg_database WHERE datname='pengucoach'" | grep -q 1; then
-  runuser -u postgres -- createdb -O pengucoach pengucoach
+  runuser -u postgres -- createdb \
+    --owner=pengucoach \
+    --encoding=UTF8 \
+    --locale=en_US.UTF-8 \
+    --template=template0 \
+    pengucoach
+fi
+DB_ENCODING="$(runuser -u postgres -- psql -d postgres -Atqc "SELECT pg_encoding_to_char(encoding) FROM pg_database WHERE datname='pengucoach'")"
+if [[ "$DB_ENCODING" != "UTF8" ]]; then
+  die "Database 'pengucoach' uses $DB_ENCODING instead of UTF8. Run $APP_DIR/install/proxmox/pengucoach-db-utf8.sh before continuing."
 fi
 
 info "Configuring Redis"
@@ -59,7 +85,7 @@ JWT_SECRET="$(openssl rand -hex 48)"
 FERNET_KEY="$(.venv/bin/python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())')"
 cat > "$ENV_DIR/pengucoach.env" <<ENV
 PENGUCOACH_ENV=production
-PENGUCOACH_APP_VERSION=0.1.0-alpha.1
+PENGUCOACH_APP_VERSION=0.1.0-alpha.2
 PENGUCOACH_DATABASE_URL=postgresql+asyncpg://pengucoach:${DB_PASS}@127.0.0.1:5432/pengucoach
 PENGUCOACH_REDIS_URL=redis://127.0.0.1:6379/0
 PENGUCOACH_JWT_SECRET=${JWT_SECRET}
@@ -209,9 +235,14 @@ nginx -t
 install -m 0755 "$APP_DIR/install/proxmox/pengucoach-update.sh" /usr/local/bin/pengucoach-update
 install -m 0755 "$APP_DIR/install/proxmox/pengucoach-backup.sh" /usr/local/bin/pengucoach-backup
 install -m 0755 "$APP_DIR/install/proxmox/pengucoach-status.sh" /usr/local/bin/pengucoach-status
+install -m 0755 "$APP_DIR/install/proxmox/pengucoach-db-utf8.sh" /usr/local/bin/pengucoach-db-utf8
 
 systemctl daemon-reload
 systemctl enable --now pengucoach-api pengucoach-worker pengucoach-scheduler pengucoach-web nginx >/dev/null
+# nginx is often already running because the package starts it during install.
+# Explicitly reload after writing the PenguCoach site so /healthz uses the new config.
+nginx -t
+systemctl reload nginx
 sleep 3
 curl -fsS http://127.0.0.1/healthz >/dev/null || { journalctl -u pengucoach-api -n 80 --no-pager; exit 1; }
 info "PenguCoach services are healthy"
