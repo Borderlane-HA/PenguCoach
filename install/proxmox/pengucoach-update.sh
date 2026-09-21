@@ -10,7 +10,7 @@ git config --global --add safe.directory "$APP" >/dev/null 2>&1 || true
 OLD_SHA="$(git rev-parse HEAD)"
 OLD_VERSION="$(sed -n 's/^PENGUCOACH_APP_VERSION=//p' "$ENV_FILE" 2>/dev/null | tail -n1)"
 echo "[PenguCoach] Current revision: $OLD_SHA"
-BACKUP="$(pengucoach-backup | tail -n1)"
+BACKUP="$(/usr/local/bin/pengucoach-backup | tail -n1)"
 echo "[PenguCoach] Backup: $BACKUP"
 
 git fetch origin --tags --prune
