@@ -35,8 +35,12 @@ class ModelIn(BaseModel):
 class RouteIn(BaseModel):
     primary_model_id: uuid.UUID | None = None
     fallback_model_id: uuid.UUID | None = None
-    max_output_tokens: int = Field(default=1600, ge=128, le=8192)
-    max_context_chars: int = Field(default=70000, ge=4000, le=200000)
+    max_output_tokens: int = Field(default=3500, ge=128, le=8192)
+    context_window_tokens: int = Field(default=8192, ge=2048, le=262144)
+    max_context_chars: int = Field(default=32000, ge=4000, le=800000)
+    default_prompt_de: str | None = Field(default=None, max_length=16000)
+    default_prompt_en: str | None = Field(default=None, max_length=16000)
+    # Backward-compatible field accepted from alpha.4 clients.
     default_prompt: str | None = Field(default=None, max_length=16000)
     enabled: bool = True
 
@@ -107,15 +111,17 @@ async def create_model(payload: ModelIn, _: User = Depends(admin_user), db: Asyn
 @router.get("/routes")
 async def routes(_: User = Depends(admin_user), db: AsyncSession = Depends(get_db)):
     out = []
-    for task_type in TASK_DEFAULTS:
+    for task_type, defaults in TASK_DEFAULTS.items():
         row = await db.get(LlmRoute, task_type)
-        config = await task_settings(db, task_type)
+        config = await task_settings(db, task_type, "de")
         out.append({
             "task_type": task_type,
             "primary_model_id": str(row.primary_model_id) if row and row.primary_model_id else None,
             "fallback_model_id": str(row.fallback_model_id) if row and row.fallback_model_id else None,
             "enabled": row.enabled if row else True,
             **config,
+            "factory_prompt_de": defaults["default_prompt_de"],
+            "factory_prompt_en": defaults["default_prompt_en"],
         })
     return out
 
@@ -134,11 +140,16 @@ async def set_route(task_type: str, payload: RouteIn, _: User = Depends(admin_us
     row.primary_model_id = payload.primary_model_id
     row.fallback_model_id = payload.fallback_model_id
     row.enabled = payload.enabled
-    default_prompt = (payload.default_prompt or TASK_DEFAULTS[task_type]["default_prompt"]).strip()
+    defaults = TASK_DEFAULTS[task_type]
+    legacy = (payload.default_prompt or "").strip()
+    prompt_de = (payload.default_prompt_de or legacy or defaults["default_prompt_de"]).strip()
+    prompt_en = (payload.default_prompt_en or legacy or defaults["default_prompt_en"]).strip()
     row.settings = {
         "max_output_tokens": payload.max_output_tokens,
+        "context_window_tokens": payload.context_window_tokens,
         "max_context_chars": payload.max_context_chars,
-        "default_prompt": default_prompt,
+        "default_prompt_de": prompt_de,
+        "default_prompt_en": prompt_en,
     }
     await db.commit()
     return {"saved": True}
