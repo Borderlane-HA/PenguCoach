@@ -119,6 +119,10 @@ docker compose up --build
 Web: `http://localhost:3000`  
 API docs: `http://localhost:8000/docs`
 
+## Activity Detail v2
+
+Since `0.1.0-alpha.3`, parsed FIT activities include a richer deterministic detail view before AI interpretation: interactive overlay/stacked charts, min/average/max sensor values, elevation and grade, kilometre/100 m splits, channel coverage, and sport-specific FIT lap/set/length tables when the recording device provides them. See [`docs/ACTIVITY_DETAIL_V2.md`](docs/ACTIVITY_DETAIL_V2.md).
+
 ## Data flow
 
 ```text

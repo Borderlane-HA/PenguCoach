@@ -83,9 +83,10 @@ python3 -m venv .venv
 
 JWT_SECRET="$(openssl rand -hex 48)"
 FERNET_KEY="$(.venv/bin/python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())')"
+APP_VERSION="$(.venv/bin/python -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])')"
 cat > "$ENV_DIR/pengucoach.env" <<ENV
 PENGUCOACH_ENV=production
-PENGUCOACH_APP_VERSION=0.1.0-alpha.2
+PENGUCOACH_APP_VERSION=${APP_VERSION}
 PENGUCOACH_DATABASE_URL=postgresql+asyncpg://pengucoach:${DB_PASS}@127.0.0.1:5432/pengucoach
 PENGUCOACH_REDIS_URL=redis://127.0.0.1:6379/0
 PENGUCOACH_JWT_SECRET=${JWT_SECRET}

@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from pengucoach.common.config import settings
 from pengucoach.db.models import Activity, ActivityMetric, FitFile, GarminConnection, User
 from pengucoach.garmin.gateway.factory import gateway_from_connection, serialize_refreshed_token
+from pengucoach.fit.activity_detail import build_activity_stats, build_distance_splits, serialize_series
 
 
 def _safe_name(value: str) -> str:
@@ -44,6 +45,9 @@ def _semicircles_to_degrees(value: Any) -> Any:
 def _parse_fit(path: Path) -> tuple[pd.DataFrame, dict[str, Any]]:
     records: list[dict[str, Any]] = []
     session: dict[str, Any] = {}
+    laps: list[dict[str, Any]] = []
+    sets: list[dict[str, Any]] = []
+    lengths: list[dict[str, Any]] = []
     with fitdecode.FitReader(str(path)) as fit:
         for frame in fit:
             if not isinstance(frame, fitdecode.records.FitDataMessage):
@@ -61,6 +65,18 @@ def _parse_fit(path: Path) -> tuple[pd.DataFrame, dict[str, Any]]:
                 records.append(values)
             elif frame.name == "session":
                 session.update(values)
+            elif frame.name == "lap":
+                laps.append(values)
+            elif frame.name == "set":
+                sets.append(values)
+            elif frame.name == "length":
+                lengths.append(values)
+    if laps:
+        session["_laps"] = laps
+    if sets:
+        session["_sets"] = sets
+    if lengths:
+        session["_lengths"] = lengths
     df = pd.DataFrame.from_records(records)
     return df, session
 
@@ -189,14 +205,15 @@ async def download_and_analyze_fit(db: AsyncSession, user: User, activity: Activ
 def load_activity_series(fit_file: FitFile, limit: int = 5000) -> list[dict[str, Any]]:
     if not fit_file.parquet_path or not Path(fit_file.parquet_path).exists():
         return []
-    wanted = ["timestamp", "distance", "heart_rate", "enhanced_speed", "speed", "power", "cadence", "enhanced_altitude", "altitude", "position_lat", "position_long", "temperature"]
     df = pd.read_parquet(fit_file.parquet_path)
-    columns = [c for c in wanted if c in df.columns]
-    if not columns:
-        return []
-    df = df[columns]
-    if len(df) > limit:
-        indices = np.linspace(0, len(df) - 1, limit).astype(int)
-        df = df.iloc[indices]
-    df = df.replace({np.nan: None})
-    return df.to_dict(orient="records")
+    return serialize_series(df, limit=limit)
+
+
+def load_activity_detail(fit_file: FitFile, sport_type: str | None = None) -> dict[str, Any]:
+    if not fit_file.parquet_path or not Path(fit_file.parquet_path).exists():
+        return {"stats": None, "splits": []}
+    df = pd.read_parquet(fit_file.parquet_path)
+    return {
+        "stats": build_activity_stats(df, sport_type=sport_type),
+        "splits": build_distance_splits(df, sport_type=sport_type),
+    }
