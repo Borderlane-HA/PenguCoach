@@ -1,0 +1,21 @@
+PenguCoach 0.1.0-alpha.11
+
+Modified:
+- CHANGELOG.md
+- README.md
+- pyproject.toml
+- .env.example
+- apps/web/package.json
+- pengucoach/common/config.py
+- apps/api/routers/activities.py
+- apps/web/app/activities/page.tsx
+- apps/web/app/activities/[id]/page.tsx
+- apps/web/components/AppShell.tsx
+- apps/web/app/globals.css
+- pengucoach/coach/context.py
+
+Added:
+- pengucoach/imports/__init__.py
+- pengucoach/imports/manual_activity.py
+- tests/test_manual_activity_import.py
+- docs/CHANGED_FILES_0.1.0-alpha.11.txt

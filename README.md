@@ -8,7 +8,7 @@ PenguCoach is designed as a local-first, multi-user platform that reads Garmin C
 
 ## Current alpha scope
 
-`v0.1.0-alpha.10` is the current end-to-end alpha baseline:
+`v0.1.0-alpha.11` is the current end-to-end alpha baseline:
 
 - German and English web UI
 - bright health-first responsive web design with desktop sidebar and mobile navigation dock
@@ -29,6 +29,7 @@ PenguCoach is designed as a local-first, multi-user platform that reads Garmin C
 - FIT parsing and Parquet time-series storage
 - deterministic FIT analytics: HR/pace/power/cadence drift, aerobic decoupling, pace consistency and data coverage
 - activity list and detail view with FIT time series
+- manual activity import without Garmin: FIT, GPX, TCX and ZIP-contained FIT files are stored locally, normalized into the same activity history and analysed with the same deterministic pipeline
 - health overview and historical charts
 - Ollama, OpenAI, Anthropic and OpenAI-compatible provider management
 - editable/deletable AI models plus saved-provider model discovery
@@ -150,11 +151,11 @@ See [`docs/AI_ANALYSIS_AND_PLANNING.md`](docs/AI_ANALYSIS_AND_PLANNING.md).
 ## Data flow
 
 ```text
-Garmin Connect (read only)
+Garmin Connect (read only)     Manual FIT / GPX / TCX import
+        ↓                              ↓
+Raw source records + normalized PostgreSQL activities
         ↓
-Raw source records + normalized PostgreSQL data
-        ↓
-Original FIT → Parquet → deterministic analytics
+Original activity file → Parquet → deterministic analytics
         ↓
 Context builder
         ↓
@@ -179,6 +180,7 @@ apps/api/                 FastAPI API and routers
 pengucoach/               Domain/application code
 pengucoach/garmin/        Auth, read-only gateway and sync
 pengucoach/fit/           FIT storage/parser/analytics
+pengucoach/imports/       Manual FIT/GPX/TCX activity import
 pengucoach/llm/           Provider adapters and routing
 worker/                   Celery workers/scheduler
 db/migrations/            Alembic schema migrations

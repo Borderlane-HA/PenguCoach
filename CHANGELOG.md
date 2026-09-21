@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.1.0-alpha.11 - 2026-09-21
+
+Manual activity import / non-Garmin activity release:
+
+- adds a prominent **Training importieren / Import activity** action to the Activities page
+- imports FIT, GPX, TCX and ZIP files containing FIT data without requiring a Garmin account
+- stores uploaded activity files locally, creates Parquet time series and runs the existing deterministic activity analytics
+- automatically detects activity name/sport where possible, with optional name and sport overrides in the upload dialog
+- rejects duplicate imports using the canonical activity-file SHA-256 and limits uploads to 50 MB
+- labels manual activities explicitly in the activity history and adapts source/AI wording so imported files are not presented as Garmin data
+- makes manually imported activities available to Coach, activity AI analysis and training-plan context together with Garmin activities
+- restores the sign-out button in the desktop sidebar and responsive top bar while preserving the newer default app icon/theme/avatar behavior
+- adds parser tests for GPX and TCX imports
+
 ## 0.1.0-alpha.10
 
 - Fixed fresh Proxmox LXC installs: an empty database is now bootstrapped from the current reviewed schema and Alembic is stamped at head instead of replaying historical migrations against dynamic metadata.
