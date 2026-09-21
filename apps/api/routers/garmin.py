@@ -10,6 +10,7 @@ from pengucoach.common.config import settings
 from pengucoach.db.models import GarminConnection, GarminSyncRun, GarminSyncSetting, User
 from pengucoach.db.session import get_db
 from pengucoach.garmin.auth.service import garmin_auth_service
+from pengucoach.garmin.zones import training_zone_snapshot
 from worker.tasks.garmin_sync import historical_import, sync_user
 
 router = APIRouter(prefix="/garmin", tags=["garmin"])
@@ -104,6 +105,14 @@ async def start_import(payload: ImportRequest, user: User = Depends(safety_confi
     if not conn or conn.status != "connected": raise HTTPException(status_code=409, detail="GARMIN_NOT_CONNECTED")
     task = historical_import.apply_async(args=[str(user.id), payload.days], queue="garmin")
     return {"queued": True, "task_id": task.id, "days": payload.days, "scope": "all" if payload.days == 0 else "days"}
+
+
+@router.get("/zones")
+async def training_zones(user: User = Depends(safety_confirmed_user), db: AsyncSession = Depends(get_db)):
+    conn = await db.scalar(select(GarminConnection).where(GarminConnection.user_id == user.id))
+    snapshot = await training_zone_snapshot(db, user.id)
+    snapshot["connected"] = bool(conn and conn.status == "connected")
+    return snapshot
 
 
 @router.get("/sync/history")

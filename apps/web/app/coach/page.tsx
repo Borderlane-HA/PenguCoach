@@ -3,6 +3,7 @@
 import {FormEvent,useEffect,useMemo,useState} from "react";
 import AppShell from "../../components/AppShell";
 import AiReport from "../../components/AiReport";
+import TrainingZoneStatus from "../../components/TrainingZoneStatus";
 import {api} from "../../lib/api";
 import {bi,useI18n} from "../../lib/i18n";
 
@@ -46,9 +47,10 @@ export default function Coach(){
         <label>{bi(lang,"Trainingskontext","Training context")}<select value={contextMode} onChange={e=>setContextMode(e.target.value)}><option value="auto">{bi(lang,"Auto · nur wenn relevant","Auto · only when relevant")}</option><option value="none">{bi(lang,"Kein Kontext","No context")}</option><option value="7">7 {bi(lang,"Tage","days")}</option><option value="28">28 {bi(lang,"Tage","days")}</option></select></label>
         <label>{bi(lang,"Kontextfenster","Context window")}<div className="ai-number-control"><input type="number" min={2048} max={task.context_window_tokens??262144} step={1024} value={ctx} onChange={e=>setCtx(Math.min(task.context_window_tokens??262144,Number(e.target.value)))}/><span>tokens</span></div></label>
         <div className="ai-preset-row">{[4096,8192,16384,32768,65536].filter(v=>v<=(task.context_window_tokens??8192)).map(v=><button type="button" className={ctx===v?"active":""} key={v} onClick={()=>setCtx(v)}>{v/1024}K</button>)}</div>
-        <label>{bi(lang,"Max. Antwort","Max response")}<div className="ai-number-control"><input type="number" min={128} max={task.max_output_tokens??8192} step={100} value={tokens} onChange={e=>setTokens(Math.min(task.max_output_tokens??8192,Number(e.target.value)))}/><span>tokens</span></div></label>
+        <label>{bi(lang,"Max. Antwort","Max response")}<div className="ai-number-control"><input type="number" min={128} max={task.max_output_tokens??8192} step={1} value={tokens} onChange={e=>setTokens(Math.min(task.max_output_tokens??8192,Number(e.target.value)))}/><span>tokens</span></div></label>
         <div className="coach-budget"><div><span>{bi(lang,"Input-Budget","Input budget")}</span><strong>≈ {estimatedInput.toLocaleString()}</strong></div><div><span>{bi(lang,"Antwort","Response")}</span><strong>{tokens.toLocaleString()}</strong></div><div className="coach-budget-track"><i style={{width:`${budgetPct}%`}}/></div></div>
         <small>{selected?.local?bi(lang,"Ollama: Kontextfenster wird als num_ctx gesetzt. Keine API-Kosten.","Ollama: context window is sent as num_ctx. No API cost."):bi(lang,"Cloud: Tokenlimits begrenzen die Anfrage und helfen Kosten zu kontrollieren.","Cloud: token limits cap the request and help control cost.")}</small>
+        <TrainingZoneStatus compact/>
       </aside>
     </div>
   </AppShell>
