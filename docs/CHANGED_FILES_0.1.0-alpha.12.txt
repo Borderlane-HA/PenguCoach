@@ -1,0 +1,29 @@
+PenguCoach 0.1.0-alpha.12 changed files
+
+Core large-history import
+- worker/tasks/garmin_sync.py
+- pengucoach/garmin/sync/service.py
+- worker/tasks/fit.py
+- apps/web/app/settings/garmin/page.tsx
+- apps/web/app/globals.css
+
+Health period consistency
+- apps/api/routers/health.py
+- apps/web/app/health/page.tsx
+
+AI/context/privacy polish carried into this release
+- pengucoach/llm/service.py
+- apps/api/routers/coach.py
+- apps/web/app/activities/[id]/page.tsx
+- apps/web/app/admin/ai/page.tsx
+- apps/web/app/coach/page.tsx
+
+Release/tests/docs
+- tests/test_bulk_history_import.py
+- tests/test_health_period_filter.py
+- pyproject.toml
+- apps/web/package.json
+- .env.example
+- pengucoach/common/config.py
+- README.md
+- CHANGELOG.md

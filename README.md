@@ -8,7 +8,7 @@ PenguCoach is designed as a local-first, multi-user platform that reads Garmin C
 
 ## Current alpha scope
 
-`v0.1.0-alpha.11` is the current end-to-end alpha baseline:
+`v0.1.0-alpha.12` is the current end-to-end alpha baseline:
 
 - German and English web UI
 - bright health-first responsive web design with desktop sidebar and mobile navigation dock
@@ -16,6 +16,7 @@ PenguCoach is designed as a local-first, multi-user platform that reads Garmin C
 - profile-picture and custom app-icon upload stored locally and included in normal backups
 - built-in PenguCoach app icon used by default in the UI plus a browser favicon; a custom app icon can still override the sidebar branding
 - simplified Garmin synchronization with one everyday Sync action and a separate history/backfill section
+- scalable Garmin history import: offset-paginated activity catalogue for hundreds/thousands of activities, then resumable day-by-day health/recovery backfill with rate-limit retries and live progress
 - live Garmin sync state with reload-safe job polling; the Sync button stays disabled until the worker has actually finished and timestamps refresh automatically
 - first-run administrator setup
 - multi-user local authentication
@@ -30,11 +31,11 @@ PenguCoach is designed as a local-first, multi-user platform that reads Garmin C
 - deterministic FIT analytics: HR/pace/power/cadence drift, aerobic decoupling, pace consistency and data coverage
 - activity list and detail view with FIT time series
 - manual activity import without Garmin: FIT, GPX, TCX and ZIP-contained FIT files are stored locally, normalized into the same activity history and analysed with the same deterministic pipeline
-- health overview and historical charts
+- health overview and historical charts with one consistent 7/30/90 day, 1 year, 5 year or all-data filter across HRV, resting HR, sleep, stress and sport-specific VO₂ max
 - Ollama, OpenAI, Anthropic and OpenAI-compatible provider management
 - editable/deletable AI models plus saved-provider model discovery
 - current Anthropic Models API discovery with imported Claude context/output capabilities
-- cloud-health AI disabled per user by default; local Ollama can be used without cloud permission
+- cloud-health AI disabled per user by default; configuring an external provider shows the privacy requirement and offers an explicit one-click enable action; local Ollama can be used without cloud permission
 - evidence-constrained Coach chat using local Garmin/FIT facts with selectable models and token budgets
 - per-activity AI deep analysis with Training-only / This day / 3-day / 7-day training-recovery context and an editable predefined prompt
 - AI training-plan generation for strength, muscle gain, cardio, hybrid, running, cycling, mobility and custom goals

@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.1.0-alpha.12 - 2026-09-21
+
+Large Garmin history / resumable import release:
+
+- replaces day-by-day activity discovery with true offset pagination over Garmin's activity catalogue, continuing until Garmin returns no further page instead of trusting a possibly capped activity count
+- imports the complete activity catalogue **before** the slower daily wellness backfill, so hundreds or thousands of activities appear without waiting for years of sleep/HRV/stress requests
+- supports date-bounded history imports and **All available data** with a 25-year safety horizon while deriving the wellness start from the oldest activity actually discovered
+- batch-upserts each Garmin activity page with one database lookup, eliminating the historical N+1 query pattern
+- persists per-day historical completion markers for older wellness days, making interrupted/rate-limited imports safe to restart without re-requesting every completed day
+- automatically retries Garmin rate limits with bounded exponential backoff and records a resume-safe rate-limited result if Garmin continues throttling
+- uses one per-account Garmin lock so the normal scheduler cannot compete with a long historical import
+- exposes live Celery history progress in the Garmin page: activity pages/count, wellness day progress, skipped completed days and FIT queue progress; progress survives a browser reload
+- queues even very large historical FIT backlogs directly in Redis while FIT workers consume them at a controlled 30/min rate; per-account/per-activity locks, Garmin rate-limit retries and an already-parsed check prevent bursts and duplicate work
+- raises Coach/Activity/Training request ceilings to match AI Studio's configurable 65,536 output / 1,048,576 context settings
+- protects the current activity during AI context compression and automatically reduces only the effective output budget when a too-small context window would otherwise squeeze the activity data out
+- adds a clear Cloud-AI privacy banner in AI Studio with an explicit enable action, and a useful Privacy link instead of an empty model selector when cloud models are configured but not permitted
+- warns directly while configuring any external/Cloud AI provider that health and training data remains blocked until explicit privacy consent is enabled, with one-click enable and Privacy actions
+- makes the Health period selector authoritative for every chart family: VO₂ max running/cycling now follows the same 7/30/90 day, 1 year, 5 year or All data window as HRV, resting HR, sleep and stress; coverage counts follow the same range
+
 ## 0.1.0-alpha.11 - 2026-09-21
 
 Manual activity import / non-Garmin activity release:

@@ -299,10 +299,28 @@ def _bounded_context(context: dict[str, Any], max_chars: int) -> tuple[str, dict
             "context_truncated": True,
         }
         payload, size = _json_size(compact)
-        if size > max_chars:
-            # Preserve valid JSON even for extremely small budgets.
-            compact["activity"] = None
-            compact["context_note"] = "Context exceeded configured budget; only summaries retained."
+        if size > max_chars and isinstance(compact.get("activity"), dict):
+            # An activity-analysis request must never lose the activity itself.
+            # Reduce the current-session payload before discarding lookback data.
+            activity = compact["activity"]
+            compact["activity"] = {
+                "garmin": activity.get("garmin"),
+                "pengucoach": activity.get("pengucoach"),
+                "fit_analytics_source": activity.get("fit_analytics_source"),
+                "fit_analytics": activity.get("fit_analytics"),
+                "splits_source": activity.get("splits_source"),
+                "splits": (activity.get("splits") or [])[:2],
+                "context_compacted": True,
+            }
+            payload, size = _json_size(compact)
+        if size > max_chars and isinstance(compact.get("activity"), dict):
+            activity = compact["activity"]
+            compact["activity"] = {
+                "garmin": activity.get("garmin"),
+                "pengucoach": activity.get("pengucoach"),
+                "context_compacted": True,
+            }
+            compact["context_note"] = "Lookback and detailed FIT context were reduced to preserve the current activity."
             payload, size = _json_size(compact)
     return payload, {
         "context_chars": size,
@@ -351,13 +369,26 @@ async def chat(
         raw_provider_max = model.metadata_json.get("provider_max_output_tokens")
         if isinstance(raw_provider_max, int) and raw_provider_max > 0:
             provider_max_output = raw_provider_max
+    requested_output_tokens = max_tokens
     if provider_max_output:
         max_tokens = min(max_tokens, provider_max_output)
-    # Never request more generated tokens than can fit in the selected context window.
-    max_tokens = min(max_tokens, max(128, context_window_tokens - 1024))
+    # A configured output ceiling is not useful if it squeezes the actual
+    # training data out of the model context. Keep a task-specific minimum
+    # input budget and automatically lower only the effective output request
+    # when the selected context window is too small. Users remain free to raise
+    # the context window to obtain the full requested output budget.
+    minimum_input_tokens = {
+        "activity_analysis": 3072,
+        "training_plan": 3072,
+        "coach_chat": 1024,
+    }.get(task, 1024)
+    framing_reserve_tokens = 768
+    max_output_that_fits = max(128, context_window_tokens - minimum_input_tokens - framing_reserve_tokens)
+    max_tokens = min(max_tokens, max_output_that_fits)
+    output_budget_adjusted = max_tokens < requested_output_tokens
     # Leave room for system/task instructions and chat framing. The remaining budget is shared by JSON context and messages.
-    usable_input_tokens = max(768, context_window_tokens - max_tokens - 768)
-    context_budget_tokens = max(512, int(usable_input_tokens * 0.72))
+    usable_input_tokens = max(minimum_input_tokens, context_window_tokens - max_tokens - framing_reserve_tokens)
+    context_budget_tokens = max(768, int(usable_input_tokens * 0.72))
     message_budget_tokens = max(256, usable_input_tokens - context_budget_tokens)
     max_context_chars = min(int(config["max_context_chars"]), context_budget_tokens * 4)
 
@@ -483,6 +514,8 @@ async def chat(
         "model_id": str(model.id),
         "local": provider.is_local,
         "max_output_tokens": max_tokens,
+        "requested_max_output_tokens": requested_output_tokens,
+        "output_budget_adjusted": output_budget_adjusted,
         "context_window_tokens": context_window_tokens,
         "context_budget_tokens": context_budget_tokens,
         "usage": usage,

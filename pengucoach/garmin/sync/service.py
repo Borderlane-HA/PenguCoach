@@ -206,16 +206,45 @@ async def _upsert_body(db: AsyncSession, user: User, day: date, payload: Any) ->
 
 
 async def _upsert_activities(db: AsyncSession, user: User, activities: list[dict[str, Any]] | None) -> tuple[int, list[Activity]]:
-    changed = 0
-    rows: list[Activity] = []
+    """Upsert an activity page with one lookup instead of one query per row.
+
+    Historical Garmin accounts can contain thousands of activities. Batch-loading
+    existing IDs keeps a full-history import bounded by pages rather than by an
+    N+1 database query pattern.
+    """
+    payloads: list[tuple[int, dict[str, Any]]] = []
+    seen: set[int] = set()
     for item in activities or []:
-        activity_id = item.get("activityId")
-        if not activity_id:
+        raw_id = item.get("activityId")
+        if raw_id in (None, ""):
             continue
-        row = await db.scalar(select(Activity).where(Activity.user_id == user.id, Activity.garmin_activity_id == int(activity_id)))
-        if not row:
-            row = Activity(user_id=user.id, garmin_activity_id=int(activity_id))
-            db.add(row); changed += 1
+        try:
+            activity_id = int(raw_id)
+        except (TypeError, ValueError):
+            continue
+        if activity_id in seen:
+            continue
+        seen.add(activity_id)
+        payloads.append((activity_id, item))
+
+    if not payloads:
+        return 0, []
+
+    ids = [activity_id for activity_id, _ in payloads]
+    existing = (await db.scalars(select(Activity).where(
+        Activity.user_id == user.id, Activity.garmin_activity_id.in_(ids)
+    ))).all()
+    by_id = {int(row.garmin_activity_id): row for row in existing}
+
+    inserted = 0
+    rows: list[Activity] = []
+    for activity_id, item in payloads:
+        row = by_id.get(activity_id)
+        if row is None:
+            row = Activity(user_id=user.id, garmin_activity_id=activity_id)
+            db.add(row)
+            by_id[activity_id] = row
+            inserted += 1
         row.name = item.get("activityName")
         atype = item.get("activityType") or {}
         row.sport_type = atype.get("typeKey") if isinstance(atype, dict) else str(atype)
@@ -238,7 +267,7 @@ async def _upsert_activities(db: AsyncSession, user: User, activities: list[dict
         row.raw = item
         rows.append(row)
     await db.flush()
-    return changed, rows
+    return inserted, rows
 
 
 async def sync_day(
