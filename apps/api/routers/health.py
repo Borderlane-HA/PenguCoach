@@ -1,4 +1,4 @@
-from datetime import date, timedelta
+from datetime import date, datetime, time, timedelta, timezone
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import select
@@ -43,16 +43,16 @@ def _vo2_sport(sport_type: str | None) -> str | None:
     return None
 
 
-async def _vo2_rows(db: AsyncSession, user_id) -> list:
-    result = await db.execute(
-        select(Activity.id, Activity.sport_type, Activity.started_at, Activity.vo2max)
-        .where(
-            Activity.user_id == user_id,
-            Activity.vo2max.is_not(None),
-            Activity.started_at.is_not(None),
-        )
-        .order_by(Activity.started_at.asc())
+async def _vo2_rows(db: AsyncSession, user_id, start_date: date | None = None) -> list:
+    stmt = select(Activity.id, Activity.sport_type, Activity.started_at, Activity.vo2max).where(
+        Activity.user_id == user_id,
+        Activity.vo2max.is_not(None),
+        Activity.started_at.is_not(None),
     )
+    if start_date is not None:
+        start_dt = datetime.combine(start_date, time.min, tzinfo=timezone.utc)
+        stmt = stmt.where(Activity.started_at >= start_dt)
+    result = await db.execute(stmt.order_by(Activity.started_at.asc()))
     return list(result.all())
 
 
@@ -148,10 +148,18 @@ async def health_range(
 
 
 @router.get("/vo2-history")
-async def vo2_history(user: User = Depends(safety_confirmed_user), db: AsyncSession = Depends(get_db)):
-    series = _vo2_history(await _vo2_rows(db, user.id))
+async def vo2_history(
+    days: int = Query(default=30, ge=1, le=9132),
+    all_data: bool = Query(default=False, alias="all"),
+    user: User = Depends(safety_confirmed_user),
+    db: AsyncSession = Depends(get_db),
+):
+    start = None if all_data else date.today() - timedelta(days=days - 1)
+    series = _vo2_history(await _vo2_rows(db, user.id, start_date=start))
     return {
         **series,
+        "days": None if all_data else days,
+        "all": all_data,
         "latest": {
             "running": series["running"][-1]["value"] if series["running"] else None,
             "cycling": series["cycling"][-1]["value"] if series["cycling"] else None,

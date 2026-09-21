@@ -35,8 +35,8 @@ class ChatRequest(BaseModel):
     message: str = Field(min_length=1, max_length=8000)
     conversation_id: uuid.UUID | None = None
     model_id: uuid.UUID | None = None
-    max_tokens: int | None = Field(default=None, ge=128, le=8192)
-    context_window_tokens: int | None = Field(default=None, ge=2048, le=262144)
+    max_tokens: int | None = Field(default=None, ge=128, le=65536)
+    context_window_tokens: int | None = Field(default=None, ge=2048, le=1048576)
     context_mode: Literal["auto", "none", "7", "28"] = "auto"
     locale: Literal["de", "en"] | None = None
 
@@ -46,8 +46,8 @@ class ActivityAnalysisRequest(BaseModel):
     lookback_days: Literal[0, 1, 3, 7] = 7
     prompt: str | None = Field(default=None, max_length=16000)
     model_id: uuid.UUID | None = None
-    max_tokens: int | None = Field(default=None, ge=128, le=8192)
-    context_window_tokens: int | None = Field(default=None, ge=2048, le=262144)
+    max_tokens: int | None = Field(default=None, ge=128, le=65536)
+    context_window_tokens: int | None = Field(default=None, ge=2048, le=1048576)
     locale: Literal["de", "en"] | None = None
 
 
@@ -65,8 +65,8 @@ class TrainingPlanRequest(BaseModel):
     constraints: str = Field(default="", max_length=2500)
     prompt: str | None = Field(default=None, max_length=16000)
     model_id: uuid.UUID | None = None
-    max_tokens: int | None = Field(default=None, ge=128, le=8192)
-    context_window_tokens: int | None = Field(default=None, ge=2048, le=262144)
+    max_tokens: int | None = Field(default=None, ge=128, le=65536)
+    context_window_tokens: int | None = Field(default=None, ge=2048, le=1048576)
     locale: Literal["de", "en"] | None = None
 
 
@@ -100,6 +100,8 @@ def _answer_metadata(answer: dict, *, locale: str, goal: dict | None = None) -> 
         "context_estimated_tokens": answer.get("context_estimated_tokens"),
         "context_window_tokens": answer.get("context_window_tokens"),
         "context_budget_tokens": answer.get("context_budget_tokens"),
+        "requested_max_output_tokens": answer.get("requested_max_output_tokens"),
+        "output_budget_adjusted": answer.get("output_budget_adjusted", False),
         "context_truncated": answer.get("context_truncated", False),
         "stop_reason": answer.get("stop_reason"),
         "truncated": answer.get("truncated", False),
