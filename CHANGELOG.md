@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.0-alpha.10
+
+- Fixed fresh Proxmox LXC installs: an empty database is now bootstrapped from the current reviewed schema and Alembic is stamped at head instead of replaying historical migrations against dynamic metadata.
+- Fresh-install recovery also works when an interrupted attempt left only a stale `alembic_version` table.
+- Added post-bootstrap schema verification for core tables and `activities.vo2max`.
+- Made the historical `0002_ai_runs` migration idempotent and added a clear baseline error to `0003_activity_vo2max`.
+- Switched early installer locale handling to Debian's built-in `C.UTF-8`, removing the noisy locale bootstrap warnings on minimal Debian 13 containers.
+- Added regression tests for the fresh database bootstrap path.
+
 ## 0.1.0-alpha.9 - 2026-09-21
 
 Full-history Garmin / sport-specific VO2 release:

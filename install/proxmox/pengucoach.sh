@@ -70,13 +70,13 @@ done
 pct exec "$CTID" -- getent hosts github.com >/dev/null 2>&1 || die "Container has no working DNS/network."
 
 info "Bootstrapping Git and CA certificates"
-pct exec "$CTID" -- bash -lc 'apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq ca-certificates git curl'
+pct exec "$CTID" -- env LANG=C.UTF-8 LC_ALL=C.UTF-8 bash -lc 'apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq ca-certificates git curl'
 
 info "Cloning PenguCoach"
 pct exec "$CTID" -- bash -lc "rm -rf /opt/pengucoach && git clone --branch '$BRANCH' --depth 1 '$REPO_URL' /opt/pengucoach"
 
 info "Installing PenguCoach inside the LXC"
-pct exec "$CTID" -- env PENGUCOACH_BRANCH="$BRANCH" bash /opt/pengucoach/install/proxmox/install-app.sh
+pct exec "$CTID" -- env LANG=C.UTF-8 LC_ALL=C.UTF-8 PENGUCOACH_BRANCH="$BRANCH" bash /opt/pengucoach/install/proxmox/install-app.sh
 
 IP="$(pct exec "$CTID" -- hostname -I 2>/dev/null | awk '{print $1}')"
 echo

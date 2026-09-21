@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 export DEBIAN_FRONTEND=noninteractive
+# Debian always provides C.UTF-8. Use it from the first apt invocation so a
+# brand-new minimal LXC never inherits an unavailable host locale.
+export LANG=C.UTF-8
+export LC_ALL=C.UTF-8
 APP_DIR=/opt/pengucoach
 ENV_DIR=/etc/pengucoach
 DATA_DIR=/var/lib/pengucoach
@@ -13,12 +17,10 @@ die(){ echo "[PenguCoach] ERROR: $*" >&2; exit 1; }
 
 info "Preparing UTF-8 locale"
 apt-get update -qq
-apt-get install -y -qq locales ca-certificates curl
-sed -i 's/^# *en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen
-locale-gen en_US.UTF-8 >/dev/null
-update-locale LANG=en_US.UTF-8
-export LANG=en_US.UTF-8
-export LC_ALL=en_US.UTF-8
+apt-get install -y -qq ca-certificates curl
+# C.UTF-8 is present even in the minimal Debian 13 template and is sufficient
+# for PostgreSQL UTF-8 databases as well as Python/Node processes.
+locale charmap | grep -qi 'UTF-8' || die "No UTF-8 locale available in the container"
 
 info "Installing system packages"
 apt-get install -y -qq \
@@ -61,7 +63,7 @@ if ! runuser -u postgres -- psql -tAc "SELECT 1 FROM pg_database WHERE datname='
   runuser -u postgres -- createdb \
     --owner=pengucoach \
     --encoding=UTF8 \
-    --locale=en_US.UTF-8 \
+    --locale=C.UTF-8 \
     --template=template0 \
     pengucoach
 fi
@@ -107,13 +109,65 @@ chown root:"$APP_USER" "$ENV_DIR/pengucoach.env"
 chmod 640 "$ENV_DIR/pengucoach.env"
 echo "${PENGUCOACH_BRANCH:-main}" > "$ENV_DIR/channel"
 
-info "Applying database migrations"
+info "Preparing database schema"
 set -a
 # shellcheck disable=SC1090
 . "$ENV_DIR/pengucoach.env"
 set +a
 cd "$APP_DIR"
-.venv/bin/alembic -c alembic.ini upgrade head
+
+# A fresh database has no PenguCoach application tables. Bootstrap the current
+# reviewed schema directly, then stamp Alembic at head. Existing installations
+# keep using the normal migration chain. A stale alembic_version left by an
+# interrupted first install is intentionally ignored when there are no app tables.
+APP_TABLE_COUNT="$(runuser -u postgres -- psql -d pengucoach -Atqc "
+SELECT count(*)
+FROM pg_tables
+WHERE schemaname = 'public'
+  AND tablename <> 'alembic_version';
+")"
+
+if [[ "${APP_TABLE_COUNT:-0}" == "0" ]]; then
+  info "Fresh database detected; creating current schema"
+  .venv/bin/python install/proxmox/bootstrap-db.py
+  .venv/bin/alembic -c alembic.ini stamp head
+else
+  info "Existing database detected; applying Alembic migrations"
+  .venv/bin/alembic -c alembic.ini upgrade head
+fi
+
+info "Verifying database schema"
+.venv/bin/python - <<'PYSCHEMA'
+import asyncio
+from sqlalchemy import inspect
+from sqlalchemy.ext.asyncio import create_async_engine
+from sqlalchemy.pool import NullPool
+from pengucoach.common.config import settings
+
+REQUIRED_TABLES = {
+    "users", "activities", "ai_runs", "garmin_connections",
+    "source_records", "daily_health", "sleep_sessions", "hrv_daily",
+}
+
+async def verify():
+    engine = create_async_engine(settings.database_url, poolclass=NullPool)
+    try:
+        async with engine.connect() as conn:
+            def check(sync_conn):
+                inspector = inspect(sync_conn)
+                tables = set(inspector.get_table_names())
+                missing = sorted(REQUIRED_TABLES - tables)
+                if missing:
+                    raise RuntimeError(f"Missing required database tables: {', '.join(missing)}")
+                activity_columns = {c["name"] for c in inspector.get_columns("activities")}
+                if "vo2max" not in activity_columns:
+                    raise RuntimeError("Database schema is missing activities.vo2max")
+            await conn.run_sync(check)
+    finally:
+        await engine.dispose()
+
+asyncio.run(verify())
+PYSCHEMA
 
 info "Building web application"
 cd "$APP_DIR/apps/web"

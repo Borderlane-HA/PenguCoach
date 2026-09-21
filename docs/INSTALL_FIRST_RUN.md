@@ -66,3 +66,10 @@ pct exec <CTID> -- bash /opt/pengucoach/install/proxmox/pengucoach-db-utf8.sh
 ```
 
 The repair keeps both a dump and the old database until you remove them manually after validation.
+
+
+## Fresh database bootstrap (alpha.10+)
+
+On a genuinely empty PostgreSQL database the installer creates the current reviewed schema directly and then stamps Alembic at the current head. Existing databases continue to use `alembic upgrade head`. This keeps fresh installs independent from historical migration implementation details while preserving normal upgrades.
+
+If a first installation was interrupted after creating only `alembic_version`, rerunning `install-app.sh` is supported: with zero PenguCoach application tables the installer treats the database as fresh, creates the schema and stamps the current head.

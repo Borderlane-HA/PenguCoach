@@ -8,7 +8,7 @@ PenguCoach is designed as a local-first, multi-user platform that reads Garmin C
 
 ## Current alpha scope
 
-`v0.1.0-alpha.9` is the current end-to-end alpha baseline:
+`v0.1.0-alpha.10` is the current end-to-end alpha baseline:
 
 - German and English web UI
 - bright health-first responsive web design with desktop sidebar and mobile navigation dock
