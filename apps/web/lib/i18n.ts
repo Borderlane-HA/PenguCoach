@@ -1,0 +1,2 @@
+export type Locale="de-DE"|"en-US";
+export const t={"de-DE":{login:"Anmelden",username:"Benutzername",password:"Passwort",today:"Heute",health:"Gesundheit",activities:"Aktivitäten",training:"Training",coach:"Coach",settings:"Einstellungen"},"en-US":{login:"Sign in",username:"Username",password:"Password",today:"Today",health:"Health",activities:"Activities",training:"Training",coach:"Coach",settings:"Settings"}} as const;
