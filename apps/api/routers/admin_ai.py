@@ -23,11 +23,29 @@ class ProviderIn(BaseModel):
     is_local: bool = False
 
 
+class ProviderUpdate(BaseModel):
+    name: str = Field(min_length=2, max_length=128)
+    base_url: str | None = None
+    api_key: str | None = None
+    enabled: bool = True
+    is_local: bool = False
+
+
 class ModelIn(BaseModel):
     provider_id: uuid.UUID
     model_identifier: str = Field(min_length=1, max_length=255)
     display_name: str = Field(min_length=1, max_length=255)
     context_window: int | None = Field(default=None, ge=1024, le=4_000_000)
+    provider_max_output_tokens: int | None = Field(default=None, ge=128, le=1_000_000)
+    temperature: float = Field(default=0.2, ge=0, le=2)
+    enabled: bool = True
+
+
+class ModelUpdate(BaseModel):
+    model_identifier: str = Field(min_length=1, max_length=255)
+    display_name: str = Field(min_length=1, max_length=255)
+    context_window: int | None = Field(default=None, ge=1024, le=4_000_000)
+    provider_max_output_tokens: int | None = Field(default=None, ge=128, le=1_000_000)
     temperature: float = Field(default=0.2, ge=0, le=2)
     enabled: bool = True
 
@@ -35,14 +53,30 @@ class ModelIn(BaseModel):
 class RouteIn(BaseModel):
     primary_model_id: uuid.UUID | None = None
     fallback_model_id: uuid.UUID | None = None
-    max_output_tokens: int = Field(default=3500, ge=128, le=8192)
-    context_window_tokens: int = Field(default=8192, ge=2048, le=262144)
-    max_context_chars: int = Field(default=32000, ge=4000, le=800000)
+    max_output_tokens: int = Field(default=3500, ge=128, le=65536)
+    context_window_tokens: int = Field(default=8192, ge=2048, le=1_048_576)
+    max_context_chars: int = Field(default=32000, ge=4000, le=4_000_000)
     default_prompt_de: str | None = Field(default=None, max_length=16000)
     default_prompt_en: str | None = Field(default=None, max_length=16000)
-    # Backward-compatible field accepted from alpha.4 clients.
     default_prompt: str | None = Field(default=None, max_length=16000)
     enabled: bool = True
+
+
+def _model_payload(x: LlmModel, provider: LlmProvider | None) -> dict:
+    meta = x.metadata_json if isinstance(x.metadata_json, dict) else {}
+    return {
+        "id": str(x.id),
+        "provider_id": str(x.provider_id),
+        "provider_name": provider.name if provider else None,
+        "provider_type": provider.provider_type if provider else None,
+        "local": provider.is_local if provider else None,
+        "model_identifier": x.model_identifier,
+        "display_name": x.display_name,
+        "enabled": x.enabled,
+        "context_window": x.context_window,
+        "provider_max_output_tokens": meta.get("provider_max_output_tokens"),
+        "temperature": x.temperature,
+    }
 
 
 @router.get("/providers")
@@ -69,6 +103,31 @@ async def create_provider(payload: ProviderIn, _: User = Depends(admin_user), db
     return {"id": str(row.id)}
 
 
+@router.put("/providers/{provider_id}")
+async def update_provider(provider_id: uuid.UUID, payload: ProviderUpdate, _: User = Depends(admin_user), db: AsyncSession = Depends(get_db)):
+    row = await db.get(LlmProvider, provider_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="PROVIDER_NOT_FOUND")
+    row.name = payload.name
+    row.base_url = payload.base_url
+    row.enabled = payload.enabled
+    row.is_local = payload.is_local or row.provider_type == "ollama"
+    if payload.api_key:
+        row.secret_ciphertext = SecretBox().encrypt(payload.api_key)
+    await db.commit()
+    return {"saved": True}
+
+
+@router.delete("/providers/{provider_id}")
+async def delete_provider(provider_id: uuid.UUID, _: User = Depends(admin_user), db: AsyncSession = Depends(get_db)):
+    row = await db.get(LlmProvider, provider_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="PROVIDER_NOT_FOUND")
+    await db.delete(row)
+    await db.commit()
+    return {"deleted": True}
+
+
 @router.post("/providers/test")
 async def provider_test(payload: ProviderIn, _: User = Depends(admin_user)):
     try:
@@ -77,18 +136,27 @@ async def provider_test(payload: ProviderIn, _: User = Depends(admin_user)):
         raise HTTPException(status_code=400, detail=f"PROVIDER_TEST_FAILED:{type(exc).__name__}") from exc
 
 
+
+
+@router.post("/providers/{provider_id}/discover")
+async def discover_provider_models(provider_id: uuid.UUID, _: User = Depends(admin_user), db: AsyncSession = Depends(get_db)):
+    row = await db.get(LlmProvider, provider_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="PROVIDER_NOT_FOUND")
+    secret = SecretBox().decrypt(row.secret_ciphertext) if row.secret_ciphertext else None
+    try:
+        return await test_provider(row.provider_type, row.base_url, secret)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"PROVIDER_DISCOVERY_FAILED:{type(exc).__name__}") from exc
+
+
 @router.get("/models")
 async def models(_: User = Depends(admin_user), db: AsyncSession = Depends(get_db)):
     rows = (await db.scalars(select(LlmModel).order_by(LlmModel.display_name))).all()
     out = []
     for x in rows:
         provider = await db.get(LlmProvider, x.provider_id)
-        out.append({
-            "id": str(x.id), "provider_id": str(x.provider_id), "provider_name": provider.name if provider else None,
-            "provider_type": provider.provider_type if provider else None, "local": provider.is_local if provider else None,
-            "model_identifier": x.model_identifier, "display_name": x.display_name, "enabled": x.enabled,
-            "context_window": x.context_window, "temperature": x.temperature,
-        })
+        out.append(_model_payload(x, provider))
     return out
 
 
@@ -102,10 +170,55 @@ async def create_model(payload: ModelIn, _: User = Depends(admin_user), db: Asyn
     ))
     if existing:
         return {"id": str(existing.id), "existing": True}
-    row = LlmModel(**payload.model_dump())
+    row = LlmModel(
+        provider_id=payload.provider_id,
+        model_identifier=payload.model_identifier,
+        display_name=payload.display_name,
+        enabled=payload.enabled,
+        context_window=payload.context_window,
+        temperature=payload.temperature,
+        metadata_json={"provider_max_output_tokens": payload.provider_max_output_tokens} if payload.provider_max_output_tokens else {},
+    )
     db.add(row)
     await db.commit()
     return {"id": str(row.id), "existing": False}
+
+
+@router.put("/models/{model_id}")
+async def update_model(model_id: uuid.UUID, payload: ModelUpdate, _: User = Depends(admin_user), db: AsyncSession = Depends(get_db)):
+    row = await db.get(LlmModel, model_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="MODEL_NOT_FOUND")
+    duplicate = await db.scalar(select(LlmModel).where(
+        LlmModel.provider_id == row.provider_id,
+        LlmModel.model_identifier == payload.model_identifier,
+        LlmModel.id != row.id,
+    ))
+    if duplicate:
+        raise HTTPException(status_code=409, detail="MODEL_IDENTIFIER_ALREADY_EXISTS")
+    row.model_identifier = payload.model_identifier
+    row.display_name = payload.display_name
+    row.enabled = payload.enabled
+    row.context_window = payload.context_window
+    row.temperature = payload.temperature
+    meta = dict(row.metadata_json or {})
+    if payload.provider_max_output_tokens:
+        meta["provider_max_output_tokens"] = payload.provider_max_output_tokens
+    else:
+        meta.pop("provider_max_output_tokens", None)
+    row.metadata_json = meta
+    await db.commit()
+    return {"saved": True}
+
+
+@router.delete("/models/{model_id}")
+async def delete_model(model_id: uuid.UUID, _: User = Depends(admin_user), db: AsyncSession = Depends(get_db)):
+    row = await db.get(LlmModel, model_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="MODEL_NOT_FOUND")
+    await db.delete(row)
+    await db.commit()
+    return {"deleted": True}
 
 
 @router.get("/routes")

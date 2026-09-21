@@ -35,9 +35,12 @@ export default function Today(){
         <p>{bi(lang,"Garmin, FIT-Analysen und dein AI Coach – ruhig, verständlich und an einem Ort.","Garmin, FIT analytics and your AI Coach — calm, clear and in one place.")}</p>
         <div className="hero-actions"><a className="primary-link" href="/coach">✦ {bi(lang,"Coach fragen","Ask Coach")}</a><a className="soft-link" href="/activities">{bi(lang,"Aktivitäten öffnen","Open activities")} →</a></div>
       </div>
-      <div className="wellness-panel">
-        <div className="wellness-ring"><span>{h?.training_readiness??h?.body_battery_high??"—"}</span><small>{h?.training_readiness?bi(lang,"Bereitschaft","Readiness"):"Body Battery"}</small></div>
-        <div className="wellness-copy"><span className="metric-label">{bi(lang,"Heute im Fokus","Today at a glance")}</span><strong>{h?.available!==false?bi(lang,"Daten sind synchronisiert","Health data synced"):bi(lang,"Warte auf Garmin-Daten","Waiting for Garmin data")}</strong><small>{bi(lang,"Tippe auf Gesundheit für den langfristigen Verlauf.","Open Health for longer-term trends.")}</small></div>
+      <div className="dashboard-hero-art">
+        <img src="/dashboard-wellness.svg" alt=""/>
+        <div className="wellness-panel floating">
+          <div className="wellness-ring"><span>{h?.training_readiness??h?.body_battery_high??"—"}</span><small>{h?.training_readiness?bi(lang,"Bereitschaft","Readiness"):"Body Battery"}</small></div>
+          <div className="wellness-copy"><span className="metric-label">{bi(lang,"Heute im Fokus","Today at a glance")}</span><strong>{h?.available!==false?bi(lang,"Daten sind synchronisiert","Health data synced"):bi(lang,"Warte auf Garmin-Daten","Waiting for Garmin data")}</strong><small>{bi(lang,"Tippe auf Gesundheit für den langfristigen Verlauf.","Open Health for longer-term trends.")}</small></div>
+        </div>
       </div>
     </section>
 
