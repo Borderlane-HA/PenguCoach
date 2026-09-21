@@ -10,6 +10,7 @@ app.conf.update(
         "worker.tasks.garmin_sync.*": {"queue": "garmin"},
         "worker.tasks.fit.*": {"queue": "fit"},
         "worker.tasks.scheduler.*": {"queue": "maintenance"},
+        "worker.tasks.ai.*": {"queue": "maintenance"},
     },
     beat_schedule={
         "schedule-due-garmin-syncs": {"task": "worker.tasks.scheduler.schedule_due_garmin_syncs", "schedule": 60.0},
@@ -19,4 +20,5 @@ app.conf.imports = (
     "worker.tasks.garmin_sync",
     "worker.tasks.fit",
     "worker.tasks.scheduler",
+    "worker.tasks.ai",
 )

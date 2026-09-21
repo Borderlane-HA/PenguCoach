@@ -14,52 +14,132 @@ from pengucoach.db.models import LlmModel, LlmProvider, LlmRoute
 from pengucoach.security.crypto import SecretBox
 
 
-SYSTEM_PROMPT = """You are PenguCoach, a self-hosted training and wellness analysis assistant.
+SYSTEM_PROMPT_DE = """Du bist PenguCoach, ein selbst gehosteter Assistent für Trainings- und Wellnessanalyse.
+Nutze ausschließlich Fakten aus dem bereitgestellten Kontext. Erfinde niemals Messwerte, Trainingseinheiten,
+Symptome oder Erholungsdaten. Unterscheide klar zwischen Garmin-Werten, von PenguCoach berechneten
+Metriken und Angaben des Nutzers. Garmin-Zusammenfassungen sind – sofern vorhanden – die maßgebliche
+Quelle für offizielle Aktivitäts-Gesamtwerte; PenguCoach-Berechnungen ergänzen die Analyse.
+PenguCoach ist kein Medizinprodukt. Stelle keine Diagnosen und erteile keine medizinische Trainingsfreigabe.
+Bei dringlichen oder potentiell ernsten Symptomen sollst du eine zeitnahe professionelle medizinische Abklärung
+empfehlen. Mache Unsicherheit und fehlende Daten transparent. Leite aus Trainingsdaten allein kein
+Übertrainingssyndrom ab; beschreibe stattdessen Muster wie hohe/niedrige kurzfristige Belastung und verfügbare
+Erholungssignale mit angemessener Unsicherheit. Antworte ausschließlich auf Deutsch."""
+
+SYSTEM_PROMPT_EN = """You are PenguCoach, a self-hosted training and wellness analysis assistant.
 Use only facts in the supplied context. Never invent measurements, workouts, symptoms or recovery data.
 Clearly distinguish Garmin values, PenguCoach-calculated metrics and user-provided information. Garmin summary
 values are the authoritative source for official activity totals when present; PenguCoach calculations are analytical
 supplements. You are not a medical device and you do not diagnose, treat, or provide medical clearance. If a user
 describes urgent or potentially serious symptoms, recommend prompt professional medical assessment rather than
-giving training clearance. For training, nutrition and health topics, make uncertainty and missing data explicit.
-Do not claim overtraining syndrome from training data alone; describe patterns such as high/low recent load and
-recovery signals with appropriate uncertainty. Reply in the requested language."""
+giving training clearance. Make uncertainty and missing data explicit. Do not claim overtraining syndrome from
+training data alone; describe patterns such as high/low recent load and recovery signals with appropriate uncertainty.
+Reply exclusively in English."""
 
-DEEP_ACTIVITY_PROMPT = """Perform a deep, evidence-focused analysis of this activity and the supplied recent training context.
-Prioritize the official Garmin activity totals and use PenguCoach FIT metrics as additional analytical evidence.
-Assess pacing/speed, heart-rate response, power, cadence, elevation, splits, sensor coverage and efficiency where data exists.
-If lookback data is supplied, compare the activity with the previous 3 and/or 7 days: training frequency, total duration,
-distance, Garmin training load, rest days, sleep/HRV/resting-HR/recovery signals when available. Discuss whether the recent
-pattern looks relatively light, balanced or heavy without diagnosing overtraining. Highlight inconsistencies and missing data.
-Structure the answer as: 1) Executive summary, 2) Activity deep dive, 3) Recent-load/recovery context, 4) Strengths,
-5) Watch-outs, 6) Practical next-session recommendation. Use concrete numbers from the context and never invent values."""
+DEEP_ACTIVITY_PROMPT_DE = """Führe eine tiefgehende, datenbasierte Analyse dieser Trainingseinheit durch.
+Priorisiere die offiziellen Garmin-Gesamtwerte und verwende PenguCoach-FIT-Metriken als ergänzende analytische Evidenz.
+Analysiere – sofern Daten vorhanden sind – Tempo/Geschwindigkeit, Herzfrequenzreaktion, Leistung, Kadenz,
+Höhenprofil, Splits, Sensorabdeckung, Effizienz und auffällige Veränderungen innerhalb der Einheit.
 
-TRAINING_PLAN_PROMPT = """Create a practical, periodized training plan using the user's stated goal and the supplied recent training context.
+Wenn Rückblickdaten vorhanden sind, beziehe insbesondere die letzten 3 und 7 Tage ein: Trainingshäufigkeit,
+Gesamtdauer, Distanz, Garmin Training Load, Ruhetage sowie Schlaf, HRV, Ruhepuls, Body Battery bzw.
+Training Readiness, soweit tatsächlich vorhanden. Ordne die kurzfristige Belastung vorsichtig als eher niedrig,
+ausgewogen oder hoch ein, ohne ein Übertrainingssyndrom zu diagnostizieren.
+
+Strukturiere die Antwort vollständig in:
+1. Kurzfazit
+2. Leistungsanalyse der aktuellen Einheit
+3. Herzfrequenz, Leistung/Pace und Effizienz
+4. Höhenprofil, Splits und Pacing
+5. Rückblick 3 Tage
+6. Rückblick 7 Tage und Belastungs-/Erholungskontext
+7. Stärken der Einheit
+8. Auffälligkeiten / Punkte zum Beobachten
+9. Konkrete Empfehlung für die nächsten 1–3 Trainingstage
+
+Nutze konkrete Zahlen aus dem Kontext. Erfinde keine fehlenden Werte. Kennzeichne klar, was direkt von Garmin
+stammt und was von PenguCoach berechnet wurde. Antworte ausschließlich auf Deutsch."""
+
+DEEP_ACTIVITY_PROMPT_EN = """Perform a deep, evidence-focused analysis of this training session.
+Prioritize official Garmin activity totals and use PenguCoach FIT metrics as supplementary analytical evidence.
+Where data exists, assess pacing/speed, heart-rate response, power, cadence, elevation, splits, sensor coverage,
+efficiency and meaningful changes within the session.
+
+If lookback data is supplied, explicitly assess the previous 3 and 7 days: training frequency, total duration,
+distance, Garmin Training Load, rest days, sleep, HRV, resting heart rate, Body Battery and Training Readiness
+when those values are actually available. Describe the short-term load as relatively light, balanced or heavy
+with appropriate uncertainty; do not diagnose overtraining syndrome.
+
+Complete the answer using this structure:
+1. Executive summary
+2. Current-session performance analysis
+3. Heart rate, power/pace and efficiency
+4. Elevation, splits and pacing
+5. 3-day lookback
+6. 7-day load and recovery context
+7. Strengths
+8. Watch-outs
+9. Practical recommendation for the next 1–3 training days
+
+Use concrete numbers from the supplied context. Never invent missing values. Clearly distinguish Garmin values
+from PenguCoach-calculated metrics. Reply exclusively in English."""
+
+TRAINING_PLAN_PROMPT_DE = """Erstelle einen praktischen, periodisierten Trainingsplan aus dem angegebenen Ziel und dem bereitgestellten
+Trainingskontext. Beachte Wochenanzahl, Trainingstage und typische Sessiondauer. Balanciere Trainingsreiz und Erholung.
+Nutze verfügbare 7- und 28-Tage-Daten zu Umfang, Belastung und Erholung als Kontext, ohne medizinische Trainingsbereitschaft
+zu behaupten. Berücksichtige Progression und leichtere/regenerative Einheiten. Für Kraftziele: große Bewegungsmuster,
+Sätze/Wiederholungen und RPE/RIR-Leitplanken, ohne unbekannte Gewichte zu erfinden. Für Ausdauerziele: lockere aerobe
+Einheiten, Qualität/Intervalle und längere Einheiten passend zum Ziel. Für Hybridziele: Kraft und Ausdauer sinnvoll verteilen.
+Kennzeichne optionale Einheiten und Ruhetage. Struktur: Ziel & Annahmen, Wochenstruktur, Plan Woche für Woche,
+Sessiondetails, Progressionsregeln, Belastungs-/Erholungsleitplanken und Anpassung bei verpassten Einheiten oder schwachen
+Erholungssignalen. Erfinde keine Gesundheitsdaten. Antworte ausschließlich auf Deutsch."""
+
+TRAINING_PLAN_PROMPT_EN = """Create a practical, periodized training plan using the user's stated goal and the supplied recent training context.
 Respect the requested number of weeks, training days and typical session duration. Balance training stimulus and recovery.
-Use recent 7- and 28-day volume/load as context when available, but do not infer medical readiness. Include progression,
-recovery/easier sessions, and sport-specific detail. For strength goals include major movement patterns, sets/reps/RPE guidance
-without pretending exact loads are known. For endurance goals include easy aerobic, quality/interval and longer sessions as
-appropriate. For hybrid goals balance strength and endurance interference. Clearly mark optional sessions and rest days.
-Structure the result as: Goal & assumptions, Weekly structure, Week-by-week plan, Session details, Progression rules,
-Recovery/load guardrails, and How to adjust when sessions are missed or recovery data is poor. Do not invent health data."""
+Use recent 7- and 28-day volume/load and recovery data as context when available, but do not infer medical readiness.
+Include progression and easier/recovery sessions. For strength goals include major movement patterns, sets/reps and
+RPE/RIR guardrails without pretending exact loads are known. For endurance goals include easy aerobic, quality/interval
+and longer sessions as appropriate. For hybrid goals balance strength and endurance interference. Clearly mark optional
+sessions and rest days. Structure the result as: Goal & assumptions, Weekly structure, Week-by-week plan, Session details,
+Progression rules, Recovery/load guardrails, and How to adjust when sessions are missed or recovery data is poor.
+Do not invent health data. Reply exclusively in English."""
 
-COACH_CHAT_PROMPT = """Answer the user's training/wellness question from the supplied Garmin and PenguCoach context.
-Use concrete values when relevant, distinguish measured facts from interpretation, and state when the available data is insufficient."""
+COACH_CHAT_PROMPT_DE = """Beantworte die Frage des Nutzers anhand des bereitgestellten Garmin- und PenguCoach-Kontexts.
+Nutze konkrete Werte, wenn sie relevant sind, unterscheide Messwerte von Interpretation und sage klar, wenn die Datenlage
+für eine Aussage nicht ausreicht. Wenn die Frage keinen Trainings-/Gesundheitskontext benötigt, antworte direkt und ignoriere
+irrelevante Trainingsdaten. Antworte ausschließlich auf Deutsch."""
+
+COACH_CHAT_PROMPT_EN = """Answer the user's question from the supplied Garmin and PenguCoach context.
+Use concrete values when relevant, distinguish measured facts from interpretation, and state when the available data is
+insufficient. If the question does not require training/wellness context, answer directly and ignore irrelevant training data.
+Reply exclusively in English."""
+
+# Compatibility exports used by older tests/integrations.
+DEEP_ACTIVITY_PROMPT = DEEP_ACTIVITY_PROMPT_EN
+TRAINING_PLAN_PROMPT = TRAINING_PLAN_PROMPT_EN
+COACH_CHAT_PROMPT = COACH_CHAT_PROMPT_EN
+SYSTEM_PROMPT = SYSTEM_PROMPT_EN
 
 TASK_DEFAULTS: dict[str, dict[str, Any]] = {
     "coach_chat": {
-        "max_output_tokens": 1200,
-        "max_context_chars": 60000,
-        "default_prompt": COACH_CHAT_PROMPT,
+        "max_output_tokens": 2500,
+        "context_window_tokens": 8192,
+        "max_context_chars": 24000,
+        "default_prompt_de": COACH_CHAT_PROMPT_DE,
+        "default_prompt_en": COACH_CHAT_PROMPT_EN,
     },
     "activity_analysis": {
-        "max_output_tokens": 1600,
-        "max_context_chars": 70000,
-        "default_prompt": DEEP_ACTIVITY_PROMPT,
+        "max_output_tokens": 3500,
+        "context_window_tokens": 8192,
+        "max_context_chars": 32000,
+        "default_prompt_de": DEEP_ACTIVITY_PROMPT_DE,
+        "default_prompt_en": DEEP_ACTIVITY_PROMPT_EN,
     },
     "training_plan": {
-        "max_output_tokens": 2200,
-        "max_context_chars": 80000,
-        "default_prompt": TRAINING_PLAN_PROMPT,
+        "max_output_tokens": 4500,
+        "context_window_tokens": 8192,
+        "max_context_chars": 32000,
+        "default_prompt_de": TRAINING_PLAN_PROMPT_DE,
+        "default_prompt_en": TRAINING_PLAN_PROMPT_EN,
     },
 }
 
@@ -71,15 +151,32 @@ def _clamp_int(value: Any, minimum: int, maximum: int, fallback: int) -> int:
         return fallback
 
 
-async def task_settings(db: AsyncSession, task: str) -> dict[str, Any]:
+def _locale_key(locale: str | None) -> str:
+    return "de" if str(locale or "de").lower().startswith("de") else "en"
+
+
+async def task_settings(db: AsyncSession, task: str, locale: str | None = None) -> dict[str, Any]:
     defaults = dict(TASK_DEFAULTS.get(task, TASK_DEFAULTS["coach_chat"]))
     route = await db.get(LlmRoute, task)
     custom = route.settings if route and isinstance(route.settings, dict) else {}
     result = {**defaults, **custom}
+
+    # Migrate alpha.4's single prompt transparently if present in JSON settings.
+    legacy_prompt = str(custom.get("default_prompt") or "").strip()
+    for language in ("de", "en"):
+        key = f"default_prompt_{language}"
+        prompt = str(result.get(key) or legacy_prompt or defaults[key]).strip()
+        result[key] = prompt[:16000]
+
     result["max_output_tokens"] = _clamp_int(result.get("max_output_tokens"), 128, 8192, defaults["max_output_tokens"])
-    result["max_context_chars"] = _clamp_int(result.get("max_context_chars"), 4000, 200000, defaults["max_context_chars"])
-    prompt = str(result.get("default_prompt") or defaults["default_prompt"]).strip()
-    result["default_prompt"] = prompt[:16000]
+    result["context_window_tokens"] = _clamp_int(
+        result.get("context_window_tokens"), 2048, 262144, defaults["context_window_tokens"]
+    )
+    result["max_context_chars"] = _clamp_int(
+        result.get("max_context_chars"), 4000, 800000, defaults["max_context_chars"]
+    )
+    language = _locale_key(locale)
+    result["default_prompt"] = result[f"default_prompt_{language}"]
     return result
 
 
@@ -98,6 +195,7 @@ async def eligible_models(db: AsyncSession, local_only: bool = False) -> list[di
             "provider_type": provider.provider_type,
             "local": provider.is_local,
             "context_window": model.context_window,
+            "temperature": model.temperature,
         })
     return out
 
@@ -146,11 +244,7 @@ def _json_size(value: Any) -> tuple[str, int]:
 
 
 def _bounded_context(context: dict[str, Any], max_chars: int) -> tuple[str, dict[str, Any]]:
-    """Keep the context valid JSON while enforcing a deterministic input budget.
-
-    Context builders already avoid raw FIT samples. If a future context grows too large,
-    low-priority lists are progressively shortened before falling back to summaries only.
-    """
+    """Keep the context valid JSON while enforcing a deterministic input budget."""
     working = copy.deepcopy(context)
     payload, size = _json_size(working)
     original_size = size
@@ -196,13 +290,20 @@ def _bounded_context(context: dict[str, Any], max_chars: int) -> tuple[str, dict
         }
         payload, size = _json_size(compact)
         if size > max_chars:
-            payload = payload[:max_chars]
+            # Preserve valid JSON even for extremely small budgets.
+            compact["activity"] = None
+            compact["context_note"] = "Context exceeded configured budget; only summaries retained."
+            payload, size = _json_size(compact)
     return payload, {
-        "context_chars": min(size, max_chars),
-        "context_estimated_tokens": max(1, min(size, max_chars) // 4),
+        "context_chars": size,
+        "context_estimated_tokens": max(1, size // 4),
         "context_truncated": True,
         "original_context_chars": original_size,
     }
+
+
+def _system_prompt(locale: str) -> str:
+    return SYSTEM_PROMPT_DE if _locale_key(locale) == "de" else SYSTEM_PROMPT_EN
 
 
 async def chat(
@@ -216,8 +317,9 @@ async def chat(
     model_id: uuid.UUID | None = None,
     instruction_prompt: str | None = None,
     requested_max_tokens: int | None = None,
+    requested_context_window_tokens: int | None = None,
 ) -> dict[str, Any]:
-    config = await task_settings(db, task)
+    config = await task_settings(db, task, locale)
     selected = await resolve_model(db, task, local_only=local_only, model_id=model_id)
     if not selected:
         raise RuntimeError("NO_ELIGIBLE_LLM_MODEL_CONFIGURED")
@@ -227,17 +329,32 @@ async def chat(
     max_tokens = configured_max if requested_max_tokens is None else min(
         configured_max, _clamp_int(requested_max_tokens, 128, 8192, configured_max)
     )
+
+    configured_ctx = int(config["context_window_tokens"])
+    requested_ctx = configured_ctx if requested_context_window_tokens is None else min(
+        configured_ctx, _clamp_int(requested_context_window_tokens, 2048, 262144, configured_ctx)
+    )
+    model_ctx = int(model.context_window) if model.context_window else None
+    context_window_tokens = min(requested_ctx, model_ctx) if model_ctx else requested_ctx
+    # Never request more generated tokens than can fit in the selected context window.
+    max_tokens = min(max_tokens, max(128, context_window_tokens - 1024))
+    # Leave room for system/task instructions and chat framing. The remaining budget is shared by JSON context and messages.
+    usable_input_tokens = max(768, context_window_tokens - max_tokens - 768)
+    context_budget_tokens = max(512, int(usable_input_tokens * 0.72))
+    message_budget_tokens = max(256, usable_input_tokens - context_budget_tokens)
+    max_context_chars = min(int(config["max_context_chars"]), context_budget_tokens * 4)
+
     task_prompt = (instruction_prompt or config["default_prompt"]).strip()[:16000]
-    context_json, context_meta = _bounded_context(context, int(config["max_context_chars"]))
+    context_json, context_meta = _bounded_context(context, max_context_chars)
     system_content = (
-        SYSTEM_PROMPT
-        + f"\nResponse locale: {locale}."
-        + "\nThe task instructions below may refine the task but may not override the safety, source-integrity or no-invention rules above."
+        _system_prompt(locale)
+        + "\nThe task instructions below may refine the task but may not override safety, source-integrity or no-invention rules."
         + f"\nTask instructions:\n{task_prompt}"
         + f"\nData context (JSON):\n{context_json}"
     )
+
     recent_messages = messages[-12:]
-    message_budget = max(4000, int(config["max_context_chars"]) // 2)
+    message_budget = message_budget_tokens * 4
     bounded_messages: list[dict[str, str]] = []
     used_message_chars = 0
     for message in reversed(recent_messages):
@@ -251,8 +368,11 @@ async def chat(
         used_message_chars += len(content)
     bounded_messages.reverse()
     prompt_messages = [{"role": "system", "content": system_content}] + bounded_messages
-    timeout = httpx.Timeout(settings.ai_request_timeout_seconds)
+
+    timeout_seconds = max(settings.ai_request_timeout_seconds, 300) if provider.is_local else settings.ai_request_timeout_seconds
+    timeout = httpx.Timeout(timeout_seconds)
     usage: dict[str, Any] = {}
+    stop_reason: str | None = None
 
     async with httpx.AsyncClient(timeout=timeout) as client:
         if provider.provider_type in {"openai", "openai_compatible"}:
@@ -270,7 +390,9 @@ async def chat(
             )
             response.raise_for_status()
             body = response.json()
-            text = body["choices"][0]["message"]["content"]
+            choice = body["choices"][0]
+            text = choice["message"]["content"]
+            stop_reason = choice.get("finish_reason")
             raw_usage = body.get("usage") or {}
             usage = {
                 "input_tokens": raw_usage.get("prompt_tokens"),
@@ -294,6 +416,7 @@ async def chat(
             response.raise_for_status()
             body = response.json()
             text = "\n".join(x.get("text", "") for x in body.get("content", []) if x.get("type") == "text")
+            stop_reason = body.get("stop_reason")
             raw_usage = body.get("usage") or {}
             usage = {
                 "input_tokens": raw_usage.get("input_tokens"),
@@ -309,12 +432,17 @@ async def chat(
                     "model": model.model_identifier,
                     "messages": prompt_messages,
                     "stream": False,
-                    "options": {"temperature": model.temperature, "num_predict": max_tokens},
+                    "options": {
+                        "temperature": model.temperature,
+                        "num_predict": max_tokens,
+                        "num_ctx": context_window_tokens,
+                    },
                 },
             )
             response.raise_for_status()
             body = response.json()
             text = body.get("message", {}).get("content", "")
+            stop_reason = body.get("done_reason")
             usage = {
                 "input_tokens": body.get("prompt_eval_count"),
                 "output_tokens": body.get("eval_count"),
@@ -324,6 +452,10 @@ async def chat(
         else:
             raise RuntimeError("UNSUPPORTED_LLM_PROVIDER")
 
+    output_tokens = usage.get("output_tokens")
+    truncated = stop_reason in {"length", "max_tokens"} or (
+        isinstance(output_tokens, int) and output_tokens >= max_tokens
+    )
     return {
         "content": text,
         "provider": provider.name,
@@ -332,7 +464,11 @@ async def chat(
         "model_id": str(model.id),
         "local": provider.is_local,
         "max_output_tokens": max_tokens,
+        "context_window_tokens": context_window_tokens,
+        "context_budget_tokens": context_budget_tokens,
         "usage": usage,
+        "stop_reason": stop_reason,
+        "truncated": truncated,
         "message_chars": used_message_chars,
         **context_meta,
     }

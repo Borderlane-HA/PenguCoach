@@ -100,7 +100,7 @@ PENGUCOACH_COOKIE_SECURE=false
 PENGUCOACH_DATA_DIR=${DATA_DIR}
 PENGUCOACH_GARMIN_DEFAULT_INTERVAL_MINUTES=30
 PENGUCOACH_GARMIN_RATE_LIMIT_COOLDOWN_MINUTES=30
-PENGUCOACH_AI_REQUEST_TIMEOUT_SECONDS=120
+PENGUCOACH_AI_REQUEST_TIMEOUT_SECONDS=300
 PENGUCOACH_LOG_LEVEL=INFO
 ENV
 chown root:"$APP_USER" "$ENV_DIR/pengucoach.env"
@@ -208,6 +208,9 @@ server {
     client_max_body_size 20m;
 
     location /api/ {
+        proxy_connect_timeout 30s;
+        proxy_send_timeout 300s;
+        proxy_read_timeout 300s;
         proxy_pass http://127.0.0.1:8000;
         proxy_http_version 1.1;
         proxy_set_header Host $host;

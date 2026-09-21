@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="PENGUCOACH_", env_file=".env", extra="ignore")
 
     env: str = "development"
-    app_version: str = "0.1.0-alpha.4"
+    app_version: str = "0.1.0-alpha.5"
     database_url: str = "postgresql+asyncpg://pengucoach:pengucoach@localhost:5432/pengucoach"
     redis_url: str = "redis://localhost:6379/0"
     jwt_secret: str = "development-only-change-me"
@@ -22,7 +22,7 @@ class Settings(BaseSettings):
     data_dir: str = "/var/lib/pengucoach"
     garmin_default_interval_minutes: int = 30
     garmin_rate_limit_cooldown_minutes: int = 30
-    ai_request_timeout_seconds: int = 120
+    ai_request_timeout_seconds: int = 300
     log_level: str = "INFO"
 
 

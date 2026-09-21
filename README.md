@@ -8,7 +8,7 @@ PenguCoach is designed as a local-first, multi-user platform that reads Garmin C
 
 ## Current alpha scope
 
-`v0.1.0-alpha.4` is the current end-to-end alpha baseline:
+`v0.1.0-alpha.5` is the current end-to-end alpha baseline:
 
 - German and English web UI
 - first-run administrator setup
@@ -29,15 +29,15 @@ PenguCoach is designed as a local-first, multi-user platform that reads Garmin C
 - evidence-constrained Coach chat using local Garmin/FIT facts with selectable models and token budgets
 - per-activity AI deep analysis with 0/3/7-day training/recovery lookback and an editable predefined prompt
 - AI training-plan generation for strength, muscle gain, cardio, hybrid, running, cycling, mobility and custom goals
-- task-specific default/fallback model routing, prompts, output-token caps and bounded input context
-- persisted AI analysis/plan runs
+- task-specific default/fallback model routing, bilingual DE/EN prompts, configurable context windows and output-token caps
+- persisted AI analysis/plan runs plus reload-safe background AI jobs
 - PostgreSQL + Redis/Celery
 - Alembic schema baseline
 - native Proxmox LXC installer with Debian 13 `nesting=1`, UTF-8 locale/database setup and explicit Nginx reload
 - `pengucoach-update`, `pengucoach-backup`, `pengucoach-status`, `pengucoach-db-utf8`
 - Docker Compose for development/alternative deployments
 
-Advanced long-term baselines, a correlation explorer and the full LangGraph multi-agent workflow remain planned work. Training-plan generation in alpha.4 is intentionally an AI-assisted planning foundation: it uses the locally stored 7/28-day context but does not write anything back to Garmin.
+Advanced long-term baselines, a correlation explorer and the full LangGraph multi-agent workflow remain planned work. Training-plan generation in alpha.5 is intentionally an AI-assisted planning foundation: it uses the locally stored 7/28-day context but does not write anything back to Garmin.
 
 ## Proxmox installation
 
@@ -134,7 +134,7 @@ Since `0.1.0-alpha.4`, each activity can be sent to an eligible configured LLM f
 
 The Training page can generate and persist plans for muscle gain, endurance/cardio, hybrid, cycling, running race goals, strength, general fitness, mobility and custom goals. Plan generation uses deterministic 7- and 28-day activity/load summaries plus available Garmin recovery data.
 
-AI cost controls are configured under **AI → Routing & cost limits**. Each task has a hard maximum response-token budget and a bounded context size. A user may request fewer output tokens, but not exceed the configured task maximum. Local Ollama remains usable without enabling cloud-health processing.
+AI controls are configured in the **AI Studio**. Each task has a default/fallback model, separate German and English prompts, a configurable context window and a hard response-token ceiling. For Ollama, the context window is sent as `num_ctx` and the response budget as `num_predict`. Long local-model generations run in the background so page reloads do not lose the job. Local Ollama remains usable without enabling cloud-health processing.
 
 See [`docs/AI_ANALYSIS_AND_PLANNING.md`](docs/AI_ANALYSIS_AND_PLANNING.md).
 

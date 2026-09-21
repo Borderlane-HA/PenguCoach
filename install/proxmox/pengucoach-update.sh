@@ -59,6 +59,24 @@ for cmd in pengucoach-update pengucoach-backup pengucoach-status pengucoach-db-u
   ln -sf "/usr/local/bin/$cmd" "/usr/bin/$cmd"
 done
 
+# Long local-model generations now run in Celery, but keep generous API proxy timeouts for
+# synchronous API clients and compatibility endpoints.
+NGINX_SITE=/etc/nginx/sites-available/pengucoach
+if [[ -f "$NGINX_SITE" ]] && ! grep -q 'proxy_read_timeout 300s;' "$NGINX_SITE"; then
+  sed -i '/location \/api\/ {/a\        proxy_connect_timeout 30s;\n        proxy_send_timeout 300s;\n        proxy_read_timeout 300s;' "$NGINX_SITE"
+fi
+# Raise the old alpha.4 default timeout for local LLMs. Background jobs remove proxy pressure,
+# but the Ollama HTTP client itself still needs enough time to finish.
+if grep -q '^PENGUCOACH_AI_REQUEST_TIMEOUT_SECONDS=120$' "$ENV_FILE"; then
+  sed -i 's/^PENGUCOACH_AI_REQUEST_TIMEOUT_SECONDS=120$/PENGUCOACH_AI_REQUEST_TIMEOUT_SECONDS=300/' "$ENV_FILE"
+elif ! grep -q '^PENGUCOACH_AI_REQUEST_TIMEOUT_SECONDS=' "$ENV_FILE"; then
+  echo 'PENGUCOACH_AI_REQUEST_TIMEOUT_SECONDS=300' >> "$ENV_FILE"
+fi
+
+systemctl daemon-reload
+nginx -t >/dev/null
+systemctl reload nginx
+
 DB_ENCODING="$(runuser -u postgres -- psql -d postgres -Atqc "SELECT pg_encoding_to_char(encoding) FROM pg_database WHERE datname='pengucoach'" 2>/dev/null || true)"
 if [[ -n "$DB_ENCODING" && "$DB_ENCODING" != "UTF8" ]]; then
   echo "[PenguCoach] WARNING: database encoding is $DB_ENCODING, expected UTF8." >&2

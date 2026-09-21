@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.1.0-alpha.5 - 2026-09-21
+
+Modern AI Studio / long-running local-model release:
+
+- redesigns the AI administration into a focused **AI Studio** with task tabs for Coach Chat, Activity Analysis and Training Planning
+- adds separate German and English default prompts; the active UI language is sent with every AI job and selects the matching prompt automatically
+- adds a configurable **context window** per task (default 8192 tokens) and passes it to Ollama as `num_ctx`
+- separates context-window size from maximum response tokens (`num_predict` for Ollama)
+- raises sensible local-first defaults to 2500 response tokens for Coach Chat, 3500 for Activity Analysis and 4500 for Training Plans
+- visualizes input/output token budgets and offers 4K/8K/16K/32K context presets in AI Studio
+- records provider stop reasons and detects responses that hit the output-token ceiling
+- shows a clear **response truncated** warning instead of silently presenting incomplete analyses
+- moves Coach Chat, Activity Analysis and Training Plan generation to Celery **background jobs** using the already-consumed maintenance queue for seamless alpha.4 upgrades
+- AI jobs survive page reloads; the UI stores active task IDs and resumes polling automatically
+- avoids browser/proxy 504s for slow local models because long generation no longer depends on one open browser request
+- increases the default LLM HTTP timeout to 300 seconds and updates existing alpha.4 environments from the old 120-second default
+- adds 300-second Nginx API proxy timeouts for compatibility with synchronous API clients
+- Coach context can be Auto, none, 7 days or 28 days; Auto skips Garmin/FIT context for unrelated questions such as general IT topics
+- activity AI UI is simplified into a compact modern control panel with model, lookback, context window and response budget
+- activity analysis history remains selectable and now shows model, context, token usage and stop reason
+- training planning uses the same background-job and context-window controls
+- improves AI markdown rendering including `####` and deeper headings
+- new installs use a 300-second AI timeout; local providers also enforce a minimum 300-second client timeout so alpha.4 installations work immediately after update
+
 ## 0.1.0-alpha.4 - 2026-09-21
 
 AI analysis and training-planning release:
