@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.1.0-alpha.7 - 2026-09-21
+
+- adds an explicit sign-out action in the desktop account area and mobile/tablet top bar; logout clears the session and transient local AI job state
+
+Personalization / Garmin simplicity / AI-provider management release:
+
+- adds per-user appearance themes: **Mint Light**, **Midnight Health**, **Ocean**, **Forest** and **Lavender**
+- adds local PNG/JPEG/WebP upload for a user profile picture and a custom PenguCoach sidebar app icon
+- stores uploaded appearance assets under `/var/lib/pengucoach/user-assets/<user-id>/`, so existing backups include them automatically
+- adds a local dashboard wellness/training SVG illustration with no external dependency
+- simplifies Garmin settings around one everyday **Synchronize** action; historical backfill is moved into a clearly separated expandable initial-setup/history section
+- keeps historical import available without presenting it as a second routine synchronization action
+- adds AI model **edit**, enable/disable and **delete** controls in AI Studio
+- adds deletion of complete AI providers and discovery of models from already-saved providers
+- updates Anthropic/Claude integration to use the current `GET /v1/models` API and imports model display name, maximum input context and maximum output tokens when available
+- keeps Anthropic Messages API on the documented `anthropic-version: 2023-06-01` header and intentionally omits `temperature` for Claude requests to remain compatible with newer Claude models that reject non-default sampling parameters
+- increases configurable task ceilings to 65,536 output tokens and 1,048,576 context tokens while keeping recommended presets
+- raises recommended defaults for deep Activity Analysis and Training Planning to 16K context / 8K output; Coach Chat remains 8K / 2.5K
+- persists provider-reported maximum output tokens on discovered models and clamps generated output to the provider capability when known
+- changes `pengucoach-update` to treat `/opt/pengucoach` as a deployment checkout: after backup it automatically replaces local source changes with `origin/<channel>` instead of aborting
+- preserves ignored runtime dependencies such as `.venv` and `node_modules` while removing untracked source/build leftovers
+- adds `docs/UI_PERSONALIZATION_ALPHA7.md`
+
 ## 0.1.0-alpha.6 - 2026-09-21
 
 Bright Health UI / readability release:

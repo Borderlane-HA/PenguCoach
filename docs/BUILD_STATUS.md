@@ -1,6 +1,6 @@
-# Build status — 0.1.0-alpha.6
+# Build status — 0.1.0-alpha.7
 
-PenguCoach is an alpha development project. This release keeps the alpha.5 Garmin/FIT/AI architecture and adds a cohesive bright, health-first responsive interface.
+PenguCoach is an alpha development project. This release builds on the alpha.6 Garmin/FIT/AI architecture with personalization, simpler Garmin UX, stronger provider/model management and a deterministic deployment updater.
 
 ## Implemented baseline
 
@@ -17,14 +17,18 @@ PenguCoach is an alpha development project. This release keeps the alpha.5 Garmi
 - Persisted AI runs with token/stop metadata and truncation detection
 - Native Proxmox LXC installer/updater/backup/status/database repair helpers
 
-## Alpha.6 visual layer
+## Alpha.7 visual & operations layer
 
-- bright health-first design system with high-contrast typography
+- bright health-first design system with five per-user themes and high-contrast typography
 - persistent grouped desktop navigation sidebar
 - compact sticky context header
 - responsive mobile bottom navigation dock
-- redesigned login, Today, Health and Activities experiences
+- redesigned login, Today, Health and Activities experiences plus a local dashboard wellness illustration
 - modernized forms, tables, cards, status chips, Activity Detail v2, Coach and AI Studio surfaces
+- profile-picture and custom app-icon uploads stored under the persistent data directory
+- simplified Garmin sync/backfill separation
+- model edit/delete and saved-provider discovery, including current Anthropic model discovery
+- updater now replaces local deployment-source changes after backup instead of aborting
 - improved responsive behavior without removing analytical table detail
 
 ## Intentionally still alpha / next iterations

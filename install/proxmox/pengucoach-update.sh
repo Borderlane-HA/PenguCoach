@@ -14,12 +14,16 @@ BACKUP="$(/usr/local/bin/pengucoach-backup | tail -n1)"
 echo "[PenguCoach] Backup: $BACKUP"
 
 git fetch origin --tags --prune
-if ! git diff --quiet || ! git diff --cached --quiet; then
-  echo "Local source changes detected in $APP. Update aborted to avoid overwriting them." >&2
-  exit 2
-fi
-git checkout "$BRANCH"
-git pull --ff-only origin "$BRANCH"
+# /opt/pengucoach is a deployment checkout, not a workspace. Users commonly
+# replace all files in GitHub when publishing a new PenguCoach ZIP. To make
+# updates deterministic, always align the LXC checkout with origin/<channel>.
+# The database, settings, FIT/parquet files and user assets live outside the
+# repository and were backed up above. Ignored runtime files (.venv, node_modules)
+# are preserved; untracked source/build leftovers are removed.
+echo "[PenguCoach] Aligning deployment checkout with origin/$BRANCH (local source changes are replaced)"
+git clean -fd
+git checkout -f "$BRANCH"
+git reset --hard "origin/$BRANCH"
 NEW_SHA="$(git rev-parse HEAD)"
 if [[ "$OLD_SHA" == "$NEW_SHA" ]]; then echo "[PenguCoach] Already up to date."; exit 0; fi
 NEW_VERSION="$(python3 -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])')"

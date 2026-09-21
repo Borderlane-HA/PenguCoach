@@ -8,10 +8,13 @@ PenguCoach is designed as a local-first, multi-user platform that reads Garmin C
 
 ## Current alpha scope
 
-`v0.1.0-alpha.6` is the current end-to-end alpha baseline:
+`v0.1.0-alpha.7` is the current end-to-end alpha baseline:
 
 - German and English web UI
 - bright health-first responsive web design with desktop sidebar and mobile navigation dock
+- per-user appearance themes (Mint Light, Midnight Health, Ocean, Forest and Lavender)
+- profile-picture and custom app-icon upload stored locally and included in normal backups
+- simplified Garmin synchronization with one everyday Sync action and a separate history/backfill section
 - first-run administrator setup
 - multi-user local authentication
 - mandatory safety/development gate after every login
@@ -26,11 +29,13 @@ PenguCoach is designed as a local-first, multi-user platform that reads Garmin C
 - activity list and detail view with FIT time series
 - health overview and historical charts
 - Ollama, OpenAI, Anthropic and OpenAI-compatible provider management
+- editable/deletable AI models plus saved-provider model discovery
+- current Anthropic Models API discovery with imported Claude context/output capabilities
 - cloud-health AI disabled per user by default; local Ollama can be used without cloud permission
 - evidence-constrained Coach chat using local Garmin/FIT facts with selectable models and token budgets
-- per-activity AI deep analysis with 0/3/7-day training/recovery lookback and an editable predefined prompt
+- per-activity AI deep analysis with Training-only / This day / 3-day / 7-day training-recovery context and an editable predefined prompt
 - AI training-plan generation for strength, muscle gain, cardio, hybrid, running, cycling, mobility and custom goals
-- task-specific default/fallback model routing, bilingual DE/EN prompts, configurable context windows and output-token caps
+- task-specific default/fallback model routing, bilingual DE/EN prompts, freely configurable context windows and output-token caps with recommended presets
 - persisted AI analysis/plan runs plus reload-safe background AI jobs
 - PostgreSQL + Redis/Celery
 - Alembic schema baseline
@@ -38,7 +43,7 @@ PenguCoach is designed as a local-first, multi-user platform that reads Garmin C
 - `pengucoach-update`, `pengucoach-backup`, `pengucoach-status`, `pengucoach-db-utf8`
 - Docker Compose for development/alternative deployments
 
-Advanced long-term baselines, a correlation explorer and the full LangGraph multi-agent workflow remain planned work. Training-plan generation in alpha.5 is intentionally an AI-assisted planning foundation: it uses the locally stored 7/28-day context but does not write anything back to Garmin.
+Advanced long-term baselines, a correlation explorer and the full LangGraph multi-agent workflow remain planned work. Training-plan generation in the current alpha remains an AI-assisted planning foundation: it uses the locally stored 7/28-day context but does not write anything back to Garmin.
 
 ## Proxmox installation
 
@@ -81,7 +86,7 @@ Or directly from the Proxmox host:
 pct exec <CTID> -- pengucoach-update
 ```
 
-The updater creates a backup, fetches the configured Git branch, updates Python dependencies, applies Alembic migrations, rebuilds Next.js, restarts services and performs a health check.
+The updater creates a backup, fetches the configured Git branch, deterministically aligns the deployment checkout with `origin/<channel>` (local source edits in `/opt/pengucoach` are replaced), updates Python dependencies, applies Alembic migrations, rebuilds Next.js, restarts services and performs a health check. Runtime data, configuration, FIT/Parquet files and user assets live outside the Git checkout and are preserved.
 
 Status:
 
@@ -131,7 +136,7 @@ Since `0.1.0-alpha.3`, parsed FIT activities include a richer deterministic deta
 
 ## AI analysis and training planning
 
-Since `0.1.0-alpha.4`, each activity can be sent to an eligible configured LLM for a deep analysis. The UI shows the effective default model, permits choosing another eligible model, supports no lookback or a 3/7-day lookback, and exposes the predefined analysis prompt for editing. Garmin activity totals are marked as the primary official values; locally calculated FIT analytics are supplied separately.
+Since `0.1.0-alpha.4`, each activity can be sent to an eligible configured LLM for a deep analysis. The UI shows the effective default model, permits choosing another eligible model, supports Training-only / This day / 3-day / 7-day context scopes, and exposes the predefined analysis prompt for editing. Garmin activity totals are marked as the primary official values; locally calculated FIT analytics are supplied separately.
 
 The Training page can generate and persist plans for muscle gain, endurance/cardio, hybrid, cycling, running race goals, strength, general fitness, mobility and custom goals. Plan generation uses deterministic 7- and 28-day activity/load summaries plus available Garmin recovery data.
 

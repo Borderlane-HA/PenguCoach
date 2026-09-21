@@ -27,8 +27,8 @@ def test_garmin_elevation_totals_are_exposed():
 
 def test_ai_task_defaults_include_context_and_response_budgets():
     assert TASK_DEFAULTS["coach_chat"]["context_window_tokens"] == 8192
-    assert TASK_DEFAULTS["activity_analysis"]["max_output_tokens"] == 3500
-    assert TASK_DEFAULTS["training_plan"]["max_output_tokens"] == 4500
+    assert TASK_DEFAULTS["activity_analysis"]["max_output_tokens"] == 8000
+    assert TASK_DEFAULTS["training_plan"]["max_output_tokens"] == 8000
     assert TASK_DEFAULTS["activity_analysis"]["max_output_tokens"] <= 8192
 
 

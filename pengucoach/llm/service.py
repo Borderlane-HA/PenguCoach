@@ -138,16 +138,16 @@ TASK_DEFAULTS: dict[str, dict[str, Any]] = {
         "default_prompt_en": COACH_CHAT_PROMPT_EN,
     },
     "activity_analysis": {
-        "max_output_tokens": 3500,
-        "context_window_tokens": 8192,
-        "max_context_chars": 32000,
+        "max_output_tokens": 8000,
+        "context_window_tokens": 16384,
+        "max_context_chars": 52000,
         "default_prompt_de": DEEP_ACTIVITY_PROMPT_DE,
         "default_prompt_en": DEEP_ACTIVITY_PROMPT_EN,
     },
     "training_plan": {
-        "max_output_tokens": 4500,
-        "context_window_tokens": 8192,
-        "max_context_chars": 32000,
+        "max_output_tokens": 8000,
+        "context_window_tokens": 16384,
+        "max_context_chars": 52000,
         "default_prompt_de": TRAINING_PLAN_PROMPT_DE,
         "default_prompt_en": TRAINING_PLAN_PROMPT_EN,
     },
@@ -178,9 +178,9 @@ async def task_settings(db: AsyncSession, task: str, locale: str | None = None) 
         prompt = str(result.get(key) or legacy_prompt or defaults[key]).strip()
         result[key] = prompt[:16000]
 
-    result["max_output_tokens"] = _clamp_int(result.get("max_output_tokens"), 128, 8192, defaults["max_output_tokens"])
+    result["max_output_tokens"] = _clamp_int(result.get("max_output_tokens"), 128, 65536, defaults["max_output_tokens"])
     result["context_window_tokens"] = _clamp_int(
-        result.get("context_window_tokens"), 2048, 262144, defaults["context_window_tokens"]
+        result.get("context_window_tokens"), 2048, 1_048_576, defaults["context_window_tokens"]
     )
     result["max_context_chars"] = _clamp_int(
         result.get("max_context_chars"), 4000, 800000, defaults["max_context_chars"]
@@ -337,15 +337,22 @@ async def chat(
 
     configured_max = int(config["max_output_tokens"])
     max_tokens = configured_max if requested_max_tokens is None else min(
-        configured_max, _clamp_int(requested_max_tokens, 128, 8192, configured_max)
+        configured_max, _clamp_int(requested_max_tokens, 128, 65536, configured_max)
     )
 
     configured_ctx = int(config["context_window_tokens"])
     requested_ctx = configured_ctx if requested_context_window_tokens is None else min(
-        configured_ctx, _clamp_int(requested_context_window_tokens, 2048, 262144, configured_ctx)
+        configured_ctx, _clamp_int(requested_context_window_tokens, 2048, 1_048_576, configured_ctx)
     )
     model_ctx = int(model.context_window) if model.context_window else None
     context_window_tokens = min(requested_ctx, model_ctx) if model_ctx else requested_ctx
+    provider_max_output = None
+    if isinstance(model.metadata_json, dict):
+        raw_provider_max = model.metadata_json.get("provider_max_output_tokens")
+        if isinstance(raw_provider_max, int) and raw_provider_max > 0:
+            provider_max_output = raw_provider_max
+    if provider_max_output:
+        max_tokens = min(max_tokens, provider_max_output)
     # Never request more generated tokens than can fit in the selected context window.
     max_tokens = min(max_tokens, max(128, context_window_tokens - 1024))
     # Leave room for system/task instructions and chat framing. The remaining budget is shared by JSON context and messages.
@@ -419,7 +426,9 @@ async def chat(
                     "model": model.model_identifier,
                     "system": prompt_messages[0]["content"],
                     "max_tokens": max_tokens,
-                    "temperature": model.temperature,
+                    # Temperature is intentionally omitted. Current Claude models
+                    # accept provider defaults, and newer Opus generations reject
+                    # non-default sampling parameters.
                     "messages": prompt_messages[1:],
                 },
             )
@@ -498,5 +507,20 @@ async def test_provider(provider_type: str, base_url: str | None, api_key: str |
             response.raise_for_status()
             return {"ok": True, "models": [x.get("id") for x in response.json().get("data", [])][:100]}
         if provider_type == "anthropic":
-            return {"ok": bool(api_key), "models": [], "note": "Anthropic key stored; model identifiers are configured manually."}
+            base = (base_url or "https://api.anthropic.com/v1").rstrip("/")
+            headers = {
+                "x-api-key": api_key or "",
+                "anthropic-version": "2023-06-01",
+                "content-type": "application/json",
+            }
+            response = await client.get(base + "/models", headers=headers, params={"limit": 100})
+            response.raise_for_status()
+            data = response.json().get("data", [])
+            details = [{
+                "id": x.get("id"),
+                "display_name": x.get("display_name") or x.get("id"),
+                "context_window": x.get("max_input_tokens"),
+                "max_output_tokens": x.get("max_tokens"),
+            } for x in data if x.get("id")]
+            return {"ok": True, "models": [x["id"] for x in details], "model_details": details}
     return {"ok": False}
