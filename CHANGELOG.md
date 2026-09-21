@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.1.0-alpha.6 - 2026-09-21
+
+Bright Health UI / readability release:
+
+- adds four explicit Activity AI context scopes: **Nur dieses Training**, **Dieser Tag**, **3 Tage** and **7 Tage** (with English equivalents)
+- **Dieser Tag** includes available Garmin wellness/recovery values for the activity date, including hydration, sleep, HRV, resting HR, stress, Body Battery, Training Readiness and steps when present
+- fixes 3-/7-day recovery windows to be true inclusive calendar-day windows instead of loading one extra date
+- deep-analysis prompts now adapt to the selected context scope and no longer demand unavailable 3-/7-day sections
+- introduces a cohesive light health-and-training design system with mint/teal accents, softer borders, restrained shadows and improved typography
+- replaces the dense desktop top navigation with a persistent grouped sidebar and compact contextual header
+- adds a responsive five-destination mobile navigation dock for Today, Health, Activities, Training and AI Coach
+- redesigns the login experience into a clearer local-first health/product introduction and focused sign-in surface
+- rebuilds the Today dashboard with a calmer health hero, readiness/Body Battery focus panel, semantic metric cards, recent activity list and larger 14-day trend surface
+- rebuilds the Health page with a clearer period selector, consistent health metric cards, larger trend cards and explicit data-coverage summary
+- modernizes the Activities history with search, FIT-analysis counters, sport-aware badges, clearer distance/duration/HR hierarchy and responsive list rows
+- refreshes Activity Detail v2, Coach, AI Studio, forms, tables, chips and status elements without changing the underlying Garmin/FIT/AI data contracts
+- deliberately keeps the interface light even when the operating system requests dark mode to preserve the new bright health visual language
+- adds `docs/UI_REFRESH_ALPHA6.md` documenting the visual system and responsive behavior
+
 ## 0.1.0-alpha.5 - 2026-09-21
 
 Modern AI Studio / long-running local-model release:

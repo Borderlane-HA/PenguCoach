@@ -40,18 +40,23 @@ Priorisiere die offiziellen Garmin-Gesamtwerte und verwende PenguCoach-FIT-Metri
 Analysiere – sofern Daten vorhanden sind – Tempo/Geschwindigkeit, Herzfrequenzreaktion, Leistung, Kadenz,
 Höhenprofil, Splits, Sensorabdeckung, Effizienz und auffällige Veränderungen innerhalb der Einheit.
 
-Wenn Rückblickdaten vorhanden sind, beziehe insbesondere die letzten 3 und 7 Tage ein: Trainingshäufigkeit,
-Gesamtdauer, Distanz, Garmin Training Load, Ruhetage sowie Schlaf, HRV, Ruhepuls, Body Battery bzw.
-Training Readiness, soweit tatsächlich vorhanden. Ordne die kurzfristige Belastung vorsichtig als eher niedrig,
-ausgewogen oder hoch ein, ohne ein Übertrainingssyndrom zu diagnostizieren.
+Wenn Kontextdaten vorhanden sind, verwende exakt den angeforderten Kontextumfang aus lookback.scope:
+- session_only: ausschließlich diese Trainingseinheit; keine Tages- oder Rückblickbewertung erfinden.
+- activity_day: Tageskontext des Trainingstags einschließlich verfügbarer Garmin-Tageswerte wie Schlaf, HRV,
+  Ruhepuls, Stress, Body Battery, Training Readiness, Schritte und Hydration sowie weitere Einheiten dieses Tages.
+- three_days: die Einheit plus den inklusiven 3-Tage-Kontext mit Trainingshäufigkeit, Dauer, Distanz, Garmin
+  Training Load, Ruhetagen und verfügbaren Erholungsdaten.
+- seven_days: die Einheit plus den inklusiven 7-Tage-Kontext; nutze zusätzlich den 3-Tage-Vergleich, wenn vorhanden.
+Ordne kurzfristige Belastung vorsichtig als eher niedrig, ausgewogen oder hoch ein, ohne ein Übertrainingssyndrom
+zu diagnostizieren. Tageswerte sind Garmin-Tagesaggregate und können den gesamten Kalendertag abbilden.
 
-Strukturiere die Antwort vollständig in:
+Strukturiere die Antwort passend zum tatsächlich gelieferten Kontext in:
 1. Kurzfazit
 2. Leistungsanalyse der aktuellen Einheit
 3. Herzfrequenz, Leistung/Pace und Effizienz
 4. Höhenprofil, Splits und Pacing
-5. Rückblick 3 Tage
-6. Rückblick 7 Tage und Belastungs-/Erholungskontext
+5. Kontext des gewählten Zeitraums (nur wenn geliefert)
+6. Belastungs-/Erholungskontext (nur wenn geliefert)
 7. Stärken der Einheit
 8. Auffälligkeiten / Punkte zum Beobachten
 9. Konkrete Empfehlung für die nächsten 1–3 Trainingstage
@@ -64,18 +69,23 @@ Prioritize official Garmin activity totals and use PenguCoach FIT metrics as sup
 Where data exists, assess pacing/speed, heart-rate response, power, cadence, elevation, splits, sensor coverage,
 efficiency and meaningful changes within the session.
 
-If lookback data is supplied, explicitly assess the previous 3 and 7 days: training frequency, total duration,
-distance, Garmin Training Load, rest days, sleep, HRV, resting heart rate, Body Battery and Training Readiness
-when those values are actually available. Describe the short-term load as relatively light, balanced or heavy
-with appropriate uncertainty; do not diagnose overtraining syndrome.
+When context data is supplied, use exactly the requested scope from lookback.scope:
+- session_only: analyse only this training session; do not invent daily or lookback conclusions.
+- activity_day: use the calendar-day context for the session, including available Garmin daily values such as sleep,
+  HRV, resting heart rate, stress, Body Battery, Training Readiness, steps and hydration, plus other sessions that day.
+- three_days: use the session plus the inclusive 3-day context with training frequency, duration, distance, Garmin
+  Training Load, rest days and available recovery data.
+- seven_days: use the session plus the inclusive 7-day context and the 3-day comparison when available.
+Describe short-term load cautiously as relatively light, balanced or heavy; do not diagnose overtraining syndrome.
+Daily values are Garmin calendar-day aggregates and may represent the complete calendar day.
 
-Complete the answer using this structure:
+Complete the answer using sections appropriate to the supplied context:
 1. Executive summary
 2. Current-session performance analysis
 3. Heart rate, power/pace and efficiency
 4. Elevation, splits and pacing
-5. 3-day lookback
-6. 7-day load and recovery context
+5. Selected-period context (only when supplied)
+6. Load and recovery context (only when supplied)
 7. Strengths
 8. Watch-outs
 9. Practical recommendation for the next 1–3 training days

@@ -8,9 +8,10 @@ PenguCoach is designed as a local-first, multi-user platform that reads Garmin C
 
 ## Current alpha scope
 
-`v0.1.0-alpha.5` is the current end-to-end alpha baseline:
+`v0.1.0-alpha.6` is the current end-to-end alpha baseline:
 
 - German and English web UI
+- bright health-first responsive web design with desktop sidebar and mobile navigation dock
 - first-run administrator setup
 - multi-user local authentication
 - mandatory safety/development gate after every login
@@ -195,3 +196,8 @@ See [`SECURITY.md`](SECURITY.md).
 MIT. See [`LICENSE`](LICENSE).
 
 Garmin and Garmin Connect are trademarks of Garmin Ltd. or its subsidiaries. PenguCoach is an independent development project and is not affiliated with or endorsed by Garmin.
+
+
+### Activity AI context scopes
+
+Activity deep analysis supports four explicit context scopes: **Nur dieses Training / This training only**, **Dieser Tag / This day**, **3 Tage / 3 days**, and **7 Tage / 7 days**. The day/multi-day scopes include available Garmin wellness/recovery data such as sleep, HRV, resting heart rate, stress, Body Battery, Training Readiness, steps and hydration. Missing Garmin values remain null and are never invented.

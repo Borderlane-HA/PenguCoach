@@ -20,6 +20,14 @@ SOURCE_NOTICE = (
 )
 
 
+def _context_start_date(end_date: date, lookback_days: int) -> date:
+    """Return the first calendar date for an inclusive activity-analysis context window."""
+    days = lookback_days if lookback_days in {0, 1, 3, 7} else 7
+    if days == 0:
+        return end_date
+    return end_date - timedelta(days=days - 1)
+
+
 def _activity_garmin(a: Activity) -> dict[str, Any]:
     extra = selected_garmin_extras(a.raw)
     return {
@@ -204,8 +212,10 @@ async def build_activity_analysis_context(
     if end_dt.tzinfo is None:
         end_dt = end_dt.replace(tzinfo=timezone.utc)
     end_date = end_dt.date()
-    lookback_days = lookback_days if lookback_days in {0, 3, 7} else 7
-    start_date = end_date - timedelta(days=max(0, lookback_days))
+    lookback_days = lookback_days if lookback_days in {0, 1, 3, 7} else 7
+    # 0 = only this session; 1 = calendar day of the session; 3/7 = inclusive calendar-day windows.
+    # Using days - 1 avoids accidentally turning a 3-day request into four calendar dates.
+    start_date = _context_start_date(end_date, lookback_days)
 
     prior: list[Activity] = []
     health: list[DailyHealth] = []
@@ -229,13 +239,19 @@ async def build_activity_analysis_context(
         "splits_source": "pengucoach_fit",
         "splits": (fit_detail.get("splits") or [])[:120],
     }
+    scope = {0: "session_only", 1: "activity_day", 3: "three_days", 7: "seven_days"}[lookback_days]
     lookback: dict[str, Any] = {
+        "scope": scope,
         "days": lookback_days,
+        "from": start_date if lookback_days else None,
+        "to": end_date if lookback_days else None,
         "activities": prior_payload,
         "health": _health_payload(health),
         "sleep": _sleep_payload(sleep),
         "hrv": _hrv_payload(hrv),
     }
+    if lookback_days == 1:
+        lookback["summary_day"] = _window_summary(prior, end_date, 1)
     if lookback_days >= 3:
         lookback["summary_3d"] = _window_summary(prior, end_date, 3)
     if lookback_days >= 7:

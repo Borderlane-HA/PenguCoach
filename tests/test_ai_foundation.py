@@ -33,8 +33,10 @@ def test_ai_task_defaults_include_context_and_response_budgets():
 
 
 def test_prompts_are_bilingual_and_deep_analysis_has_lookbacks():
-    assert "3" in DEEP_ACTIVITY_PROMPT_DE and "7" in DEEP_ACTIVITY_PROMPT_DE
-    assert "3" in DEEP_ACTIVITY_PROMPT_EN and "7" in DEEP_ACTIVITY_PROMPT_EN
+    assert "activity_day" in DEEP_ACTIVITY_PROMPT_DE
+    assert "three_days" in DEEP_ACTIVITY_PROMPT_DE and "seven_days" in DEEP_ACTIVITY_PROMPT_DE
+    assert "activity_day" in DEEP_ACTIVITY_PROMPT_EN
+    assert "three_days" in DEEP_ACTIVITY_PROMPT_EN and "seven_days" in DEEP_ACTIVITY_PROMPT_EN
     assert "periodisierten" in TRAINING_PLAN_PROMPT_DE
     assert _locale_key("de-DE") == "de"
     assert _locale_key("en-GB") == "en"
