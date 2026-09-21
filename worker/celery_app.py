@@ -15,4 +15,8 @@ app.conf.update(
         "schedule-due-garmin-syncs": {"task": "worker.tasks.scheduler.schedule_due_garmin_syncs", "schedule": 60.0},
     },
 )
-app.autodiscover_tasks(["worker.tasks"])
+app.conf.imports = (
+    "worker.tasks.garmin_sync",
+    "worker.tasks.fit",
+    "worker.tasks.scheduler",
+)
