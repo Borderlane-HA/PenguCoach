@@ -39,6 +39,9 @@ DEEP_ACTIVITY_PROMPT_DE = """Führe eine tiefgehende, datenbasierte Analyse dies
 Priorisiere die offiziellen Garmin-Gesamtwerte und verwende PenguCoach-FIT-Metriken als ergänzende analytische Evidenz.
 Analysiere – sofern Daten vorhanden sind – Tempo/Geschwindigkeit, Herzfrequenzreaktion, Leistung, Kadenz,
 Höhenprofil, Splits, Sensorabdeckung, Effizienz und auffällige Veränderungen innerhalb der Einheit.
+Wenn training_zones vorhanden sind, verwende die von Garmin konfigurierten sportartspezifischen Herzfrequenz- und
+Leistungszonen. Wenn time_in_zones vorhanden ist, nutze diese lokal aus FIT berechnete Zeitverteilung und kennzeichne
+klar: Zonengrenzen = Garmin, Zeit in Zone = PenguCoach/FIT. Erfinde keine fehlenden Zonen.
 
 Wenn Kontextdaten vorhanden sind, verwende exakt den angeforderten Kontextumfang aus lookback.scope:
 - session_only: ausschließlich diese Trainingseinheit; keine Tages- oder Rückblickbewertung erfinden.
@@ -67,7 +70,9 @@ stammt und was von PenguCoach berechnet wurde. Antworte ausschließlich auf Deut
 DEEP_ACTIVITY_PROMPT_EN = """Perform a deep, evidence-focused analysis of this training session.
 Prioritize official Garmin activity totals and use PenguCoach FIT metrics as supplementary analytical evidence.
 Where data exists, assess pacing/speed, heart-rate response, power, cadence, elevation, splits, sensor coverage,
-efficiency and meaningful changes within the session.
+efficiency and meaningful changes within the session. If training_zones are supplied, use Garmin's configured
+sport-specific heart-rate and power zones. If time_in_zones is supplied, use the locally FIT-calculated distribution
+and state clearly: zone boundaries = Garmin, time in zone = PenguCoach/FIT. Never invent missing zones.
 
 When context data is supplied, use exactly the requested scope from lookback.scope:
 - session_only: analyse only this training session; do not invent daily or lookback conclusions.
@@ -96,7 +101,9 @@ from PenguCoach-calculated metrics. Reply exclusively in English."""
 TRAINING_PLAN_PROMPT_DE = """Erstelle einen praktischen, periodisierten Trainingsplan aus dem angegebenen Ziel und dem bereitgestellten
 Trainingskontext. Beachte Wochenanzahl, Trainingstage und typische Sessiondauer. Balanciere Trainingsreiz und Erholung.
 Nutze verfügbare 7- und 28-Tage-Daten zu Umfang, Belastung und Erholung als Kontext, ohne medizinische Trainingsbereitschaft
-zu behaupten. Berücksichtige Progression und leichtere/regenerative Einheiten. Für Kraftziele: große Bewegungsmuster,
+zu behaupten. Wenn training_zones vorhanden sind, verwende die von Garmin konfigurierten Herzfrequenz- und Leistungszonen
+für konkrete Intensitätsvorgaben (z. B. Z2 Grundlage oder Z4 Intervalle) und nenne die gelieferten Grenzen, wenn sinnvoll.
+Erfinde keine Zonen, FTP- oder Schwellenwerte. Berücksichtige Progression und leichtere/regenerative Einheiten. Für Kraftziele: große Bewegungsmuster,
 Sätze/Wiederholungen und RPE/RIR-Leitplanken, ohne unbekannte Gewichte zu erfinden. Für Ausdauerziele: lockere aerobe
 Einheiten, Qualität/Intervalle und längere Einheiten passend zum Ziel. Für Hybridziele: Kraft und Ausdauer sinnvoll verteilen.
 Kennzeichne optionale Einheiten und Ruhetage. Struktur: Ziel & Annahmen, Wochenstruktur, Plan Woche für Woche,
@@ -106,6 +113,8 @@ Erholungssignalen. Erfinde keine Gesundheitsdaten. Antworte ausschließlich auf 
 TRAINING_PLAN_PROMPT_EN = """Create a practical, periodized training plan using the user's stated goal and the supplied recent training context.
 Respect the requested number of weeks, training days and typical session duration. Balance training stimulus and recovery.
 Use recent 7- and 28-day volume/load and recovery data as context when available, but do not infer medical readiness.
+If training_zones are supplied, use Garmin-configured heart-rate and power zones for concrete intensity prescriptions
+(e.g. Z2 aerobic work or Z4 intervals) and include supplied bounds when useful. Never invent zones, FTP or thresholds.
 Include progression and easier/recovery sessions. For strength goals include major movement patterns, sets/reps and
 RPE/RIR guardrails without pretending exact loads are known. For endurance goals include easy aerobic, quality/interval
 and longer sessions as appropriate. For hybrid goals balance strength and endurance interference. Clearly mark optional
@@ -115,12 +124,14 @@ Do not invent health data. Reply exclusively in English."""
 
 COACH_CHAT_PROMPT_DE = """Beantworte die Frage des Nutzers anhand des bereitgestellten Garmin- und PenguCoach-Kontexts.
 Nutze konkrete Werte, wenn sie relevant sind, unterscheide Messwerte von Interpretation und sage klar, wenn die Datenlage
-für eine Aussage nicht ausreicht. Wenn die Frage keinen Trainings-/Gesundheitskontext benötigt, antworte direkt und ignoriere
+für eine Aussage nicht ausreicht. Nutze Garmin-Trainingszonen aus training_zones, wenn die Frage Intensität, Puls oder Leistung betrifft.
+Wenn die Frage keinen Trainings-/Gesundheitskontext benötigt, antworte direkt und ignoriere
 irrelevante Trainingsdaten. Antworte ausschließlich auf Deutsch."""
 
 COACH_CHAT_PROMPT_EN = """Answer the user's question from the supplied Garmin and PenguCoach context.
 Use concrete values when relevant, distinguish measured facts from interpretation, and state when the available data is
-insufficient. If the question does not require training/wellness context, answer directly and ignore irrelevant training data.
+insufficient. Use Garmin training zones from training_zones when the question concerns intensity, heart rate or power.
+If the question does not require training/wellness context, answer directly and ignore irrelevant training data.
 Reply exclusively in English."""
 
 # Compatibility exports used by older tests/integrations.
@@ -296,6 +307,7 @@ def _bounded_context(context: dict[str, Any], max_chars: int) -> tuple[str, dict
                 "summary_28d": working.get("lookback", {}).get("summary_28d"),
             },
             "goal": working.get("goal"),
+            "training_zones": working.get("training_zones"),
             "context_truncated": True,
         }
         payload, size = _json_size(compact)
@@ -308,6 +320,8 @@ def _bounded_context(context: dict[str, Any], max_chars: int) -> tuple[str, dict
                 "pengucoach": activity.get("pengucoach"),
                 "fit_analytics_source": activity.get("fit_analytics_source"),
                 "fit_analytics": activity.get("fit_analytics"),
+                "training_zones": activity.get("training_zones"),
+                "time_in_zones": activity.get("time_in_zones"),
                 "splits_source": activity.get("splits_source"),
                 "splits": (activity.get("splits") or [])[:2],
                 "context_compacted": True,
@@ -318,6 +332,8 @@ def _bounded_context(context: dict[str, Any], max_chars: int) -> tuple[str, dict
             compact["activity"] = {
                 "garmin": activity.get("garmin"),
                 "pengucoach": activity.get("pengucoach"),
+                "training_zones": activity.get("training_zones"),
+                "time_in_zones": activity.get("time_in_zones"),
                 "context_compacted": True,
             }
             compact["context_note"] = "Lookback and detailed FIT context were reduced to preserve the current activity."

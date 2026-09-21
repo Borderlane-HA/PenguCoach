@@ -19,6 +19,7 @@ from pengucoach.db.models import (
 )
 from pengucoach.db.session import SessionLocal
 from pengucoach.garmin.gateway.factory import gateway_from_connection, serialize_refreshed_token
+from pengucoach.garmin.zones import sync_training_zones
 from pengucoach.garmin.sync.service import (
     _hash_payload,
     _store_raw,
@@ -63,6 +64,20 @@ async def _sync(user_id: str):
             return {"status": "not_connected"}
         result = await run_incremental_sync(db, user, conn)
         if result.get("status") == "success":
+            # Zone profiles are account-level Garmin training settings. Refresh
+            # them separately from day data so AI analysis/planning can use the
+            # user's actual configured HR/power zones. Failures here do not make
+            # an otherwise successful daily sync unusable.
+            try:
+                zone_gateway, _ = await gateway_from_connection(conn)
+                result["training_zones"] = await sync_training_zones(db, user, zone_gateway)
+                await db.commit()
+            except (GarminConnectAuthenticationError, GarminConnectTooManyRequestsError):
+                await db.rollback()
+                result["training_zones"] = {"synced": False, "deferred": True}
+            except Exception as exc:
+                await db.rollback()
+                result["training_zones"] = {"synced": False, "error": type(exc).__name__}
             setting = await db.get(GarminSyncSetting, user.id)
             if setting and setting.fit_download_enabled:
                 pending = (await db.scalars(
@@ -375,6 +390,26 @@ async def _historical(user_id: str, days: int, callback: ProgressCallback | None
 
         try:
             gateway, raw_client = await gateway_from_connection(conn)
+            try:
+                zones = await sync_training_zones(db, user, gateway, force=True)
+                await db.commit()
+                _progress(
+                    callback,
+                    phase="zones",
+                    state="running",
+                    message="Garmin training zones synchronized",
+                    heart_rate_profiles=zones.get("heart_rate", {}).get("profile_count", 0),
+                    power_profiles=zones.get("power", {}).get("profile_count", 0),
+                )
+            except GarminConnectTooManyRequestsError:
+                await db.rollback()
+                # A zone refresh is valuable but must not block a multi-year import.
+                pass
+            except Exception:
+                await db.rollback()
+                user = await db.get(User, user_id)
+                conn = await db.scalar(select(GarminConnection).where(GarminConnection.user_id == user.id)) if user else None
+                run = await db.get(GarminSyncRun, run_id)
             _progress(
                 callback,
                 phase="activities",

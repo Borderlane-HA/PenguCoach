@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from pengucoach.db.models import Activity, ActivityMetric, DailyHealth, FitFile, HrvDaily, SleepSession, User
 from pengucoach.fit.activity_detail import selected_garmin_extras
 from pengucoach.fit.service import load_activity_detail
+from pengucoach.garmin.zones import activity_zone_time, training_zone_snapshot
 
 
 SOURCE_NOTICE = (
@@ -183,8 +184,10 @@ async def build_coach_context(db: AsyncSession, user: User, days: int = 30) -> d
     for a in activities:
         metric = await db.scalar(select(ActivityMetric).where(ActivityMetric.activity_id == a.id))
         activity_context.append({"garmin": _activity_garmin(a), "pengucoach": _metric_payload(metric)})
+    zones = await training_zone_snapshot(db, user.id)
     return {
         "source_notice": SOURCE_NOTICE,
+        "training_zones": zones,
         "period_days": days,
         "summary_7d": _window_summary(list(activities), end, min(7, days)),
         "summary_28d": _window_summary(list(activities), end, min(28, days)),
@@ -212,6 +215,14 @@ async def build_activity_analysis_context(
             fit_detail = await asyncio.to_thread(load_activity_detail, fit, activity.sport_type)
         except Exception:
             fit_detail = {"stats": None, "splits": []}
+
+    zones = await training_zone_snapshot(db, user.id)
+    zone_time = await asyncio.to_thread(
+        activity_zone_time,
+        fit.parquet_path if fit and fit.status == "parsed" else None,
+        activity.sport_type,
+        zones,
+    )
 
     end_dt = activity.started_at or datetime.now(timezone.utc)
     if end_dt.tzinfo is None:
@@ -241,6 +252,8 @@ async def build_activity_analysis_context(
         "pengucoach": _metric_payload(metric),
         "fit_analytics_source": "pengucoach_fit",
         "fit_analytics": fit_detail.get("stats"),
+        "training_zones": zones,
+        "time_in_zones": zone_time,
         "splits_source": "pengucoach_fit",
         "splits": (fit_detail.get("splits") or [])[:120],
     }
@@ -273,8 +286,10 @@ async def build_training_plan_context(db: AsyncSession, user: User, days: int = 
         Activity.user_id == user.id, Activity.started_at >= start_dt
     ).order_by(Activity.started_at))).all())
     health, sleep, hrv = await _recovery_window(db, user.id, start, end)
+    zones = await training_zone_snapshot(db, user.id)
     return {
         "source_notice": SOURCE_NOTICE,
+        "training_zones": zones,
         "lookback": {
             "days": days,
             "summary_7d": _window_summary(activities, end, 7),

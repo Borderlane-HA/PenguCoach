@@ -59,6 +59,15 @@ class GarminReadOnlyGateway:
     def get_max_metrics(self, day: date) -> Any:
         return self.__client.get_max_metrics(day.isoformat())
 
+    def get_heart_rate_zones(self) -> Any:
+        return self.__client.get_heart_rate_zones()
+
+    def get_power_zones(self) -> Any:
+        return self.__client.get_power_zones()
+
+    def get_power_zones_for_sport(self, sport: str) -> Any:
+        return self.__client.get_power_zones_for_sport(sport)
+
     def get_intensity_minutes_data(self, day: date) -> dict[str, Any]:
         return self.__client.get_intensity_minutes_data(day.isoformat())
 

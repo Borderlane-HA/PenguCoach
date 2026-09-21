@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.1.0-alpha.13 - 2026-09-21
+
+### Added
+- Garmin heart-rate and power-zone synchronization using the read-only Garmin gateway.
+- Versioned local storage for Garmin zone profiles and a `/garmin/zones` status endpoint.
+- Garmin training-zone status cards in AI Coach and Training Planning.
+- Sport-aware Garmin zone context for Coach Chat, activity analysis and training-plan generation.
+- Local FIT time-in-zone calculation using Garmin-provided heart-rate/power boundaries.
+
+### Changed
+- Deep activity-analysis prompts now use Garmin zones and PenguCoach/FIT time-in-zone when available.
+- Training-plan prompts can prescribe intensities using the user's configured Garmin zones instead of estimated zones.
+- Garmin zone refresh runs with normal synchronization and at the start of historical imports without blocking the main sync if the optional zone endpoint is temporarily unavailable.
+
+### Fixed
+- iOS/iPadOS number validation for AI maximum-response fields. Values such as 2,500, 3,500 and 8,000 tokens are now accepted because response-token inputs use unit steps instead of an incompatible 100/250 step offset from the 128-token minimum.
+
 ## 0.1.0-alpha.12 - 2026-09-21
 
 Large Garmin history / resumable import release:

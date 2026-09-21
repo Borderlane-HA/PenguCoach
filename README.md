@@ -8,7 +8,9 @@ PenguCoach is designed as a local-first, multi-user platform that reads Garmin C
 
 ## Current alpha scope
 
-`v0.1.0-alpha.12` is the current end-to-end alpha baseline:
+Alpha.13 adds Garmin-configured heart-rate and cycling/power zones as first-class coaching context. PenguCoach refreshes zone profiles during Garmin sync, stores them locally, shows their sync state in Coach and Training, and uses the exact Garmin boundaries in activity analysis and training-plan generation. For FIT-backed activities, time-in-zone is calculated locally against those Garmin boundaries. The AI token controls were also hardened for iOS/iPadOS browsers so recommended output limits such as 2,500 or 8,000 tokens remain valid inputs.
+
+`v0.1.0-alpha.13` is the current end-to-end alpha baseline:
 
 - German and English web UI
 - bright health-first responsive web design with desktop sidebar and mobile navigation dock
