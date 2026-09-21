@@ -86,6 +86,12 @@ class GarminReadOnlyGateway:
     def get_race_predictions(self) -> Any:
         return self.__client.get_race_predictions()
 
+    def count_activities(self) -> int:
+        return int(self.__client.count_activities())
+
+    def get_activities_page(self, start: int = 0, limit: int = 1000) -> Any:
+        return self.__client.get_activities(start=start, limit=limit)
+
     def get_activities_by_date(self, start: date, end: date) -> list[dict[str, Any]]:
         return self.__client.get_activities_by_date(start.isoformat(), end.isoformat())
 

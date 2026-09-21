@@ -8,13 +8,15 @@ PenguCoach is designed as a local-first, multi-user platform that reads Garmin C
 
 ## Current alpha scope
 
-`v0.1.0-alpha.7` is the current end-to-end alpha baseline:
+`v0.1.0-alpha.9` is the current end-to-end alpha baseline:
 
 - German and English web UI
 - bright health-first responsive web design with desktop sidebar and mobile navigation dock
 - per-user appearance themes (Mint Light, Midnight Health, Ocean, Forest and Lavender)
 - profile-picture and custom app-icon upload stored locally and included in normal backups
+- built-in PenguCoach app icon used by default in the UI plus a browser favicon; a custom app icon can still override the sidebar branding
 - simplified Garmin synchronization with one everyday Sync action and a separate history/backfill section
+- live Garmin sync state with reload-safe job polling; the Sync button stays disabled until the worker has actually finished and timestamps refresh automatically
 - first-run administrator setup
 - multi-user local authentication
 - mandatory safety/development gate after every login
@@ -36,6 +38,7 @@ PenguCoach is designed as a local-first, multi-user platform that reads Garmin C
 - per-activity AI deep analysis with Training-only / This day / 3-day / 7-day training-recovery context and an editable predefined prompt
 - AI training-plan generation for strength, muscle gain, cardio, hybrid, running, cycling, mobility and custom goals
 - task-specific default/fallback model routing, bilingual DE/EN prompts, freely configurable context windows and output-token caps with recommended presets
+- clearer AI Studio fixed-model assignment indicator and compact provider/model management actions
 - persisted AI analysis/plan runs plus reload-safe background AI jobs
 - PostgreSQL + Redis/Celery
 - Alembic schema baseline

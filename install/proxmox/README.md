@@ -65,6 +65,13 @@ pct exec <CTID> -- pengucoach-backup
 pct exec <CTID> -- pengucoach-db-utf8
 ```
 
+
+## Update behavior
+
+`pengucoach-update` treats `/opt/pengucoach` as a deployment checkout, not as a development workspace. Before every update it creates a backup and then aligns the source tree directly with `origin/<channel>`. Local source edits are replaced automatically; there is no overwrite confirmation and no `Local source changes detected` abort.
+
+Persistent runtime data is not stored in the Git checkout: PostgreSQL, FIT/Parquet data, uploaded user assets and `/etc/pengucoach/pengucoach.env` are preserved. This makes it safe to publish a release by replacing the repository files in GitHub and then run `pengucoach-update`.
+
 ## Logs
 
 ```bash

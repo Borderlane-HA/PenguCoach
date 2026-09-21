@@ -1,6 +1,6 @@
-# Build status — 0.1.0-alpha.7
+# Build status — 0.1.0-alpha.8
 
-PenguCoach is an alpha development project. This release builds on the alpha.6 Garmin/FIT/AI architecture with personalization, simpler Garmin UX, stronger provider/model management and a deterministic deployment updater.
+PenguCoach is an alpha development project. This release builds on the alpha.7 health UI and deployment baseline with branding polish, live Garmin sync feedback, clearer automation controls and more readable AI provider management.
 
 ## Implemented baseline
 
@@ -17,7 +17,7 @@ PenguCoach is an alpha development project. This release builds on the alpha.6 G
 - Persisted AI runs with token/stop metadata and truncation detection
 - Native Proxmox LXC installer/updater/backup/status/database repair helpers
 
-## Alpha.7 visual & operations layer
+## Alpha.8 visual & operations layer
 
 - bright health-first design system with five per-user themes and high-contrast typography
 - persistent grouped desktop navigation sidebar
@@ -26,10 +26,10 @@ PenguCoach is an alpha development project. This release builds on the alpha.6 G
 - redesigned login, Today, Health and Activities experiences plus a local dashboard wellness illustration
 - modernized forms, tables, cards, status chips, Activity Detail v2, Coach and AI Studio surfaces
 - profile-picture and custom app-icon uploads stored under the persistent data directory
-- simplified Garmin sync/backfill separation
-- model edit/delete and saved-provider discovery, including current Anthropic model discovery
-- updater now replaces local deployment-source changes after backup instead of aborting
-- improved responsive behavior without removing analytical table detail
+- simplified Garmin sync/backfill separation plus live Celery-job status, reload-safe polling and automatic timestamp refresh
+- model edit/delete and saved-provider discovery, including current Anthropic model discovery, clearer fixed-model wording and compact destructive actions
+- updater replaces local deployment-source changes after backup without an overwrite confirmation or local-source-change abort
+- built-in default app icon + favicon and improved responsive behavior without removing analytical table detail
 
 ## Intentionally still alpha / next iterations
 

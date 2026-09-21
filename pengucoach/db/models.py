@@ -211,6 +211,7 @@ class Activity(Base):
     avg_speed: Mapped[float | None] = mapped_column(Float, nullable=True)
     avg_power: Mapped[float | None] = mapped_column(Float, nullable=True)
     avg_cadence: Mapped[float | None] = mapped_column(Float, nullable=True)
+    vo2max: Mapped[float | None] = mapped_column(Float, nullable=True)
     elevation_gain: Mapped[float | None] = mapped_column(Float, nullable=True)
     training_load: Mapped[float | None] = mapped_column(Float, nullable=True)
     aerobic_training_effect: Mapped[float | None] = mapped_column(Float, nullable=True)

@@ -1,8 +1,40 @@
 # Changelog
 
-## 0.1.0-alpha.7 - 2026-09-21
+## 0.1.0-alpha.9 - 2026-09-21
 
-- adds an explicit sign-out action in the desktop account area and mobile/tablet top bar; logout clears the session and transient local AI job state
+Full-history Garmin / sport-specific VO2 release:
+
+- adds **Alle verfügbaren Daten / All available data** to Garmin history import instead of stopping at the previous 5-year UI choice
+- discovers the account-specific history start efficiently from Garmin's activity count + oldest activity page, then backfills daily/training/activity domains from that date
+- reuses one authenticated Garmin client during long history imports to reduce repeated SSO work and rate-limit pressure
+- keeps a conservative 25-year safety horizon, which still covers Garmin Connect's practical lifetime, and extends the long-history worker lock to 72 hours
+- adds a 10-year explicit history option alongside the automatic all-data scope
+- normalizes Garmin activity `vO2MaxValue` into an indexed activity field and backfills existing activities from their retained raw Garmin summary during migration
+- adds separate latest **VO2 max Running** and **VO2 max Cycling** values on the Today dashboard without changing the metric-card grid
+- adds a new full-width Health **VO2 max history** chart with distinct Running and Cycling series over all imported activity history
+- adds 5-year and **All data** range choices to the general Health trends page
+- exposes activity VO2 max to the activity API and AI training context as an official Garmin summary metric
+- adds `GET /health/vo2-history` for sport-specific long-term VO2 series
+
+## 0.1.0-alpha.8 - 2026-09-21
+
+UI polish / live Garmin sync / branding release:
+
+- adds a built-in PenguCoach SVG app icon as the default sidebar/login/setup brand mark instead of the plain `P` placeholder
+- registers the PenguCoach icon as the browser favicon
+- keeps per-user custom app-icon uploads as an override of the default sidebar branding
+- turns the Coach and Training Planning top area into one balanced full-width header frame and aligns the active-model panel with the heading/content geometry
+- makes manual Garmin synchronization follow the real Celery task until completion instead of only showing that enqueueing succeeded
+- keeps the Garmin Sync button disabled while the worker is actually running and resumes polling after a page reload through a stored task id
+- automatically refreshes Garmin last/next-sync timestamps when the job finishes and removes the running notice once complete
+- replaces the cramped Garmin automation grid with separate **Schedule** and **Activity data** panels and fixes the toggle text/layout overlap
+- renames the confusing AI Studio `routes set` KPI to **fixed models**, with an explanatory tooltip for automatic model selection
+- fixes provider action layout so Discover/Add/Delete controls stay compact and readable; destructive actions are explicitly labelled instead of using an unclear stretched `×`
+- keeps model Edit/Delete actions compact
+- re-verifies that the deployment updater performs backup + deterministic `origin/<channel>` alignment without an overwrite confirmation or local-source-change abort
+- adds `docs/UI_POLISH_ALPHA8.md`
+
+## 0.1.0-alpha.7 - 2026-09-21
 
 Personalization / Garmin simplicity / AI-provider management release:
 

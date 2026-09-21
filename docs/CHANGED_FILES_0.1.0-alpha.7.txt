@@ -27,6 +27,3 @@ Modified:
   * tests/test_ai_foundation.py
 
 Deleted:
-
-Notes:
-  - Logout/sign-out UI included in AppShell.tsx and globals.css.

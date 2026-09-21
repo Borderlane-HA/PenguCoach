@@ -65,6 +65,7 @@ def _activity_garmin(a: Activity) -> dict[str, Any]:
             "avg_rpm": a.avg_cadence,
             "max_rpm": extra.get("max_cadence"),
         },
+        "vo2max_ml_kg_min": a.vo2max,
         "training_load": a.training_load,
         "aerobic_training_effect": a.aerobic_training_effect,
         "anaerobic_training_effect": a.anaerobic_training_effect,

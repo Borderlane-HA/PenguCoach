@@ -230,6 +230,7 @@ async def _upsert_activities(db: AsyncSession, user: User, activities: list[dict
         row.avg_speed = float(item.get("averageSpeed") or 0) or None
         row.avg_power = float(item.get("avgPower") or item.get("averagePower") or 0) or None
         row.avg_cadence = float(item.get("averageRunningCadenceInStepsPerMinute") or item.get("averageBikingCadenceInRevPerMinute") or 0) or None
+        row.vo2max = float(item.get("vO2MaxValue") or item.get("vo2MaxValue") or 0) or None
         row.elevation_gain = float(item.get("elevationGain") or 0) or None
         row.training_load = float(item.get("activityTrainingLoad") or 0) or None
         row.aerobic_training_effect = float(item.get("aerobicTrainingEffect") or 0) or None
@@ -240,8 +241,17 @@ async def _upsert_activities(db: AsyncSession, user: User, activities: list[dict
     return changed, rows
 
 
-async def sync_day(db: AsyncSession, user: User, connection: GarminConnection, day: date, include_activities: bool = True) -> dict[str, Any]:
-    gateway, raw_client = await gateway_from_connection(connection)
+async def sync_day(
+    db: AsyncSession,
+    user: User,
+    connection: GarminConnection,
+    day: date,
+    include_activities: bool = True,
+    gateway=None,
+    raw_client=None,
+) -> dict[str, Any]:
+    if gateway is None or raw_client is None:
+        gateway, raw_client = await gateway_from_connection(connection)
     setting = await db.get(GarminSyncSetting, user.id)
     domains: dict[str, Any] = {}
     data: dict[str, Any] = {}
