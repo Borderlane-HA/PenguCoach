@@ -19,6 +19,18 @@ router = APIRouter(prefix="/coach", tags=["coach"])
 TASKS = ("coach_chat", "activity_analysis", "training_plan")
 
 
+def _analysis_scope_message(activity_id: uuid.UUID, days: int, locale: str) -> str:
+    de = str(locale).startswith("de")
+    labels = {
+        0: ("nur diesem Training", "this training session only"),
+        1: ("dem Kontext dieses Tages", "this day\'s context"),
+        3: ("dem 3-Tage-Kontext", "the 3-day context"),
+        7: ("dem 7-Tage-Kontext inklusive 3-Tage-Vergleich", "the 7-day context including the 3-day comparison"),
+    }
+    label = labels.get(days, labels[7])[0 if de else 1]
+    return (f"Analysiere Aktivität {activity_id} mit {label}." if de else f"Analyse activity {activity_id} using {label}.")
+
+
 class ChatRequest(BaseModel):
     message: str = Field(min_length=1, max_length=8000)
     conversation_id: uuid.UUID | None = None
@@ -31,7 +43,7 @@ class ChatRequest(BaseModel):
 
 class ActivityAnalysisRequest(BaseModel):
     activity_id: uuid.UUID
-    lookback_days: Literal[0, 3, 7] = 7
+    lookback_days: Literal[0, 1, 3, 7] = 7
     prompt: str | None = Field(default=None, max_length=16000)
     model_id: uuid.UUID | None = None
     max_tokens: int | None = Field(default=None, ge=128, le=8192)
@@ -209,10 +221,7 @@ async def activity_analysis(payload: ActivityAnalysisRequest, user: User = Depen
     _, local_only = await _privacy(db, user)
     config = await task_settings(db, "activity_analysis", locale)
     prompt = (payload.prompt or config["default_prompt"]).strip()
-    user_message = (
-        f"Analysiere Aktivität {payload.activity_id} mit {payload.lookback_days} Tagen Rückblick." if str(locale).startswith("de") else
-        f"Analyse activity {payload.activity_id} with {payload.lookback_days} days of lookback context."
-    )
+    user_message = _analysis_scope_message(payload.activity_id, payload.lookback_days, str(locale))
     try:
         answer = await chat(
             db, [{"role": "user", "content": user_message}], context, locale,
