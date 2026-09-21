@@ -45,6 +45,9 @@ install -m 0755 "$APP_DIR/install/proxmox/pengucoach-update.sh" /usr/local/bin/p
 install -m 0755 "$APP_DIR/install/proxmox/pengucoach-backup.sh" /usr/local/bin/pengucoach-backup
 install -m 0755 "$APP_DIR/install/proxmox/pengucoach-status.sh" /usr/local/bin/pengucoach-status
 install -m 0755 "$APP_DIR/install/proxmox/pengucoach-db-utf8.sh" /usr/local/bin/pengucoach-db-utf8
+for cmd in pengucoach-update pengucoach-backup pengucoach-status pengucoach-db-utf8; do
+  ln -sf "/usr/local/bin/$cmd" "/usr/bin/$cmd"
+done
 
 info "Configuring PostgreSQL"
 systemctl enable --now postgresql >/dev/null
@@ -237,6 +240,9 @@ install -m 0755 "$APP_DIR/install/proxmox/pengucoach-update.sh" /usr/local/bin/p
 install -m 0755 "$APP_DIR/install/proxmox/pengucoach-backup.sh" /usr/local/bin/pengucoach-backup
 install -m 0755 "$APP_DIR/install/proxmox/pengucoach-status.sh" /usr/local/bin/pengucoach-status
 install -m 0755 "$APP_DIR/install/proxmox/pengucoach-db-utf8.sh" /usr/local/bin/pengucoach-db-utf8
+for cmd in pengucoach-update pengucoach-backup pengucoach-status pengucoach-db-utf8; do
+  ln -sf "/usr/local/bin/$cmd" "/usr/bin/$cmd"
+done
 
 systemctl daemon-reload
 systemctl enable --now pengucoach-api pengucoach-worker pengucoach-scheduler pengucoach-web nginx >/dev/null

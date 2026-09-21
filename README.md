@@ -8,7 +8,7 @@ PenguCoach is designed as a local-first, multi-user platform that reads Garmin C
 
 ## Current alpha scope
 
-`v0.1.0-alpha.2` is the hardened first end-to-end deployment baseline:
+`v0.1.0-alpha.4` is the current end-to-end alpha baseline:
 
 - German and English web UI
 - first-run administrator setup
@@ -26,14 +26,18 @@ PenguCoach is designed as a local-first, multi-user platform that reads Garmin C
 - health overview and historical charts
 - Ollama, OpenAI, Anthropic and OpenAI-compatible provider management
 - cloud-health AI disabled per user by default; local Ollama can be used without cloud permission
-- basic evidence-constrained Coach chat using local Garmin/FIT facts
+- evidence-constrained Coach chat using local Garmin/FIT facts with selectable models and token budgets
+- per-activity AI deep analysis with 0/3/7-day training/recovery lookback and an editable predefined prompt
+- AI training-plan generation for strength, muscle gain, cardio, hybrid, running, cycling, mobility and custom goals
+- task-specific default/fallback model routing, prompts, output-token caps and bounded input context
+- persisted AI analysis/plan runs
 - PostgreSQL + Redis/Celery
 - Alembic schema baseline
 - native Proxmox LXC installer with Debian 13 `nesting=1`, UTF-8 locale/database setup and explicit Nginx reload
 - `pengucoach-update`, `pengucoach-backup`, `pengucoach-status`, `pengucoach-db-utf8`
 - Docker Compose for development/alternative deployments
 
-Training-plan generation, advanced baselines, correlation explorer and the full LangGraph multi-agent workflow remain planned work; the UI intentionally marks unfinished areas instead of pretending they are complete.
+Advanced long-term baselines, a correlation explorer and the full LangGraph multi-agent workflow remain planned work. Training-plan generation in alpha.4 is intentionally an AI-assisted planning foundation: it uses the locally stored 7/28-day context but does not write anything back to Garmin.
 
 ## Proxmox installation
 
@@ -122,6 +126,17 @@ API docs: `http://localhost:8000/docs`
 ## Activity Detail v2
 
 Since `0.1.0-alpha.3`, parsed FIT activities include a richer deterministic detail view before AI interpretation: interactive overlay/stacked charts, min/average/max sensor values, elevation and grade, kilometre/100 m splits, channel coverage, and sport-specific FIT lap/set/length tables when the recording device provides them. See [`docs/ACTIVITY_DETAIL_V2.md`](docs/ACTIVITY_DETAIL_V2.md).
+
+
+## AI analysis and training planning
+
+Since `0.1.0-alpha.4`, each activity can be sent to an eligible configured LLM for a deep analysis. The UI shows the effective default model, permits choosing another eligible model, supports no lookback or a 3/7-day lookback, and exposes the predefined analysis prompt for editing. Garmin activity totals are marked as the primary official values; locally calculated FIT analytics are supplied separately.
+
+The Training page can generate and persist plans for muscle gain, endurance/cardio, hybrid, cycling, running race goals, strength, general fitness, mobility and custom goals. Plan generation uses deterministic 7- and 28-day activity/load summaries plus available Garmin recovery data.
+
+AI cost controls are configured under **AI → Routing & cost limits**. Each task has a hard maximum response-token budget and a bounded context size. A user may request fewer output tokens, but not exceed the configured task maximum. Local Ollama remains usable without enabling cloud-health processing.
+
+See [`docs/AI_ANALYSIS_AND_PLANNING.md`](docs/AI_ANALYSIS_AND_PLANNING.md).
 
 ## Data flow
 

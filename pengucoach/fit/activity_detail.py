@@ -305,6 +305,8 @@ def serialize_series(df: pd.DataFrame, limit: int = 5000) -> list[dict[str, Any]
 
 GARMIN_EXTRA_FIELDS: dict[str, tuple[str, ...]] = {
     "elapsed_duration_s": ("elapsedDuration",),
+    "min_hr_bpm": ("minHR", "minHeartRate"),
+    "elevation_gain_m": ("elevationGain",),
     "max_speed_mps": ("maxSpeed",),
     "elevation_loss_m": ("elevationLoss",),
     "min_elevation_m": ("minElevation",),

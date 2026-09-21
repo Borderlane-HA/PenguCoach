@@ -55,6 +55,9 @@ install -m 0755 "$APP/install/proxmox/pengucoach-update.sh" /usr/local/bin/pengu
 install -m 0755 "$APP/install/proxmox/pengucoach-backup.sh" /usr/local/bin/pengucoach-backup
 install -m 0755 "$APP/install/proxmox/pengucoach-status.sh" /usr/local/bin/pengucoach-status
 install -m 0755 "$APP/install/proxmox/pengucoach-db-utf8.sh" /usr/local/bin/pengucoach-db-utf8
+for cmd in pengucoach-update pengucoach-backup pengucoach-status pengucoach-db-utf8; do
+  ln -sf "/usr/local/bin/$cmd" "/usr/bin/$cmd"
+done
 
 DB_ENCODING="$(runuser -u postgres -- psql -d postgres -Atqc "SELECT pg_encoding_to_char(encoding) FROM pg_database WHERE datname='pengucoach'" 2>/dev/null || true)"
 if [[ -n "$DB_ENCODING" && "$DB_ENCODING" != "UTF8" ]]; then

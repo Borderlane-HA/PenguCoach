@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.1.0-alpha.4 - 2026-09-21
+
+AI analysis and training-planning release:
+
+- adds an **AI Analysis** action directly on every activity detail page
+- shows the effective default model/provider and lets the user choose another eligible configured model per request
+- adds 0/3/7-day lookback selection for activity analysis; the 7-day context also includes a deterministic 3-day summary
+- ships a predefined deep-training-analysis prompt and keeps it editable per request
+- adds centrally configurable task prompts for Coach Chat, Activity Analysis and Training Planning
+- adds per-task **maximum response token** limits and a bounded input-context budget to control cloud cost
+- maps token limits to OpenAI/OpenAI-compatible `max_tokens`, Anthropic `max_tokens` and Ollama `num_predict`
+- reports provider token usage when the backend returns it
+- introduces persisted `ai_runs` so activity analyses and generated training plans survive page reloads
+- adds an AI training-plan builder for muscle gain, cardio/endurance, hybrid, cycling, 5K/10K, half marathon, marathon, strength, general fitness, mobility and custom goals
+- training-plan generation accepts experience, weeks, days/week, typical session duration, equipment, constraints and a custom prompt
+- training-plan context includes deterministic 7- and 28-day Garmin/FIT load summaries plus available recovery data
+- activity AI context clearly separates official Garmin totals from PenguCoach-calculated FIT analytics
+- activity detail now prefers Garmin summary values for ascent/descent, elevation range, HR, speed, power and cadence when Garmin provides them; local FIT calculations remain analytical fallbacks
+- exposes Garmin elevation gain/loss and minimum HR in the curated activity-extra layer when available
+- adds model/provider names to the AI admin model list and task-specific primary/fallback routing
+- fixes helper bootstrap/update reliability by invoking the backup helper via absolute path
+- installs `/usr/bin` helper symlinks so `pct exec <CTID> -- pengucoach-update|status|backup` works without depending on `/usr/local/bin` being in LXC attach PATH
+- adds a repository `.gitignore` for Python/Next.js build artifacts
+
 ## 0.1.0-alpha.3 - 2026-09-21
 
 Activity Detail v2 / analytics preparation release:
