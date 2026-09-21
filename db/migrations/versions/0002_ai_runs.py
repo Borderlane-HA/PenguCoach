@@ -14,6 +14,14 @@ depends_on = None
 
 
 def upgrade() -> None:
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    if "ai_runs" in inspector.get_table_names():
+        # Fresh installers from alpha.10+ create the current schema directly and
+        # stamp Alembic at head. This guard also makes the historical chain safe
+        # when 0001 was executed from an older dynamic metadata baseline.
+        return
+
     op.create_table(
         "ai_runs",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True, nullable=False),
@@ -37,4 +45,6 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_table("ai_runs")
+    bind = op.get_bind()
+    if "ai_runs" in sa.inspect(bind).get_table_names():
+        op.drop_table("ai_runs")

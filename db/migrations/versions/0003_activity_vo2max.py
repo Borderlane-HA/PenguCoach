@@ -14,7 +14,14 @@ depends_on = None
 
 def upgrade() -> None:
     bind = op.get_bind()
-    columns = {column["name"] for column in sa.inspect(bind).get_columns("activities")}
+    inspector = sa.inspect(bind)
+    if "activities" not in inspector.get_table_names():
+        raise RuntimeError(
+            "PenguCoach baseline schema is missing table 'activities'. "
+            "For a fresh installation use install/proxmox/install-app.sh, "
+            "which bootstraps the current schema before stamping Alembic."
+        )
+    columns = {column["name"] for column in inspector.get_columns("activities")}
     if "vo2max" not in columns:
         op.add_column("activities", sa.Column("vo2max", sa.Float(), nullable=True))
 
@@ -38,6 +45,9 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     bind = op.get_bind()
-    columns = {column["name"] for column in sa.inspect(bind).get_columns("activities")}
+    inspector = sa.inspect(bind)
+    if "activities" not in inspector.get_table_names():
+        return
+    columns = {column["name"] for column in inspector.get_columns("activities")}
     if "vo2max" in columns:
         op.drop_column("activities", "vo2max")
