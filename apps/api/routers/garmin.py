@@ -30,7 +30,7 @@ class SyncSettingsRequest(BaseModel):
     interval_minutes: int = Field(default=30, ge=15, le=1440)
     fit_download_enabled: bool = True
     fit_analysis_enabled: bool = True
-    historical_days: int = Field(default=365, ge=1, le=3650)
+    historical_days: int = Field(default=365, ge=0, le=9132)
     sync_health: bool = True
     sync_activities: bool = True
     sync_body: bool = True
@@ -38,7 +38,7 @@ class SyncSettingsRequest(BaseModel):
 
 
 class ImportRequest(BaseModel):
-    days: int = Field(default=365, ge=1, le=3650)
+    days: int = Field(default=365, ge=0, le=9132)
 
 
 @router.get("/status")
@@ -103,7 +103,7 @@ async def start_import(payload: ImportRequest, user: User = Depends(safety_confi
     conn = await db.scalar(select(GarminConnection).where(GarminConnection.user_id == user.id))
     if not conn or conn.status != "connected": raise HTTPException(status_code=409, detail="GARMIN_NOT_CONNECTED")
     task = historical_import.apply_async(args=[str(user.id), payload.days], queue="garmin")
-    return {"queued": True, "task_id": task.id, "days": payload.days}
+    return {"queued": True, "task_id": task.id, "days": payload.days, "scope": "all" if payload.days == 0 else "days"}
 
 
 @router.get("/sync/history")

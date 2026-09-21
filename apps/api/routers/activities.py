@@ -32,6 +32,7 @@ def _summary(x: Activity) -> dict:
         "avg_speed": x.avg_speed,
         "avg_power": x.avg_power,
         "avg_cadence": x.avg_cadence,
+        "vo2max": x.vo2max,
         "elevation_gain": x.elevation_gain,
         "training_load": x.training_load,
         "aerobic_training_effect": x.aerobic_training_effect,

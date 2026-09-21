@@ -6,7 +6,7 @@ import SparkLine from "../../components/SparkLine";
 import {api} from "../../lib/api";
 import {bi,useI18n} from "../../lib/i18n";
 
-type H={available:boolean;steps?:number;resting_hr?:number;stress_avg?:number;body_battery_high?:number;hydration_ml?:number;hydration_goal_ml?:number;training_readiness?:number;vo2max_running?:number;sleep?:{duration_seconds?:number;score?:number};hrv?:{overnight_average?:number;status?:string}};
+type H={available:boolean;steps?:number;resting_hr?:number;stress_avg?:number;body_battery_high?:number;hydration_ml?:number;hydration_goal_ml?:number;training_readiness?:number;vo2max_running?:number;vo2max_cycling?:number;sleep?:{duration_seconds?:number;score?:number};hrv?:{overnight_average?:number;status?:string}};
 type A={id:string;name?:string;sport_type?:string;distance_m?:number;duration_seconds?:number;avg_hr?:number;started_at?:string};
 const dur=(s?:number)=>s?`${Math.floor(s/3600)}h ${Math.round((s%3600)/60)}m`:"—";
 const sportGlyph=(s?:string)=>{const v=(s||"").toLowerCase();if(v.includes("run"))return "RUN";if(v.includes("bike")||v.includes("cycling"))return "BIKE";if(v.includes("swim"))return "SWIM";if(v.includes("strength")||v.includes("weight"))return "GYM";return "MOVE"};
@@ -24,8 +24,7 @@ export default function Today(){
     {label:"Body Battery",value:h?.body_battery_high??"—",note:bi(lang,"Höchstwert heute","High today"),tone:"battery"},
     {label:"Stress",value:h?.stress_avg??"—",note:bi(lang,"Durchschnitt","Average"),tone:"stress"},
     {label:bi(lang,"Hydration","Hydration"),value:h?.hydration_ml?`${(h.hydration_ml/1000).toFixed(1)} L`:"—",note:h?.hydration_goal_ml?`${bi(lang,"Ziel","Goal")} ${(h.hydration_goal_ml/1000).toFixed(1)} L`:"Garmin",tone:"water"},
-    {label:bi(lang,"Bereitschaft","Readiness"),value:h?.training_readiness??"—",note:bi(lang,"Training Readiness","Training readiness"),tone:"ready"},
-    {label:"VO₂max",value:h?.vo2max_running??"—",note:bi(lang,"Laufen","Running"),tone:"vo2"}
+    {label:bi(lang,"Bereitschaft","Readiness"),value:h?.training_readiness??"—",note:bi(lang,"Training Readiness","Training readiness"),tone:"ready"}
   ];
   return <AppShell>
     <section className="dashboard-hero">
@@ -44,7 +43,7 @@ export default function Today(){
       </div>
     </section>
 
-    <section className="health-metric-grid">{cards.map(c=><div className={`health-metric-card tone-${c.tone}`} key={c.label}><div className="health-metric-top"><span className="health-metric-dot"/><span className="metric-label">{c.label}</span></div><div className="metric-value">{String(c.value)}</div><div className="kpi-note">{c.note}</div></div>)}</section>
+    <section className="health-metric-grid">{cards.map(c=><div className={`health-metric-card tone-${c.tone}`} key={c.label}><div className="health-metric-top"><span className="health-metric-dot"/><span className="metric-label">{c.label}</span></div><div className="metric-value">{String(c.value)}</div><div className="kpi-note">{c.note}</div></div>)}<div className="health-metric-card tone-vo2 vo2-dual-card"><div className="health-metric-top"><span className="health-metric-dot"/><span className="metric-label">VO₂max</span></div><div className="vo2-dual-values"><div><small>{bi(lang,"Laufen","Running")}</small><strong>{h?.vo2max_running??"—"}</strong></div><div><small>{bi(lang,"Rad","Cycling")}</small><strong>{h?.vo2max_cycling??"—"}</strong></div></div><div className="kpi-note">ml/kg/min · Garmin</div></div></section>
 
     <section className="dashboard-main-grid">
       <div className="card trend-card"><div className="section-heading"><div><span className="eyebrow">{bi(lang,"Trend","Trend")}</span><h2>{bi(lang,"Ruhepuls · 14 Tage","Resting HR · 14 days")}</h2></div><a className="text-link" href="/health">{bi(lang,"Gesundheit","Health")} →</a></div><div className="trend-visual"><SparkLine values={trend.map(x=>x.resting_hr)}/></div><div className="trend-footer"><span><i className="legend-dot"/>{bi(lang,"Garmin Ruhepuls","Garmin resting HR")}</span><small>{bi(lang,"Mehr Metriken und Zeiträume in Gesundheit","More metrics and periods in Health")}</small></div></div>
