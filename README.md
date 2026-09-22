@@ -8,9 +8,9 @@ PenguCoach is designed as a local-first, multi-user platform that reads Garmin C
 
 ## Current alpha scope
 
-Alpha.21 makes larger histories and Garmin handoff easier to manage: the activity journal now searches and pages across the complete stored history, and every not-yet-exported calendar session can be edited as a Garmin-specific draft before upload. Duration, steps, zones, repeats and strength exercises can be adjusted or removed without rewriting the original AI plan. Garmin data synchronization stays read-only; only the explicit workout/calendar gateway may create or remove PenguCoach-managed workouts after user action.
+Alpha.22 is a focused build-fix release on top of the activity pagination and Garmin pre-export editor introduced in Alpha.21: the activity journal now searches and pages across the complete stored history, and every not-yet-exported calendar session can be edited as a Garmin-specific draft before upload. Duration, steps, zones, repeats and strength exercises can be adjusted or removed without rewriting the original AI plan. Garmin data synchronization stays read-only; only the explicit workout/calendar gateway may create or remove PenguCoach-managed workouts after user action.
 
-`v0.1.0-alpha.21` is the current end-to-end alpha baseline:
+`v0.1.0-alpha.22` is the current end-to-end alpha baseline:
 
 - German and English web UI
 - bright health-first responsive web design with desktop sidebar and mobile navigation dock

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.0-alpha.22 - 2026-09-22
+
+### Fixed
+- fixes the Next.js/TypeScript production build failure in `TrainingPlanCalendar.tsx` where the edited session clone was inferred as `{ steps: AnyObj[] }` and therefore rejected assignment to `duration_min`; the clone is now explicitly typed as the generic session object before step-derived duration is applied.
+- adds a regression assertion so the pre-Garmin step editor keeps the explicit object type required by strict TypeScript builds.
+
 ## 0.1.0-alpha.21 - 2026-09-22
 
 - Activities now use server-side pagination/search across the complete history with 25/50/100 rows per page, total/match counts and page navigation.

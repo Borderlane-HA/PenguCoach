@@ -69,3 +69,4 @@ def test_garmin_preview_and_worker_apply_user_calendar_edits():
     assert "Gesamtdauer aus Schritten übernehmen" in ui
     assert "session_overrides:overrides" in ui
     assert "localStorage.setItem(editKey" in ui
+    assert "const next:AnyObj={...editing,steps}" in ui
