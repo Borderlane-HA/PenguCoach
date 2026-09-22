@@ -89,6 +89,7 @@ def test_garmin_write_surface_stays_narrow_and_opt_in_is_default_off():
     assert "class GarminWorkoutGateway" in gateway
     assert "def upload_session" in gateway
     assert "def schedule_workout" in gateway
+    assert "def unschedule_workout" in gateway
     assert "def delete_workout" in gateway
     assert "__getattr__" not in gateway
     assert "workout_export_enabled: Mapped[bool] = mapped_column(Boolean, default=False)" in settings

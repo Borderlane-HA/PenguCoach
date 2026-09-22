@@ -102,7 +102,7 @@ def _parse_dt(value: Any) -> datetime | None:
     return None
 
 
-async def _upsert_health(db: AsyncSession, user: User, day: date, data: dict[str, Any]) -> None:
+async def _upsert_health(db: AsyncSession, user: User, day: date, data: dict[str, Any], preserve_missing: bool = False) -> None:
     row = await db.scalar(select(DailyHealth).where(DailyHealth.user_id == user.id, DailyHealth.date == day))
     if not row:
         row = DailyHealth(user_id=user.id, date=day)
@@ -122,8 +122,9 @@ async def _upsert_health(db: AsyncSession, user: User, day: date, data: dict[str
     row.active_calories = _first_number(summary, "activeKilocalories", "activeCalories")
     row.resting_calories = _first_number(summary, "bmrKilocalories", "restingCalories")
     row.resting_hr = int(_first_number(heart, "restingHeartRate") or _first_number(summary, "restingHeartRate") or 0) or None
-    row.min_hr = int(_first_number(heart, "minHeartRate", "minHeartRateInBeatsPerMinute") or 0) or None
-    row.max_hr = int(_first_number(heart, "maxHeartRate", "maxHeartRateInBeatsPerMinute") or 0) or None
+    if heart or not preserve_missing:
+        row.min_hr = int(_first_number(heart, "minHeartRate", "minHeartRateInBeatsPerMinute") or 0) or None
+        row.max_hr = int(_first_number(heart, "maxHeartRate", "maxHeartRateInBeatsPerMinute") or 0) or None
     row.stress_avg = _first_number(stress, "avgStressLevel", "averageStressLevel", "overallStressLevel")
     if isinstance(body_battery, list) and body_battery:
         values = []
@@ -134,13 +135,18 @@ async def _upsert_health(db: AsyncSession, user: User, day: date, data: dict[str
                         values.append(float(item[k]))
         if values:
             row.body_battery_high, row.body_battery_low = int(max(values)), int(min(values))
-    row.hydration_ml = int(_first_number(hydration, "valueInML", "waterConsumedInML", "hydrationAmount", "totalHydration") or 0) or None
-    row.hydration_goal_ml = int(_first_number(hydration, "goalInML", "hydrationGoal", "goal") or 0) or None
-    row.intensity_moderate = int(_first_number(intensity, "moderateIntensityMinutes", "moderateMinutes") or 0) or None
-    row.intensity_vigorous = int(_first_number(intensity, "vigorousIntensityMinutes", "vigorousMinutes") or 0) or None
-    row.respiration_avg = _first_number(respiration, "avgWakingRespirationValue", "avgRespiration", "averageRespiration")
-    row.spo2_avg = _first_number(spo2, "averageSpO2", "avgSpO2", "averageSpo2")
-    row.training_readiness = _first_number(readiness, "score", "trainingReadinessScore")
+    if hydration or not preserve_missing:
+        row.hydration_ml = int(_first_number(hydration, "valueInML", "waterConsumedInML", "hydrationAmount", "totalHydration") or 0) or None
+        row.hydration_goal_ml = int(_first_number(hydration, "goalInML", "hydrationGoal", "goal") or 0) or None
+    if intensity or not preserve_missing:
+        row.intensity_moderate = int(_first_number(intensity, "moderateIntensityMinutes", "moderateMinutes") or 0) or None
+        row.intensity_vigorous = int(_first_number(intensity, "vigorousIntensityMinutes", "vigorousMinutes") or 0) or None
+    if respiration or not preserve_missing:
+        row.respiration_avg = _first_number(respiration, "avgWakingRespirationValue", "avgRespiration", "averageRespiration")
+    if spo2 or not preserve_missing:
+        row.spo2_avg = _first_number(spo2, "averageSpO2", "avgSpO2", "averageSpo2")
+    if readiness or not preserve_missing:
+        row.training_readiness = _first_number(readiness, "score", "trainingReadinessScore")
     row.vo2max_running = _first_number(max_metrics, "vo2MaxPreciseValue", "vo2MaxValue", "vo2Max")
     row.raw = data
 
@@ -278,6 +284,7 @@ async def sync_day(
     include_activities: bool = True,
     gateway=None,
     raw_client=None,
+    detail_level: str = "full",
 ) -> dict[str, Any]:
     if gateway is None or raw_client is None:
         gateway, raw_client = await gateway_from_connection(connection)
@@ -285,28 +292,41 @@ async def sync_day(
     domains: dict[str, Any] = {}
     data: dict[str, Any] = {}
     calls: list[tuple[str, Callable[[], Any]]] = []
+    core_history = detail_level == "core"
     if not setting or setting.sync_health:
         calls.extend([
             ("daily", lambda: gateway.get_user_summary(day)),
-            ("heart", lambda: gateway.get_heart_rates(day)),
             ("sleep", lambda: gateway.get_sleep_data(day)),
             ("hrv", lambda: gateway.get_hrv_data(day)),
             ("stress", lambda: gateway.get_stress_data(day)),
             ("body_battery", lambda: gateway.get_body_battery(day)),
-            ("hydration", lambda: gateway.get_hydration_data(day)),
-            ("respiration", lambda: gateway.get_respiration_data(day)),
-            ("spo2", lambda: gateway.get_spo2_data(day)),
-            ("intensity", lambda: gateway.get_intensity_minutes_data(day)),
-            ("floors", lambda: gateway.get_floors(day)),
         ])
+        if not core_history:
+            calls.extend([
+                ("heart", lambda: gateway.get_heart_rates(day)),
+                ("hydration", lambda: gateway.get_hydration_data(day)),
+                ("respiration", lambda: gateway.get_respiration_data(day)),
+                ("spo2", lambda: gateway.get_spo2_data(day)),
+                ("intensity", lambda: gateway.get_intensity_minutes_data(day)),
+                ("floors", lambda: gateway.get_floors(day)),
+            ])
     if not setting or setting.sync_training:
-        calls.extend([
-            ("training_readiness", lambda: gateway.get_training_readiness(day)),
-            ("training_status", lambda: gateway.get_training_status(day)),
-            ("max_metrics", lambda: gateway.get_max_metrics(day)),
-        ])
+        if core_history:
+            calls.append(("max_metrics", lambda: gateway.get_max_metrics(day)))
+        else:
+            calls.extend([
+                ("training_readiness", lambda: gateway.get_training_readiness(day)),
+                ("training_status", lambda: gateway.get_training_status(day)),
+                ("max_metrics", lambda: gateway.get_max_metrics(day)),
+            ])
     if not setting or setting.sync_body:
-        calls.append(("body", lambda: gateway.get_stats_and_body(day)))
+        # The full endpoint bundles stats + body. Historical core mode already
+        # requested daily stats, so use the body-only date-range call to avoid
+        # fetching the same daily summary twice.
+        if core_history:
+            calls.append(("body", lambda: gateway.get_body_composition(day, day)))
+        else:
+            calls.append(("body", lambda: gateway.get_stats_and_body(day)))
     for domain, func in calls:
         value = await _call(domain, func, domains)
         data[domain] = value
@@ -320,7 +340,7 @@ async def sync_day(
             inserted, activity_rows = await _upsert_activities(db, user, activities)
             await _store_raw(db, user, "activities", day, activities)
     if not setting or setting.sync_health:
-        await _upsert_health(db, user, day, data)
+        await _upsert_health(db, user, day, data, preserve_missing=core_history)
         await _upsert_sleep(db, user, day, data.get("sleep"))
         await _upsert_hrv(db, user, day, data.get("hrv"))
     if (not setting or setting.sync_body) and data.get("body"):

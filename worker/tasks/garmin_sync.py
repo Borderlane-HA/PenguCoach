@@ -32,6 +32,8 @@ ALL_HISTORY_MAX_DAYS = 365 * 25 + 7
 ACTIVITY_PAGE_SIZE = 100
 MAX_ACTIVITY_PAGES = 5000
 HISTORY_RECENT_REFRESH_DAYS = 3
+HISTORY_FULL_DETAIL_DAYS = 90
+HISTORY_CONTROL_TTL_SECONDS = 7 * 24 * 60 * 60
 ProgressCallback = Callable[[dict[str, Any]], None]
 
 
@@ -44,6 +46,39 @@ def _account_lock(user_id: str, timeout: int):
     # One Garmin session per account at a time. A long history import and the
     # minute scheduler must not compete with each other for Garmin requests.
     return _lock(f"pengucoach:garmin-account:{user_id}", timeout=timeout)
+
+
+class HistoryImportInterrupted(RuntimeError):
+    def __init__(self, action: str) -> None:
+        self.action = action
+        super().__init__(f"GARMIN_HISTORY_{action.upper()}")
+
+
+def _history_control_key(user_id: str) -> str:
+    return f"pengucoach:garmin-history-control:{user_id}"
+
+
+def set_history_import_control(user_id: str, action: str) -> None:
+    if action not in {"pause", "cancel"}:
+        raise ValueError("INVALID_HISTORY_CONTROL")
+    Redis.from_url(settings.redis_url).setex(_history_control_key(user_id), HISTORY_CONTROL_TTL_SECONDS, action)
+
+
+def clear_history_import_control(user_id: str) -> None:
+    Redis.from_url(settings.redis_url).delete(_history_control_key(user_id))
+
+
+def _check_history_import_control(user_id: str) -> None:
+    try:
+        raw = Redis.from_url(settings.redis_url).get(_history_control_key(user_id))
+    except Exception:
+        # Progress-control polling must not make an otherwise valid import fail.
+        return
+    if not raw:
+        return
+    action = raw.decode() if isinstance(raw, bytes) else str(raw)
+    if action in {"pause", "cancel"}:
+        raise HistoryImportInterrupted(action)
 
 
 def _progress(callback: ProgressCallback | None, **payload: Any) -> None:
@@ -137,9 +172,17 @@ def _activity_list(payload: Any) -> list[dict]:
     return []
 
 
-async def _fetch_activity_page(gateway, offset: int, limit: int, callback: ProgressCallback | None) -> list[dict]:
+async def _fetch_activity_page(
+    gateway,
+    offset: int,
+    limit: int,
+    callback: ProgressCallback | None,
+    control_user_id: str | None = None,
+) -> list[dict]:
     """Fetch a Garmin activity page with bounded rate-limit retries."""
     for attempt in range(6):
+        if control_user_id:
+            _check_history_import_control(control_user_id)
         try:
             payload = await asyncio.to_thread(gateway.get_activities_page, offset, limit)
             return _activity_list(payload)
@@ -155,7 +198,11 @@ async def _fetch_activity_page(gateway, offset: int, limit: int, callback: Progr
                 retry_in_seconds=wait_seconds,
                 offset=offset,
             )
+            if control_user_id:
+                _check_history_import_control(control_user_id)
             await asyncio.sleep(wait_seconds)
+            if control_user_id:
+                _check_history_import_control(control_user_id)
     return []
 
 
@@ -186,7 +233,8 @@ async def _import_activity_catalog(
     stop_reason = "empty_page"
 
     while pages < MAX_ACTIVITY_PAGES:
-        rows = await _fetch_activity_page(gateway, offset, ACTIVITY_PAGE_SIZE, callback)
+        _check_history_import_control(str(user.id))
+        rows = await _fetch_activity_page(gateway, offset, ACTIVITY_PAGE_SIZE, callback, str(user.id))
         run.requests_made += 1
         if not rows:
             stop_reason = "empty_page"
@@ -306,6 +354,8 @@ async def _import_activity_catalog(
 
 
 def _history_marker(setting: GarminSyncSetting | None) -> dict[str, Any]:
+    # Keep this payload byte-for-byte compatible with alpha.15 so already
+    # completed full-detail days remain resume-safe after upgrading.
     return {
         "version": 1,
         "sync_health": True if setting is None else bool(setting.sync_health),
@@ -314,19 +364,39 @@ def _history_marker(setting: GarminSyncSetting | None) -> dict[str, Any]:
     }
 
 
-async def _history_day_done(db, user: User, day: date, marker: dict[str, Any]) -> bool:
+def _history_core_marker(setting: GarminSyncSetting | None) -> dict[str, Any]:
+    return {**_history_marker(setting), "detail_level": "core"}
+
+
+async def _history_day_done(
+    db,
+    user: User,
+    day: date,
+    full_marker: dict[str, Any],
+    detail_level: str = "full",
+    core_marker: dict[str, Any] | None = None,
+) -> bool:
     # Recent days are intentionally refreshed because Garmin can finalize sleep,
     # recovery and training values after the day has ended.
     if day >= date.today() - timedelta(days=HISTORY_RECENT_REFRESH_DAYS - 1):
         return False
-    digest = _hash_payload(marker)
-    found = await db.scalar(select(SourceRecord.id).where(
+    full_digest = _hash_payload(full_marker)
+    full = await db.scalar(select(SourceRecord.id).where(
         SourceRecord.user_id == user.id,
         SourceRecord.domain == "history_day_complete",
         SourceRecord.record_date == day,
-        SourceRecord.content_hash == digest,
+        SourceRecord.content_hash == full_digest,
     ))
-    return found is not None
+    if full is not None or detail_level == "full":
+        return full is not None
+    core_digest = _hash_payload(core_marker or _history_core_marker(None))
+    core = await db.scalar(select(SourceRecord.id).where(
+        SourceRecord.user_id == user.id,
+        SourceRecord.domain == "history_day_core_complete",
+        SourceRecord.record_date == day,
+        SourceRecord.content_hash == core_digest,
+    ))
+    return core is not None
 
 
 async def _queue_pending_fit(db, user: User, callback: ProgressCallback | None) -> int:
@@ -368,14 +438,15 @@ async def _queue_pending_fit(db, user: User, callback: ProgressCallback | None) 
     return queued
 
 
-async def _historical(user_id: str, days: int, callback: ProgressCallback | None = None):
+async def _historical(user_id: str, days: int, mode: str = "optimized", callback: ProgressCallback | None = None):
     async with SessionLocal() as db:
         user = await db.get(User, user_id)
         conn = await db.scalar(select(GarminConnection).where(GarminConnection.user_id == user.id)) if user else None
         if not user or not conn or conn.status != "connected":
             return {"status": "not_connected"}
         setting = await db.get(GarminSyncSetting, user.id)
-        run = GarminSyncRun(user_id=user.id, sync_type="historical", status="running", domains={})
+        mode = "full" if mode == "full" else "optimized"
+        run = GarminSyncRun(user_id=user.id, sync_type="historical", status="running", domains={"mode": mode})
         db.add(run)
         await db.commit()
         await db.refresh(run)
@@ -417,6 +488,7 @@ async def _historical(user_id: str, days: int, callback: ProgressCallback | None
                 message="Reading Garmin activity catalogue…",
                 requested_scope="all" if requested_all else "days",
                 requested_days=0 if requested_all else days,
+                import_mode=mode,
             )
 
             catalog = await _import_activity_catalog(db, user, gateway, requested_start, callback, run)
@@ -442,12 +514,16 @@ async def _historical(user_id: str, days: int, callback: ProgressCallback | None
             # data is intentionally a separate phase, so a slow wellness backfill
             # cannot leave a hole in the activity catalogue.
             marker = _history_marker(setting)
+            core_marker = _history_core_marker(setting)
             completed_days = 0
             skipped_days = 0
             requests_made = run.requests_made
+            full_detail_start = date.today() - timedelta(days=HISTORY_FULL_DETAIL_DAYS - 1)
             for offset in range(days):
+                _check_history_import_control(str(user.id))
                 day = start + timedelta(days=offset)
-                if await _history_day_done(db, user, day, marker):
+                detail_level = "full" if mode == "full" or day >= full_detail_start else "core"
+                if await _history_day_done(db, user, day, marker, detail_level, core_marker):
                     skipped_days += 1
                     completed_days += 1
                     if completed_days % 25 == 0 or completed_days == days:
@@ -462,6 +538,8 @@ async def _historical(user_id: str, days: int, callback: ProgressCallback | None
                             total_days=days,
                             percent=round(completed_days / days * 100, 1),
                             activities_imported=catalog["matched"],
+                            detail_level=detail_level,
+                            import_mode=mode,
                         )
                     continue
 
@@ -476,9 +554,12 @@ async def _historical(user_id: str, days: int, callback: ProgressCallback | None
                             include_activities=False,
                             gateway=gateway,
                             raw_client=raw_client,
+                            detail_level=detail_level,
                         )
                         requests_made += len(result.get("domains") or {})
-                        await _store_raw(db, user, "history_day_complete", day, marker)
+                        marker_domain = "history_day_complete" if detail_level == "full" else "history_day_core_complete"
+                        marker_payload = marker if detail_level == "full" else core_marker
+                        await _store_raw(db, user, marker_domain, day, marker_payload)
                         await db.commit()
                         break
                     except GarminConnectTooManyRequestsError:
@@ -497,7 +578,10 @@ async def _historical(user_id: str, days: int, callback: ProgressCallback | None
                             total_days=days,
                             retry_in_seconds=wait_seconds,
                         )
+                        # Pause/cancel is checked before a long retry sleep as well.
+                        _check_history_import_control(str(user.id))
                         await asyncio.sleep(wait_seconds)
+                        _check_history_import_control(str(user.id))
                         # Rollback expires ORM state; reload DB rows while keeping
                         # the authenticated Garmin client/session alive.
                         user = await db.get(User, user_id)
@@ -514,6 +598,8 @@ async def _historical(user_id: str, days: int, callback: ProgressCallback | None
                             "skipped_days": skipped_days,
                             "total_days": days,
                             "current_date": day.isoformat(),
+                            "mode": mode,
+                            "detail_level": detail_level,
                         },
                     }
                     await db.commit()
@@ -528,9 +614,13 @@ async def _historical(user_id: str, days: int, callback: ProgressCallback | None
                         total_days=days,
                         percent=round(completed_days / days * 100, 1),
                         activities_imported=catalog["matched"],
+                        detail_level=detail_level,
+                        import_mode=mode,
                     )
-                    # Conservative pacing for many day-specific Garmin endpoints.
-                    await asyncio.sleep(1)
+                    # Optimized historical mode uses fewer endpoints for old days;
+                    # pace less aggressively while still yielding periodically.
+                    if mode == "full" or completed_days % 25 == 0:
+                        await asyncio.sleep(1)
 
             conn.token_ciphertext = serialize_refreshed_token(raw_client)
             conn.last_validated_at = datetime.now(timezone.utc)
@@ -557,6 +647,8 @@ async def _historical(user_id: str, days: int, callback: ProgressCallback | None
                 "wellness": {
                     "completed_days": completed_days,
                     "skipped_days": skipped_days,
+                    "mode": mode,
+                    "full_detail_days": HISTORY_FULL_DETAIL_DAYS if mode == "optimized" else days,
                 },
                 "fit_queued": queued,
             }
@@ -567,6 +659,28 @@ async def _historical(user_id: str, days: int, callback: ProgressCallback | None
                 message="Historical import completed",
                 **result,
             )
+            return result
+        except HistoryImportInterrupted as interrupted:
+            await db.rollback()
+            run = await db.get(GarminSyncRun, run_id)
+            conn = await db.scalar(select(GarminConnection).where(GarminConnection.user_id == user_id))
+            if conn and "raw_client" in locals():
+                try:
+                    conn.token_ciphertext = serialize_refreshed_token(raw_client)
+                except Exception:
+                    pass
+            if run:
+                run.status = "paused" if interrupted.action == "pause" else "cancelled"
+                run.finished_at = datetime.now(timezone.utc)
+                run.error_code = None
+            await db.commit()
+            clear_history_import_control(str(user_id))
+            result = {
+                "status": "paused" if interrupted.action == "pause" else "cancelled",
+                "resume_safe": True,
+                "mode": mode,
+            }
+            _progress(callback, phase="stopped", state=result["status"], message=f"Historical import {result['status']}", **result)
             return result
         except GarminConnectAuthenticationError:
             await db.rollback()
@@ -608,7 +722,7 @@ async def _historical(user_id: str, days: int, callback: ProgressCallback | None
 
 
 @shared_task(bind=True, name="worker.tasks.garmin_sync.historical_import")
-def historical_import(self, user_id: str, days: int = 365):
+def historical_import(self, user_id: str, days: int = 365, mode: str = "optimized"):
     timeout = 7 * 24 * 60 * 60 if int(days) == 0 else 72 * 60 * 60
     lock = _account_lock(user_id, timeout=timeout)
     if not lock.acquire(blocking=False):
@@ -618,7 +732,7 @@ def historical_import(self, user_id: str, days: int = 365):
         self.update_state(state="PROGRESS", meta=meta)
 
     try:
-        return asyncio.run(_historical(user_id, days, callback=callback))
+        return asyncio.run(_historical(user_id, days, mode=mode, callback=callback))
     finally:
         try:
             lock.release()

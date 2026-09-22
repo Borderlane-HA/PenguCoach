@@ -13,6 +13,11 @@ def test_history_import_is_resume_safe_and_reports_progress():
     worker = Path("worker/tasks/garmin_sync.py").read_text()
     assert 'SourceRecord.domain == "history_day_complete"' in worker
     assert '"history_day_complete"' in worker
+    assert '"history_day_core_complete"' in worker
+    assert 'HISTORY_FULL_DETAIL_DAYS = 90' in worker
+    assert 'detail_level=detail_level' in worker
+    assert 'set_history_import_control' in worker
+    assert '_check_history_import_control' in worker
     assert 'bind=True, name="worker.tasks.garmin_sync.historical_import"' in worker
     assert "self.update_state(state=\"PROGRESS\"" in worker
     assert "_account_lock" in worker

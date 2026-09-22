@@ -179,3 +179,105 @@ async def _export_plan(
 def export_plan(self, user_id: str, payload: dict[str, Any]):
     self.update_state(state="PROGRESS", meta={"stage": "garmin_workout_export", "message": "Preparing Garmin workout export"})
     return asyncio.run(_export_plan(user_id, payload, progress=lambda value: self.update_state(state="PROGRESS", meta=value)))
+
+
+async def _delete_plan_from_garmin(
+    user_id: str,
+    plan_run_id: str,
+    progress: Callable[[dict[str, Any]], None] | None = None,
+) -> dict[str, Any]:
+    """Remove PenguCoach-created calendar schedules/templates, then delete the local plan.
+
+    Cleanup is deliberately independent from the workout-export opt-in. A user
+    who later disables export must still be able to remove content that
+    PenguCoach previously created in Garmin.
+    """
+    async with SessionLocal() as db:
+        uid = uuid.UUID(user_id)
+        run_id = uuid.UUID(plan_run_id)
+        run = await db.get(AiRun, run_id)
+        if not run or run.user_id != uid or run.task_type != "training_plan":
+            raise RuntimeError("TRAINING_PLAN_NOT_FOUND")
+
+        exports = (await db.scalars(select(GarminWorkoutExport).where(
+            GarminWorkoutExport.user_id == uid,
+            GarminWorkoutExport.plan_run_id == run_id,
+        ).order_by(GarminWorkoutExport.scheduled_date, GarminWorkoutExport.session_id))).all()
+        remote = [row for row in exports if row.workout_id or row.scheduled_workout_id]
+        if not remote:
+            await db.delete(run)
+            await db.commit()
+            return {"plan_run_id": str(run_id), "deleted": True, "garmin_deleted": 0, "failed": 0}
+
+        connection = await db.scalar(select(GarminConnection).where(GarminConnection.user_id == uid))
+        if not connection or connection.status != "connected" or not connection.token_ciphertext:
+            raise RuntimeError("GARMIN_NOT_CONNECTED")
+        gateway, raw_client = await workout_gateway_from_connection(connection)
+
+        deleted = failed = 0
+        errors: list[dict[str, Any]] = []
+        total = len(remote)
+        for index, ledger in enumerate(remote, start=1):
+            if progress:
+                progress({
+                    "stage": "garmin_workout_delete",
+                    "message": f"Removing Garmin workout {index}/{total}",
+                    "current": index,
+                    "total": total,
+                    "session_id": ledger.session_id,
+                    "date": ledger.scheduled_date.isoformat(),
+                })
+            try:
+                # Unschedule first; deleting the reusable template is a separate
+                # operation in Garmin Connect and is attempted only afterwards.
+                if ledger.scheduled_workout_id:
+                    await asyncio.to_thread(gateway.unschedule_workout, ledger.scheduled_workout_id)
+                    ledger.scheduled_workout_id = None
+                    await db.commit()
+                if ledger.workout_id:
+                    await asyncio.to_thread(gateway.delete_workout, ledger.workout_id)
+                    ledger.workout_id = None
+                    await db.commit()
+                ledger.status = "deleted"
+                ledger.error_message_safe = None
+                await db.commit()
+                deleted += 1
+            except Exception as exc:
+                failed += 1
+                ledger.status = "error"
+                ledger.error_message_safe = _safe_error(exc)
+                await db.commit()
+                errors.append({
+                    "session_id": ledger.session_id,
+                    "date": ledger.scheduled_date.isoformat(),
+                    "error": ledger.error_message_safe,
+                })
+
+        connection.token_ciphertext = serialize_refreshed_token(raw_client)
+        await db.commit()
+        if failed:
+            # Keep the plan and export ledger so the failed remote cleanup can be retried.
+            return {
+                "plan_run_id": str(run_id),
+                "deleted": False,
+                "garmin_deleted": deleted,
+                "failed": failed,
+                "errors": errors,
+                "retry_safe": True,
+            }
+
+        run = await db.get(AiRun, run_id)
+        if run:
+            await db.delete(run)
+        await db.commit()
+        return {"plan_run_id": str(run_id), "deleted": True, "garmin_deleted": deleted, "failed": 0}
+
+
+@app.task(bind=True, name="worker.tasks.garmin_workouts.delete_plan")
+def delete_plan(self, user_id: str, plan_run_id: str):
+    self.update_state(state="PROGRESS", meta={"stage": "garmin_workout_delete", "message": "Preparing Garmin workout cleanup"})
+    return asyncio.run(_delete_plan_from_garmin(
+        user_id,
+        plan_run_id,
+        progress=lambda value: self.update_state(state="PROGRESS", meta=value),
+    ))

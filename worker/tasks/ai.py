@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import asyncio
 import uuid
+
+import httpx
 from typing import Any
 
 from celery import states
@@ -214,6 +216,8 @@ async def _training_plan(user_id: str, payload: dict[str, Any]) -> dict[str, Any
             "context_estimated_tokens": answer.get("context_estimated_tokens"),
             "context_window_tokens": answer.get("context_window_tokens"),
             "context_budget_tokens": answer.get("context_budget_tokens"),
+            "requested_max_output_tokens": answer.get("requested_max_output_tokens"),
+            "output_budget_adjusted": answer.get("output_budget_adjusted", False),
             "context_truncated": answer.get("context_truncated", False),
             "stop_reason": answer.get("stop_reason"),
             "truncated": answer.get("truncated", False),
@@ -261,4 +265,13 @@ def coach_chat(self, user_id: str, payload: dict[str, Any]):
 @app.task(bind=True, name="worker.tasks.ai.training_plan")
 def training_plan(self, user_id: str, payload: dict[str, Any]):
     self.update_state(state="PROGRESS", meta={"stage": "planning", "message": "Training plan is being generated"})
-    return asyncio.run(_training_plan(user_id, payload))
+    try:
+        return asyncio.run(_training_plan(user_id, payload))
+    except httpx.HTTPError as exc:
+        # A local/OpenAI-compatible model endpoint can transiently reset or time
+        # out during a long structured generation. Retry once; structured-format
+        # validation errors do not raise here and therefore are never retried.
+        if self.request.retries < 1:
+            self.update_state(state="PROGRESS", meta={"stage": "planning_retry", "message": "AI endpoint interrupted · retrying once"})
+            raise self.retry(exc=exc, countdown=5, max_retries=1)
+        raise

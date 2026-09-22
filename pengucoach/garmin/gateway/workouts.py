@@ -184,5 +184,8 @@ class GarminWorkoutGateway:
     def schedule_workout(self, workout_id: int | str, scheduled_date: date) -> dict[str, Any]:
         return self.__client.schedule_workout(workout_id, scheduled_date.isoformat())
 
+    def unschedule_workout(self, scheduled_workout_id: int | str) -> Any:
+        return self.__client.unschedule_workout(scheduled_workout_id)
+
     def delete_workout(self, workout_id: int | str) -> Any:
         return self.__client.delete_workout(workout_id)

@@ -1,6 +1,6 @@
-# Build status — 0.1.0-alpha.15
+# Build status — 0.1.0-alpha.16
 
-PenguCoach is an alpha development project. Alpha.15 is a maintenance release on top of the alpha.14 structured training-plan and Garmin workout-calendar export baseline. It fixes the reported GitHub Actions type failure, keeps the required Garmin export migration in the release tree, and surfaces the running application version in the dashboard.
+PenguCoach is an alpha development project. Alpha.16 adds stored-plan/AI-analysis deletion, optional cleanup of PenguCoach-created Garmin calendar workouts, a token-budget-aware structured plan generator, and an optimized/resumable historical Garmin importer with pause/cancel controls. No database migration is required from alpha.15.
 
 ## Implemented baseline
 
@@ -33,7 +33,7 @@ PenguCoach is an alpha development project. Alpha.15 is a maintenance release on
 
 ## Intentionally still alpha / next iterations
 
-- Full Garmin field-by-field normalization for every device/account combination
+- Full Garmin field-by-field normalization for every device/account combination and more range/batch endpoints for very old history
 - Long-term 7/28/90/365-day training-load and recovery insight layer
 - Route/map visualization and richer sport-specific comparisons
 - Adaptive training-plan lifecycle and plan-vs-actual tracking
@@ -44,13 +44,10 @@ PenguCoach is an alpha development project. Alpha.15 is a maintenance release on
 ## Validation performed for this source package
 
 - Python bytecode compilation: passed
-- Shell syntax validation for all Proxmox helper scripts: passed
-- Training-plan/Garmin calendar regression tests: passed
-- Full Python test suite with a local import-only Garmin stub (used only because the artifact environment has no package-network access): 33 passed
+- Python regression suite with local import-only service stubs: **38 passed**
 - Changed frontend sources type-checked with local TypeScript declarations: passed
-- The two Autoprefixer compatibility warnings reported by GitHub Actions (`start`/`end`) were replaced with `flex-start`/`flex-end`
-
-The artifact environment cannot access npm/PyPI, so it cannot reproduce GitHub Actions' dependency installation or run the complete `next build` locally. The committed CI workflow remains the authoritative full production build check.
+- All 25 TypeScript/TSX sources transpiled without syntax errors
+- Full `next build` cannot be reproduced in the artifact environment because npm dependency installation is unavailable; GitHub Actions remains the authoritative production-build check
 
 ## Safety
 

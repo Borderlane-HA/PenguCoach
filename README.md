@@ -8,9 +8,9 @@ PenguCoach is designed as a local-first, multi-user platform that reads Garmin C
 
 ## Current alpha scope
 
-Alpha.14 turns generated training plans into a structured calendar. New plans are stored both as readable coaching output and as validated session/step data, can be reviewed week by week, selectively enabled/disabled and explicitly exported as individual structured workouts to the Garmin Connect calendar. Garmin data synchronization remains read-only; the separate workout write gateway is disabled by default and can only create/schedule selected PenguCoach workouts after the user enables the feature. An export ledger prevents duplicate session/date exports.
+Alpha.16 builds on the structured training-plan/Garmin calendar workflow with plan and AI-history management, safe Garmin cleanup on plan deletion, a budget-aware plan generator, and a substantially faster resumable historical-import mode. Garmin data synchronization remains read-only; only the explicit workout/calendar gateway may create or remove PenguCoach-managed workouts after user action.
 
-`v0.1.0-alpha.15` is the current end-to-end alpha baseline:
+`v0.1.0-alpha.16` is the current end-to-end alpha baseline:
 
 - German and English web UI
 - bright health-first responsive web design with desktop sidebar and mobile navigation dock
@@ -18,7 +18,7 @@ Alpha.14 turns generated training plans into a structured calendar. New plans ar
 - profile-picture and custom app-icon upload stored locally and included in normal backups
 - built-in PenguCoach app icon used by default in the UI plus a browser favicon; a custom app icon can still override the sidebar branding
 - simplified Garmin synchronization with one everyday Sync action and a separate history/backfill section
-- scalable Garmin history import: offset-paginated activity catalogue for hundreds/thousands of activities, then resumable day-by-day health/recovery backfill with rate-limit retries and live progress
+- scalable Garmin history import: offset-paginated activity catalogue plus resumable daily backfill, default optimized mode for older history, full detail for the latest 90 days, rate-limit retries, live progress and pause/cancel controls
 - live Garmin sync state with reload-safe job polling; the Sync button stays disabled until the worker has actually finished and timestamps refresh automatically
 - first-run administrator setup
 - multi-user local authentication
@@ -41,8 +41,8 @@ Alpha.14 turns generated training plans into a structured calendar. New plans ar
 - evidence-constrained Coach chat using local Garmin/FIT facts with selectable models and token budgets
 - per-activity AI deep analysis with Training-only / This day / 3-day / 7-day training-recovery context and an editable predefined prompt
 - AI training-plan generation for strength, muscle gain, cardio, hybrid, running, cycling, mobility and custom goals
-- validated structured training-plan sessions/steps with a weekly calendar review, optional-session selection and start-date mapping
-- explicit opt-in Garmin workout export for supported running/cycling/swimming/walking/hiking/strength sessions, with duplicate protection and reload-safe background job progress
+- validated structured training-plan sessions/steps with weekly calendar review, optional-session selection, start-date mapping, legacy-plan management and deletion
+- explicit opt-in Garmin workout export for supported running/cycling/swimming/walking/hiking/strength sessions, with duplicate protection, reload-safe progress and optional Garmin cleanup when a plan is deleted
 - task-specific default/fallback model routing, bilingual DE/EN prompts, freely configurable context windows and output-token caps with recommended presets
 - clearer AI Studio fixed-model assignment indicator and compact provider/model management actions
 - persisted AI analysis/plan runs plus reload-safe background AI jobs

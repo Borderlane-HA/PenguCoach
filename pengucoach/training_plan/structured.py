@@ -98,7 +98,13 @@ Return the complete plan as a single JSON document enclosed exactly between
 {PLAN_OPEN}
 and
 {PLAN_CLOSE}
-Do not put Markdown fences around that JSON. Keep the JSON compact.
+Do not put Markdown fences around that JSON. Keep the JSON compact and complete.
+There must be no prose before or after the plan block. The API provides a hard output-token budget separately.
+Fit the WHOLE plan inside that budget: shorten wording before reducing structure. Keep summary to at most two short
+sentences, notes/descriptions to one short sentence when needed, use repeat groups instead of enumerating intervals,
+and omit fields that merely repeat schema defaults (for example optional=false, empty notes/steps/exercise lists,
+or target={{"type":"none"}}) when they add no information. Never sacrifice requested weeks or training sessions because
+of token pressure. Close the JSON object and the PENGUCOACH marker before the budget is exhausted.
 
 JSON schema/semantics:
 - format_version: 1

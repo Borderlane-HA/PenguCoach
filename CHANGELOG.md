@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.1.0-alpha.16 - 2026-09-22
+
+### Added
+- training-plan management for current and legacy plans, including local deletion even when a plan predates the structured Garmin-calendar format
+- a three-way delete flow for Garmin-exported plans: remove from Garmin + PenguCoach, remove only from PenguCoach, or cancel
+- Garmin cleanup jobs that unschedule PenguCoach-created calendar entries before deleting their Garmin workout templates; failed cleanup keeps the local ledger so it can be retried
+- deletion of persisted per-activity AI analyses from Activity Detail
+- pause and cancel controls for long Garmin historical imports; completed data is preserved and restart remains resume-safe
+- an optimized historical-import mode (default) that keeps full detail for the latest 90 days and uses a smaller core endpoint set for older days
+
+### Changed
+- historical imports created by alpha.15 remain reusable: existing `history_day_complete` markers are recognized and skipped by the optimized importer
+- old-day optimized imports retain daily summary, sleep, HRV, stress, Body Battery, max metrics/VO2 and body data while avoiding several expensive detail endpoints
+- the training-plan LLM receives its exact effective hard output-token budget, estimated session count and a per-session compactness target before generation
+- structured-plan instructions now prioritize completing every requested week/session and closing valid JSON before spending tokens on prose or repeated defaults
+- transient HTTP interruptions during training-plan generation are retried once automatically
+- the sidebar application version is left-aligned with the account/logout controls
+- training-plan history can display/manage up to 30 stored plans; activity-analysis history can display/manage up to 20 stored analyses
+
+### Fixed
+- prevents compact historical imports from clearing richer full-detail fields when those endpoints were intentionally omitted
+- makes pause/cancel checks survive temporary Redis-control read failures without aborting the Garmin import
+
 ## 0.1.0-alpha.15 - 2026-09-22
 
 ### Fixed
