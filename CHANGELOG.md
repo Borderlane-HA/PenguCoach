@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.0-alpha.21 - 2026-09-22
+
+- Activities now use server-side pagination/search across the complete history with 25/50/100 rows per page, total/match counts and page navigation.
+- Training calendar sessions can be edited before Garmin export: total duration, notes, individual timed/distance steps, targets/zones, repeat counts and strength exercise parameters.
+- Workout steps/exercises can be removed before export; edits are stored locally per plan and never mutate the original AI-generated plan.
+- Garmin preview/export validates and applies the edited session payload while keeping session id, sport and calendar placement immutable.
+
 ## 0.1.0-alpha.20 - 2026-09-22
 
 ### Garmin workout export

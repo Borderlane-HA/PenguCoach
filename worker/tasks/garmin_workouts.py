@@ -11,7 +11,7 @@ from pengucoach.db.models import AiRun, GarminConnection, GarminSyncSetting, Gar
 from pengucoach.db.session import SessionLocal
 from pengucoach.garmin.gateway.factory import serialize_refreshed_token, workout_gateway_from_connection
 from pengucoach.garmin.gateway.workouts import session_exportability
-from pengucoach.training_plan.calendar import scheduled_date, selected_sessions
+from pengucoach.training_plan.calendar import apply_session_overrides, scheduled_date, selected_sessions
 from pengucoach.training_plan.structured import TrainingPlanDocument
 from worker.celery_app import app
 
@@ -63,6 +63,10 @@ async def _export_plan(
         sessions = selected_sessions(plan, requested_ids)
         if requested_ids is not None and len({x.id for x in sessions}) != len(set(requested_ids)):
             raise RuntimeError("UNKNOWN_TRAINING_SESSION")
+        try:
+            sessions = apply_session_overrides(sessions, payload.get("session_overrides"))
+        except ValueError as exc:
+            raise RuntimeError(str(exc)) from exc
         if not sessions:
             raise RuntimeError("NO_TRAINING_SESSIONS_SELECTED")
 

@@ -15,7 +15,7 @@ def test_release_versions_are_aligned():
     package_text = Path("apps/web/package.json").read_text()
     config_text = Path("pengucoach/common/config.py").read_text()
     init_text = Path("pengucoach/__init__.py").read_text()
-    assert project_version == "0.1.0-alpha.20"
-    assert '"version": "0.1.0-alpha.20"' in package_text
-    assert 'app_version: str = "0.1.0-alpha.20"' in config_text
-    assert '__version__ = "0.1.0-alpha.20"' in init_text
+    assert project_version == "0.1.0-alpha.21"
+    assert '"version": "0.1.0-alpha.21"' in package_text
+    assert 'app_version: str = "0.1.0-alpha.21"' in config_text
+    assert '__version__ = "0.1.0-alpha.21"' in init_text

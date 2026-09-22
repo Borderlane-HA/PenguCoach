@@ -12,8 +12,8 @@ from pengucoach.auth.dependencies import safety_confirmed_user
 from pengucoach.db.models import AiRun, GarminConnection, GarminSyncSetting, GarminWorkoutExport, User
 from pengucoach.db.session import get_db
 from pengucoach.garmin.gateway.workouts import session_exportability, supported_workout_sports
-from pengucoach.training_plan.calendar import scheduled_date, selected_sessions
-from pengucoach.training_plan.structured import TrainingPlanDocument
+from pengucoach.training_plan.calendar import apply_session_overrides, scheduled_date, selected_sessions
+from pengucoach.training_plan.structured import TrainingPlanDocument, TrainingSession
 from worker.tasks.garmin_workouts import delete_plan, export_plan
 
 router = APIRouter(prefix="/garmin/workout-export", tags=["garmin-workout-export"])
@@ -23,6 +23,7 @@ class WorkoutExportRequest(BaseModel):
     plan_run_id: uuid.UUID
     start_date: date
     session_ids: list[str] | None = Field(default=None, max_length=168)
+    session_overrides: dict[str, TrainingSession] = Field(default_factory=dict, max_length=168)
 
 
 def _validate_start(start_date: date) -> None:
@@ -69,6 +70,10 @@ async def preview_workout_export(
     sessions = selected_sessions(plan, payload.session_ids)
     if payload.session_ids is not None and len({x.id for x in sessions}) != len(set(payload.session_ids)):
         raise HTTPException(status_code=422, detail="UNKNOWN_TRAINING_SESSION")
+    try:
+        sessions = apply_session_overrides(sessions, payload.session_overrides)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     exports = (await db.scalars(select(GarminWorkoutExport).where(
         GarminWorkoutExport.user_id == user.id,
@@ -94,6 +99,7 @@ async def preview_workout_export(
             "export_status": prior.status if prior else None,
             "workout_id": prior.workout_id if prior else None,
             "error": prior.error_message_safe if prior and prior.status == "error" else None,
+            "edited": session.id in payload.session_overrides,
         })
     return {
         "plan_run_id": str(run.id),
@@ -123,6 +129,10 @@ async def queue_workout_export(
     sessions = selected_sessions(plan, payload.session_ids)
     if payload.session_ids is not None and len({x.id for x in sessions}) != len(set(payload.session_ids)):
         raise HTTPException(status_code=422, detail="UNKNOWN_TRAINING_SESSION")
+    try:
+        sessions = apply_session_overrides(sessions, payload.session_overrides)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     if not sessions:
         raise HTTPException(status_code=422, detail="NO_TRAINING_SESSIONS_SELECTED")
     task = export_plan.apply_async(args=[str(user.id), payload.model_dump(mode="json")], queue="garmin")

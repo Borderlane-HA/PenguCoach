@@ -2,7 +2,7 @@ import asyncio
 import uuid
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
-from sqlalchemy import select
+from sqlalchemy import String, cast, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from pengucoach.auth.dependencies import safety_confirmed_user
@@ -54,15 +54,73 @@ async def _owned_activity(activity_id: uuid.UUID, user: User, db: AsyncSession) 
 @router.get("")
 async def list_activities(
     limit: int = Query(default=50, ge=1, le=500),
+    page: int | None = Query(default=None, ge=1),
+    per_page: int | None = Query(default=None, ge=10, le=100),
+    q: str | None = Query(default=None, max_length=120),
     sport: str | None = None,
     user: User = Depends(safety_confirmed_user),
     db: AsyncSession = Depends(get_db),
 ):
-    stmt = select(Activity).where(Activity.user_id == user.id)
+    """List activities.
+
+    The legacy ``limit`` response remains a plain array for dashboard callers.
+    Supplying ``page`` or ``per_page`` enables the paginated response used by
+    the activity journal. Search is performed server-side over the complete
+    activity history, not just the currently visible page.
+    """
+    base_filters = [Activity.user_id == user.id]
     if sport:
-        stmt = stmt.where(Activity.sport_type == sport)
-    rows = (await db.scalars(stmt.order_by(Activity.started_at.desc()).limit(limit))).all()
-    return [_summary(x) for x in rows]
+        base_filters.append(Activity.sport_type == sport)
+
+    filtered = list(base_filters)
+    term = (q or "").strip()
+    if term:
+        pattern = f"%{term}%"
+        filtered.append(or_(
+            Activity.name.ilike(pattern),
+            Activity.sport_type.ilike(pattern),
+            Activity.subsport_type.ilike(pattern),
+            cast(Activity.raw, String).ilike(pattern),
+        ))
+
+    paginated = page is not None or per_page is not None
+    if not paginated:
+        rows = (await db.scalars(
+            select(Activity).where(*filtered).order_by(Activity.started_at.desc()).limit(limit)
+        )).all()
+        return [_summary(x) for x in rows]
+
+    current_page = page or 1
+    page_size = per_page or 50
+    total = int((await db.scalar(select(func.count(Activity.id)).where(*base_filters))) or 0)
+    filtered_total = int((await db.scalar(select(func.count(Activity.id)).where(*filtered))) or 0)
+    analyzed_total = int((await db.scalar(select(func.count(Activity.id)).where(
+        Activity.user_id == user.id, Activity.fit_status == "parsed"
+    ))) or 0)
+    # JSONB source metadata is intentionally queried through its string
+    # representation here so the same expression also works in lightweight
+    # test databases without PostgreSQL-specific JSON operators.
+    manual_total = int((await db.scalar(select(func.count(Activity.id)).where(
+        Activity.user_id == user.id, cast(Activity.raw, String).ilike('%manual_upload%')
+    ))) or 0)
+
+    pages = max(1, (filtered_total + page_size - 1) // page_size)
+    current_page = min(current_page, pages)
+    offset = (current_page - 1) * page_size
+    rows = (await db.scalars(
+        select(Activity).where(*filtered).order_by(Activity.started_at.desc()).offset(offset).limit(page_size)
+    )).all()
+    return {
+        "items": [_summary(x) for x in rows],
+        "page": current_page,
+        "per_page": page_size,
+        "pages": pages,
+        "total": total,
+        "filtered_total": filtered_total,
+        "analyzed_total": analyzed_total,
+        "manual_total": manual_total,
+        "query": term,
+    }
 
 
 @router.post("/import")
