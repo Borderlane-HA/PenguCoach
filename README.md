@@ -8,9 +8,9 @@ PenguCoach is designed as a local-first, multi-user platform that reads Garmin C
 
 ## Current alpha scope
 
-Alpha.18 adds first-class IONOS AI Model Hub, Google Gemini and xAI/Grok provider presets, hard-stop recovery for stuck Garmin history imports, and segmented generation for large structured training plans. Long Ollama jobs remain observable and cancellable with live token progress. Garmin data synchronization stays read-only; only the explicit workout/calendar gateway may create or remove PenguCoach-managed workouts after user action.
+Alpha.19 hardens structured training-plan generation for local Ollama models: the 8,000-token default is accepted correctly, large plan segments receive a realistic per-call budget, and Ollama uses schema-constrained JSON with thinking disabled for the structured plan phase. Alpha.18 already added IONOS AI Model Hub, Google Gemini and xAI/Grok presets plus hard-stop recovery for stuck Garmin history imports. Long Ollama jobs remain observable and cancellable with live token progress. Garmin data synchronization stays read-only; only the explicit workout/calendar gateway may create or remove PenguCoach-managed workouts after user action.
 
-`v0.1.0-alpha.18` is the current end-to-end alpha baseline:
+`v0.1.0-alpha.19` is the current end-to-end alpha baseline:
 
 - German and English web UI
 - bright health-first responsive web design with desktop sidebar and mobile navigation dock

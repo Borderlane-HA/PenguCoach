@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.1.0-alpha.19 - 2026-09-22
+
+### Changed
+- Ollama training-plan generation now disables model thinking for the structured JSON phase and uses Ollama's provider-enforced JSON schema output, preserving the output budget for the actual Garmin-ready plan instead of reasoning tokens
+- segmented plans use a larger compact per-segment allowance and retry an incomplete/invalid segment once with the full user-selected **Max. Antwort** budget
+- the Training UI clarifies that **Max. Antwort** is a per-AI-call / per-plan-segment ceiling
+
+### Fixed
+- fixes the Training `8000` default being rejected by browser number-input validation (`step=128` made only values such as 7936/8064 valid); arbitrary integer token budgets are accepted again
+- fixes `TRAINING_PLAN_SEGMENT_TRUNCATED:1-2` caused by the former 2,290-token compact allowance for an eight-session segment and a retry that still stopped below the configured 8,000-token budget
+- validates/parses a segment before treating an exact token-cap finish as failure, so a complete JSON plan is accepted even if the provider reports a length stop at the boundary
+- retries structurally invalid compact segments as well as explicitly truncated ones and shows a readable Training error instead of a raw RuntimeError if both attempts fail
+
 ## 0.1.0-alpha.18 - 2026-09-22
 
 ### Added

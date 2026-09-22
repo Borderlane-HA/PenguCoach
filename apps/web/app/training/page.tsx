@@ -6,7 +6,7 @@ import AiReport from "../../components/AiReport";
 import TrainingZoneStatus from "../../components/TrainingZoneStatus";
 import TrainingPlanCalendar from "../../components/TrainingPlanCalendar";
 import {api} from "../../lib/api";
-import {bi,useI18n} from "../../lib/i18n";
+import {bi,useI18n,type Lang} from "../../lib/i18n";
 
 type AnyObj=Record<string,any>;
 type ContextData={training:boolean;zones:boolean;sleep_hrv:boolean;recovery:boolean;daily_activity:boolean};
@@ -24,6 +24,14 @@ function progressTokens(progress:AnyObj|null){
   if(used==null)return"";
   const max=progress.max_output_tokens;
   return `${exact==null?"≈ ":""}${Number(used).toLocaleString()}${max?` / ${Number(max).toLocaleString()}`:""} Tokens`;
+}
+
+function friendlyPlanError(raw:string,lang:Lang){
+  const truncated=raw.match(/TRAINING_PLAN_SEGMENT_TRUNCATED:(\d+)-(\d+)/);
+  if(truncated)return bi(lang,`Die Wochen ${truncated[1]}–${truncated[2]} konnten auch beim automatischen Wiederholungsversuch nicht vollständig erzeugt werden. Erhöhe „Max. Antwort“ oder das Kontextfenster; PenguCoach verwendet den Wert pro Planabschnitt.`,`Weeks ${truncated[1]}–${truncated[2]} could not be completed even after the automatic retry. Increase “Max response” or the context window; PenguCoach applies that value per plan segment.`);
+  const invalid=raw.match(/TRAINING_PLAN_SEGMENT_INVALID:(\d+)-(\d+)/);
+  if(invalid)return bi(lang,`Die Wochen ${invalid[1]}–${invalid[2]} lieferten kein gültiges strukturiertes Trainingsformat. PenguCoach hat den Abschnitt bereits automatisch erneut angefordert.`,`Weeks ${invalid[1]}–${invalid[2]} did not return a valid structured training format. PenguCoach already retried that segment automatically.`);
+  return raw||bi(lang,"AI-Auftrag fehlgeschlagen","AI job failed");
 }
 
 export default function Training(){
@@ -58,7 +66,7 @@ export default function Training(){
           localStorage.removeItem(jobKey);setBusy(false);setJobId(null);setJobProgress(null);
           if(j.successful&&j.result?.cancelled){setStatus(de?"Erstellung abgebrochen":"Generation cancelled");return}
           if(j.successful&&j.result){setResult(j.result);setHistory(v=>[j.result,...v].slice(0,30));setStatus(de?"Plan fertig":"Plan ready");return}
-          setError(j.error||"AI job failed");return;
+          setError(friendlyPlanError(j.error||"AI job failed",lang));return;
         }
         setJobProgress(j.progress??null);setStatus(j.progress?.message||(de?"Trainingsplan wird erstellt…":"Training plan is being generated…"));
       }catch{}
@@ -119,8 +127,8 @@ export default function Training(){
       </div>
 
       <div className="training-step"><span>03</span><div><h2>{bi(lang,"AI Budget","AI budget")}</h2><p className="muted">{bi(lang,"Kontext und Antwortlänge bewusst steuern. Bei Ollama wird num_ctx direkt gesetzt.","Control context and response length explicitly. For Ollama, num_ctx is set directly.")}</p></div></div>
-      <div className="ai-analysis-settings"><label>{bi(lang,"Modell","Model")}<select value={model} onChange={e=>setModel(e.target.value)}>{models.map((x:AnyObj)=><option key={x.id} value={x.id}>{x.display_name} · {x.provider} · {x.local?"LOCAL":"CLOUD"}</option>)}</select></label><label>{bi(lang,"Kontextfenster","Context window")}<div className="ai-number-control"><input type="number" min={2048} max={modelCtxMax} step={1024} value={ctx} onChange={e=>setCtx(Math.max(2048,Math.min(modelCtxMax,Number(e.target.value))))}/><span>tokens</span></div></label><label>{bi(lang,"Max. Antwort","Max response")}<div className="ai-number-control"><input type="number" min={128} max={modelOutMax} step={128} value={tokens} onChange={e=>setTokens(Math.max(128,Math.min(modelOutMax,Number(e.target.value))))}/><span>tokens</span></div></label><div className="card subtle ai-budget"><span>{bi(lang,"Trainingskontext","Training context")}</span><strong>{contextDays} {bi(lang,"Tage","days")}</strong><small>{selectedContextLabels.length?selectedContextLabels.join(" · "):bi(lang,"nur Zielangaben","goal details only")}</small><small>ctx {ctx.toLocaleString()} · out {tokens.toLocaleString()}</small></div></div>
-      <p className="muted ai-budget-note">{bi(lang,`Die AI kennt ihr effektives Antwortlimit. Größere Pläne mit mehr als 12 Einheiten werden automatisch in Wochenblöcke geteilt, validiert und anschließend zusammengeführt. Max. Antwort ist nicht mehr auf den 8.000-Token-Taskstandard begrenzt; Modell-, Provider- und Kontextlimit bleiben maßgeblich.`,`The AI knows its effective response limit. Larger plans with more than 12 sessions are generated in week chunks, validated and merged automatically. Max response is no longer capped by the 8,000-token task default; model, provider and context limits still apply.`)}</p>
+      <div className="ai-analysis-settings"><label>{bi(lang,"Modell","Model")}<select value={model} onChange={e=>setModel(e.target.value)}>{models.map((x:AnyObj)=><option key={x.id} value={x.id}>{x.display_name} · {x.provider} · {x.local?"LOCAL":"CLOUD"}</option>)}</select></label><label>{bi(lang,"Kontextfenster","Context window")}<div className="ai-number-control"><input type="number" min={2048} max={modelCtxMax} step={1024} value={ctx} onChange={e=>setCtx(Math.max(2048,Math.min(modelCtxMax,Number(e.target.value))))}/><span>tokens</span></div></label><label>{bi(lang,"Max. Antwort","Max response")}<div className="ai-number-control"><input type="number" min={128} max={modelOutMax} step={1} value={tokens} onChange={e=>setTokens(Math.max(128,Math.min(modelOutMax,Number(e.target.value))))}/><span>tokens</span></div></label><div className="card subtle ai-budget"><span>{bi(lang,"Trainingskontext","Training context")}</span><strong>{contextDays} {bi(lang,"Tage","days")}</strong><small>{selectedContextLabels.length?selectedContextLabels.join(" · "):bi(lang,"nur Zielangaben","goal details only")}</small><small>ctx {ctx.toLocaleString()} · out {tokens.toLocaleString()}</small></div></div>
+      <p className="muted ai-budget-note">{bi(lang,`Die AI kennt ihr effektives Antwortlimit. Größere Pläne mit mehr als 12 Einheiten werden automatisch in Wochenblöcke geteilt, validiert und anschließend zusammengeführt. Max. Antwort gilt pro KI-Aufruf/Planabschnitt und ist nicht mehr auf den 8.000-Token-Taskstandard begrenzt; Modell-, Provider- und Kontextlimit bleiben maßgeblich.`,`The AI knows its effective response limit. Larger plans with more than 12 sessions are generated in week chunks, validated and merged automatically. Max response applies per AI call/plan segment and is no longer capped by the 8,000-token task default; model, provider and context limits still apply.`)}</p>
       {contextData.zones&&<TrainingZoneStatus/>}
       <details className="ai-prompt-details"><summary>{bi(lang,"Planungs-Prompt anzeigen / anpassen","Show / edit planning prompt")}</summary><textarea className="prompt-editor modern" value={prompt} onChange={e=>setPrompt(e.target.value)}/></details>
       <div className="between"><div>{status&&<span className={`ai-job-status ${busy?"running":""}`}>{busy&&<i/>}<span>{status}</span>{busy&&progressTokens(jobProgress)&&<b className="ai-token-live">{progressTokens(jobProgress)}</b>}</span>}{error&&<div className="status-bad">{error}</div>}</div><div className="row">{busy&&<button type="button" className="ghost danger" onClick={cancelGeneration}>{bi(lang,"Abbrechen","Cancel")}</button>}<button disabled={busy||!model}>{busy?bi(lang,"Plan läuft im Hintergrund…","Plan running in background…"):bi(lang,"Trainingsplan erstellen","Create training plan")}</button></div></div>

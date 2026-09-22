@@ -404,6 +404,7 @@ async def chat(
     requested_context_window_tokens: int | None = None,
     progress_callback: ProgressCallback | None = None,
     cancel_check: CancelCheck | None = None,
+    response_format_schema: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     config = await task_settings(db, task, locale)
     selected = await resolve_model(db, task, local_only=local_only, model_id=model_id)
@@ -583,19 +584,30 @@ async def chat(
             last_cancel_check = 0.0
             final_chunk: dict[str, Any] = {}
             started = time.monotonic()
+            ollama_payload: dict[str, Any] = {
+                "model": model.model_identifier,
+                "messages": prompt_messages,
+                "stream": True,
+                "options": {
+                    "temperature": min(float(model.temperature), 0.2) if task == "training_plan" else model.temperature,
+                    "num_predict": max_tokens,
+                    "num_ctx": context_window_tokens,
+                },
+            }
+            if task == "training_plan":
+                # Structured training-plan generation is a schema-filling task.
+                # Reasoning-capable local models can otherwise spend a large part
+                # of num_predict on hidden/visible thinking before producing JSON.
+                # Ollama supports disabling thinking and provider-enforced JSON
+                # schemas on /api/chat, which makes this path substantially more
+                # deterministic and preserves the configured budget for the plan.
+                ollama_payload["think"] = False
+                if response_format_schema:
+                    ollama_payload["format"] = response_format_schema
             async with client.stream(
                 "POST",
                 base + "/api/chat",
-                json={
-                    "model": model.model_identifier,
-                    "messages": prompt_messages,
-                    "stream": True,
-                    "options": {
-                        "temperature": model.temperature,
-                        "num_predict": max_tokens,
-                        "num_ctx": context_window_tokens,
-                    },
-                },
+                json=ollama_payload,
             ) as response:
                 response.raise_for_status()
                 cancel_event = asyncio.Event()

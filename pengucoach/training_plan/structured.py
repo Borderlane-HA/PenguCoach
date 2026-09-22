@@ -94,12 +94,9 @@ class TrainingPlanDocument(BaseModel):
 
 STRUCTURED_PLAN_INSTRUCTION = f"""
 IMPORTANT OUTPUT CONTRACT FOR PENGUCOACH:
-Return the complete plan as a single JSON document enclosed exactly between
-{PLAN_OPEN}
-and
-{PLAN_CLOSE}
-Do not put Markdown fences around that JSON. Keep the JSON compact and complete.
-There must be no prose before or after the plan block. The API provides a hard output-token budget separately.
+Return the complete plan as one compact JSON object. Do not use Markdown fences and do not add prose before or after the JSON.
+PenguCoach still accepts the legacy {PLAN_OPEN} / {PLAN_CLOSE} wrapper, but the wrapper is optional; provider-enforced
+structured-output modes may return the bare JSON object. The API provides a hard output-token budget separately.
 Fit the WHOLE plan inside that budget: shorten wording before reducing structure. Keep summary to at most two short
 sentences, notes/descriptions to one short sentence when needed, use repeat groups instead of enumerating intervals,
 and omit fields that merely repeat schema defaults (for example optional=false, empty notes/steps/exercise lists,

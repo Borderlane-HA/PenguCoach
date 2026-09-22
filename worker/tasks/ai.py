@@ -16,7 +16,7 @@ from pengucoach.db.session import SessionLocal
 from pengucoach.llm.job_control import cancel_requested, clear_cancel
 from pengucoach.llm.service import AiGenerationCancelled, chat, task_settings
 from pengucoach.training_plan.generation import merge_plan_segments, normalize_training_plan_answer, training_plan_instruction
-from pengucoach.training_plan.structured import extract_structured_plan, render_plan_markdown
+from pengucoach.training_plan.structured import TrainingPlanDocument, extract_structured_plan, render_plan_markdown
 from worker.celery_app import app
 
 ProgressCallback = Callable[[dict[str, Any]], None]
@@ -260,6 +260,7 @@ async def _training_plan(
         days_per_week = int(g["days_per_week"])
         expected_sessions = max(1, total_weeks * days_per_week)
         requested_max = int(payload.get("max_tokens") or config["max_output_tokens"])
+        plan_schema = TrainingPlanDocument.model_json_schema()
 
         def base_message(weeks: int) -> str:
             if locale.startswith("de"):
@@ -296,6 +297,7 @@ async def _training_plan(
                 requested_context_window_tokens=payload.get("context_window_tokens"),
                 progress_callback=progress_callback,
                 cancel_check=cancel_check,
+                response_format_schema=plan_schema,
             )
             if cancel_check and cancel_check():
                 raise AiGenerationCancelled("AI_JOB_CANCELLED")
@@ -345,7 +347,11 @@ async def _training_plan(
                         f"Number these segment weeks locally from 1 through {local_weeks} in the JSON."
                     )
                 segment_sessions = max(1, local_weeks * days_per_week)
-                compact_budget = min(requested_max, max(1800, segment_sessions * 230 + 450))
+                # Max. Antwort is a per-call ceiling, not a total budget shared
+                # across all plan chunks. Give each segment enough room for a
+                # complete structured document; if that compact attempt still
+                # fails, the retry below uses the user's full per-call budget.
+                compact_budget = min(requested_max, max(3500, segment_sessions * 420 + 800))
 
                 def segment_progress(meta: dict[str, Any], *, ci=chunk_index + 1, cc=chunk_count) -> None:
                     if progress_callback:
@@ -364,11 +370,24 @@ async def _training_plan(
                     requested_context_window_tokens=payload.get("context_window_tokens"),
                     progress_callback=segment_progress,
                     cancel_check=cancel_check,
+                    response_format_schema=plan_schema,
                 )
-                # If a compact segment alone hits its cap, retry just that segment
-                # once with a larger allowance instead of discarding the whole plan.
-                if answer_part.get("truncated") and compact_budget < requested_max:
-                    retry_budget = min(requested_max, max(compact_budget + 512, compact_budget * 2))
+                def parse_segment(candidate: dict[str, Any]):
+                    parsed, parsed_error = extract_structured_plan(str(candidate.get("content") or ""))
+                    if parsed is not None and parsed.weeks != local_weeks:
+                        return None, f"SEGMENT_WEEK_COUNT:{parsed.weeks}!={local_weeks}"
+                    if parsed is not None and len(parsed.sessions) < segment_sessions:
+                        return None, f"SEGMENT_SESSION_COUNT:{len(parsed.sessions)}<{segment_sessions}"
+                    return parsed, parsed_error
+
+                # Parse before treating an exact token-cap finish as a failure: a
+                # model can land exactly on its cap after already closing valid JSON.
+                segment, segment_error = parse_segment(answer_part)
+                # Retry only when the plan is incomplete/invalid. A valid schema
+                # document is accepted even if Ollama reports a length boundary.
+                needs_retry = segment is None
+                if needs_retry and compact_budget < requested_max:
+                    retry_budget = requested_max
                     answer_part = await chat(
                         db,
                         [{"role": "user", "content": segment_message}],
@@ -377,16 +396,21 @@ async def _training_plan(
                         task="training_plan",
                         local_only=local_only,
                         model_id=_u(payload.get("model_id")),
-                        instruction_prompt=segment_instruction + "\nThe previous compact attempt hit its output cap. Be more concise and finish the JSON.",
+                        instruction_prompt=(
+                            segment_instruction
+                            + "\nThe previous attempt was incomplete or invalid. Return only one compact, complete JSON object; "
+                              "shorten wording aggressively before omitting any requested session."
+                        ),
                         requested_max_tokens=retry_budget,
                         requested_context_window_tokens=payload.get("context_window_tokens"),
                         progress_callback=segment_progress,
                         cancel_check=cancel_check,
+                        response_format_schema=plan_schema,
                     )
-                if answer_part.get("truncated"):
-                    raise RuntimeError(f"TRAINING_PLAN_SEGMENT_TRUNCATED:{start_week}-{end_week}")
-                segment, segment_error = extract_structured_plan(str(answer_part.get("content") or ""))
+                    segment, segment_error = parse_segment(answer_part)
                 if segment is None:
+                    if answer_part.get("truncated"):
+                        raise RuntimeError(f"TRAINING_PLAN_SEGMENT_TRUNCATED:{start_week}-{end_week}")
                     raise RuntimeError(f"TRAINING_PLAN_SEGMENT_INVALID:{start_week}-{end_week}:{segment_error}")
                 for session in segment.sessions:
                     session.week += start_week - 1
