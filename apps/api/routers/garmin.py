@@ -36,6 +36,7 @@ class SyncSettingsRequest(BaseModel):
     sync_activities: bool = True
     sync_body: bool = True
     sync_training: bool = True
+    workout_export_enabled: bool = False
 
 
 class ImportRequest(BaseModel):
@@ -48,7 +49,7 @@ async def garmin_status(user: User = Depends(safety_confirmed_user), db: AsyncSe
     sync = await db.get(GarminSyncSetting, user.id)
     if not conn:
         return {"connected": False, "status": "disconnected", "read_only": True, "settings": {"interval_minutes": settings.garmin_default_interval_minutes}}
-    return {"connected": conn.status == "connected", "status": conn.status, "display_name": conn.garmin_display_name, "last_validated_at": conn.last_validated_at, "last_successful_sync_at": conn.last_successful_sync_at, "next_sync_at": conn.next_sync_at, "cooldown_until": conn.cooldown_until, "last_error_code": conn.last_error_code, "read_only": True, "settings": {"enabled": sync.enabled, "interval_minutes": sync.interval_minutes, "fit_download_enabled": sync.fit_download_enabled, "fit_analysis_enabled": sync.fit_analysis_enabled, "historical_days": sync.historical_days, "sync_health": sync.sync_health, "sync_activities": sync.sync_activities, "sync_body": sync.sync_body, "sync_training": sync.sync_training} if sync else None}
+    return {"connected": conn.status == "connected", "status": conn.status, "display_name": conn.garmin_display_name, "last_validated_at": conn.last_validated_at, "last_successful_sync_at": conn.last_successful_sync_at, "next_sync_at": conn.next_sync_at, "cooldown_until": conn.cooldown_until, "last_error_code": conn.last_error_code, "read_only": True, "settings": {"enabled": sync.enabled, "interval_minutes": sync.interval_minutes, "fit_download_enabled": sync.fit_download_enabled, "fit_analysis_enabled": sync.fit_analysis_enabled, "historical_days": sync.historical_days, "sync_health": sync.sync_health, "sync_activities": sync.sync_activities, "sync_body": sync.sync_body, "sync_training": sync.sync_training, "workout_export_enabled": sync.workout_export_enabled} if sync else None}
 
 
 @router.post("/auth/start")
@@ -79,7 +80,7 @@ async def get_sync_settings(user: User = Depends(safety_confirmed_user), db: Asy
     row = await db.get(GarminSyncSetting, user.id)
     if not row:
         row = GarminSyncSetting(user_id=user.id, interval_minutes=settings.garmin_default_interval_minutes); db.add(row); await db.commit()
-    return {"enabled": row.enabled, "interval_minutes": row.interval_minutes, "fit_download_enabled": row.fit_download_enabled, "fit_analysis_enabled": row.fit_analysis_enabled, "historical_days": row.historical_days, "sync_health": row.sync_health, "sync_activities": row.sync_activities, "sync_body": row.sync_body, "sync_training": row.sync_training}
+    return {"enabled": row.enabled, "interval_minutes": row.interval_minutes, "fit_download_enabled": row.fit_download_enabled, "fit_analysis_enabled": row.fit_analysis_enabled, "historical_days": row.historical_days, "sync_health": row.sync_health, "sync_activities": row.sync_activities, "sync_body": row.sync_body, "sync_training": row.sync_training, "workout_export_enabled": row.workout_export_enabled}
 
 
 @router.put("/sync/settings")

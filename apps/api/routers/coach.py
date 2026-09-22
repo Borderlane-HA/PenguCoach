@@ -11,6 +11,7 @@ from pengucoach.coach.context import SOURCE_NOTICE, build_activity_analysis_cont
 from pengucoach.db.models import AiRun, Conversation, Message, User, UserPreference
 from pengucoach.db.session import get_db
 from pengucoach.llm.service import chat, eligible_models, resolve_model, task_settings
+from pengucoach.training_plan.generation import normalize_training_plan_answer, training_plan_instruction
 from worker.tasks.ai import activity_analysis as activity_analysis_task
 from worker.tasks.ai import coach_chat as coach_chat_task
 from worker.tasks.ai import training_plan as training_plan_task
@@ -270,29 +271,44 @@ async def training_plan(payload: TrainingPlanRequest, user: User = Depends(safet
     _, local_only = await _privacy(db, user)
     config = await task_settings(db, "training_plan", locale)
     prompt = (payload.prompt or config["default_prompt"]).strip()
-    user_message = (
-        f"Erstelle einen {payload.weeks}-Wochen-Trainingsplan für {payload.goal_type}." if str(locale).startswith("de") else
-        f"Create a {payload.weeks}-week training plan for {payload.goal_type}."
-    )
+    if str(locale).startswith("de"):
+        user_message = (
+            f"Erstelle einen {payload.weeks}-Wochen-Trainingsplan für '{payload.goal_type}', "
+            f"{payload.days_per_week} Trainingstage pro Woche, etwa {payload.session_minutes} Minuten pro Einheit. "
+            f"Ziel: {payload.goal_text or 'keine Zusatzangabe'}. Equipment: {payload.equipment or 'nicht angegeben'}. "
+            f"Einschränkungen: {payload.constraints or 'keine'}. Erfahrung: {payload.experience}."
+        )
+    else:
+        user_message = (
+            f"Create a {payload.weeks}-week training plan for '{payload.goal_type}', "
+            f"{payload.days_per_week} training days per week and about {payload.session_minutes} minutes per session. "
+            f"Goal details: {payload.goal_text or 'none supplied'}. Equipment: {payload.equipment or 'not specified'}. "
+            f"Constraints: {payload.constraints or 'none supplied'}. Experience: {payload.experience}."
+        )
     try:
         answer = await chat(
             db, [{"role": "user", "content": user_message}], context, locale,
             task="training_plan", local_only=local_only, model_id=payload.model_id,
-            instruction_prompt=prompt, requested_max_tokens=payload.max_tokens,
+            instruction_prompt=training_plan_instruction(prompt), requested_max_tokens=payload.max_tokens,
             requested_context_window_tokens=payload.context_window_tokens,
         )
     except RuntimeError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+    content, plan_meta = normalize_training_plan_answer(answer, str(locale))
+    metadata = _answer_metadata(answer, locale=str(locale), goal=context["goal"])
+    metadata.update(plan_meta)
     run = AiRun(
         user_id=user.id, task_type="training_plan", model_id=uuid.UUID(answer["model_id"]),
         provider_name=answer["provider"], model_name=answer["model"], prompt=prompt, lookback_days=28,
-        max_output_tokens=answer["max_output_tokens"], content=answer["content"],
-        metadata_json=_answer_metadata(answer, locale=str(locale), goal=context["goal"]),
+        max_output_tokens=answer["max_output_tokens"], content=content, metadata_json=metadata,
     )
     db.add(run)
     await db.commit()
     await db.refresh(run)
-    return {"run_id": str(run.id), **answer, "goal": context["goal"], "created_at": run.created_at}
+    return {
+        "run_id": str(run.id), **answer, "content": content, "metadata": metadata,
+        "goal": context["goal"], "created_at": run.created_at,
+    }
 
 
 @router.get("/training-plans")
