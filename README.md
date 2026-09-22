@@ -10,7 +10,7 @@ PenguCoach is designed as a local-first, multi-user platform that reads Garmin C
 
 Alpha.14 turns generated training plans into a structured calendar. New plans are stored both as readable coaching output and as validated session/step data, can be reviewed week by week, selectively enabled/disabled and explicitly exported as individual structured workouts to the Garmin Connect calendar. Garmin data synchronization remains read-only; the separate workout write gateway is disabled by default and can only create/schedule selected PenguCoach workouts after the user enables the feature. An export ledger prevents duplicate session/date exports.
 
-`v0.1.0-alpha.14` is the current end-to-end alpha baseline:
+`v0.1.0-alpha.15` is the current end-to-end alpha baseline:
 
 - German and English web UI
 - bright health-first responsive web design with desktop sidebar and mobile navigation dock

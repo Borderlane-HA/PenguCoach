@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.0-alpha.15 - 2026-09-22
+
+### Fixed
+- fixes the Next.js production-build type error in `TrainingPlanCalendar.tsx` by using the shared `Lang` union type instead of a generic string
+- keeps the required `0004_garmin_workout_export.py` Alembic migration in the full release and documents it as a required upload for upgrades from alpha.13
+- updates stale application-version fallbacks so API/version reporting remains consistent with the checked-out release
+
+### Added
+- shows the authoritative running PenguCoach version in the dashboard sidebar directly below Sign out / Abmelden
+- exposes `app_version` from `/auth/me`, sourced from the backend's resolved release version instead of duplicating a frontend-only constant
+
 ## 0.1.0-alpha.14 - 2026-09-21
 
 Training calendar / Garmin workout export release:
