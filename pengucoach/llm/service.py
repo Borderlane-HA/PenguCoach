@@ -25,6 +25,18 @@ ProgressCallback = Callable[[dict[str, Any]], None]
 CancelCheck = Callable[[], bool]
 
 
+OPENAI_COMPATIBLE_PROVIDER_TYPES = {"openai", "openai_compatible", "ionos", "gemini", "xai"}
+PROVIDER_DEFAULT_BASE_URLS = {
+    "openai": "https://api.openai.com/v1",
+    "ionos": "https://openai.inference.de-txl.ionos.com/v1",
+    "gemini": "https://generativelanguage.googleapis.com/v1beta/openai",
+    "xai": "https://api.x.ai/v1",
+}
+
+def provider_base_url(provider_type: str, configured: str | None) -> str:
+    return (configured or PROVIDER_DEFAULT_BASE_URLS.get(provider_type) or "").rstrip("/")
+
+
 def _emit_progress(callback: ProgressCallback | None, **payload: Any) -> None:
     if callback is not None:
         callback(payload)
@@ -224,6 +236,7 @@ async def eligible_models(db: AsyncSession, local_only: bool = False) -> list[di
         provider = await db.get(LlmProvider, model.provider_id)
         if not provider or not provider.enabled or (local_only and not provider.is_local):
             continue
+        meta = model.metadata_json if isinstance(model.metadata_json, dict) else {}
         out.append({
             "id": str(model.id),
             "display_name": model.display_name,
@@ -232,6 +245,7 @@ async def eligible_models(db: AsyncSession, local_only: bool = False) -> list[di
             "provider_type": provider.provider_type,
             "local": provider.is_local,
             "context_window": model.context_window,
+            "provider_max_output_tokens": meta.get("provider_max_output_tokens"),
             "temperature": model.temperature,
         })
     return out
@@ -398,13 +412,16 @@ async def chat(
     provider, model = selected
 
     configured_max = int(config["max_output_tokens"])
-    max_tokens = configured_max if requested_max_tokens is None else min(
-        configured_max, _clamp_int(requested_max_tokens, 128, 65536, configured_max)
+    # Route budgets are task defaults, not a hidden ceiling. An explicit value from
+    # the task UI may be higher; the selected model/provider and the context window
+    # still enforce the real hard limits below.
+    max_tokens = configured_max if requested_max_tokens is None else _clamp_int(
+        requested_max_tokens, 128, 65536, configured_max
     )
 
     configured_ctx = int(config["context_window_tokens"])
-    requested_ctx = configured_ctx if requested_context_window_tokens is None else min(
-        configured_ctx, _clamp_int(requested_context_window_tokens, 2048, 1_048_576, configured_ctx)
+    requested_ctx = configured_ctx if requested_context_window_tokens is None else _clamp_int(
+        requested_context_window_tokens, 2048, 1_048_576, configured_ctx
     )
     model_ctx = int(model.context_window) if model.context_window else None
     context_window_tokens = min(requested_ctx, model_ctx) if model_ctx else requested_ctx
@@ -506,8 +523,8 @@ async def chat(
     stop_reason: str | None = None
 
     async with httpx.AsyncClient(timeout=timeout) as client:
-        if provider.provider_type in {"openai", "openai_compatible"}:
-            base = (provider.base_url or "https://api.openai.com/v1").rstrip("/")
+        if provider.provider_type in OPENAI_COMPATIBLE_PROVIDER_TYPES:
+            base = provider_base_url(provider.provider_type, provider.base_url)
             headers = {"Authorization": f"Bearer {_secret(provider)}", "Content-Type": "application/json"}
             response = await client.post(
                 base + "/chat/completions",
@@ -697,8 +714,8 @@ async def test_provider(provider_type: str, base_url: str | None, api_key: str |
             response.raise_for_status()
             models = [x.get("name") for x in response.json().get("models", [])]
             return {"ok": True, "models": models}
-        if provider_type in {"openai", "openai_compatible"}:
-            base = (base_url or "https://api.openai.com/v1").rstrip("/")
+        if provider_type in OPENAI_COMPATIBLE_PROVIDER_TYPES:
+            base = provider_base_url(provider_type, base_url)
             response = await client.get(base + "/models", headers={"Authorization": f"Bearer {api_key or ''}"})
             response.raise_for_status()
             return {"ok": True, "models": [x.get("id") for x in response.json().get("data", [])][:100]}

@@ -21,6 +21,7 @@ from pengucoach.db.session import SessionLocal
 from pengucoach.garmin.gateway.factory import gateway_from_connection, serialize_refreshed_token
 from pengucoach.garmin.zones import sync_training_zones
 from pengucoach.garmin.sync.service import (
+    GarminRequestTimeout,
     _hash_payload,
     _store_raw,
     _upsert_activities,
@@ -42,10 +43,52 @@ def _lock(name: str, timeout: int):
     return redis.lock(name, timeout=timeout, blocking_timeout=0)
 
 
+def _account_lock_key(user_id: str) -> str:
+    return f"pengucoach:garmin-account:{user_id}"
+
+
 def _account_lock(user_id: str, timeout: int):
     # One Garmin session per account at a time. A long history import and the
     # minute scheduler must not compete with each other for Garmin requests.
-    return _lock(f"pengucoach:garmin-account:{user_id}", timeout=timeout)
+    return _lock(_account_lock_key(user_id), timeout=timeout)
+
+
+def _history_task_key(user_id: str) -> str:
+    return f"pengucoach:garmin-history-task:{user_id}"
+
+
+def current_history_import_task(user_id: str) -> str | None:
+    raw = Redis.from_url(settings.redis_url).get(_history_task_key(user_id))
+    if raw is None:
+        return None
+    return raw.decode("utf-8") if isinstance(raw, bytes) else str(raw)
+
+
+def _set_current_history_import_task(user_id: str, task_id: str) -> None:
+    Redis.from_url(settings.redis_url).setex(_history_task_key(user_id), HISTORY_CONTROL_TTL_SECONDS, task_id)
+
+
+def _clear_current_history_import_task(user_id: str, task_id: str | None = None) -> None:
+    redis = Redis.from_url(settings.redis_url)
+    key = _history_task_key(user_id)
+    if task_id is None:
+        redis.delete(key)
+        return
+    raw = redis.get(key)
+    current = raw.decode("utf-8") if isinstance(raw, bytes) else (str(raw) if raw is not None else None)
+    if current == task_id:
+        redis.delete(key)
+
+
+def force_clear_history_import_state(user_id: str) -> None:
+    """Clear cooperative-control and stale account-lock keys after a hard revoke.
+
+    Hard cancellation kills the Celery child and therefore its ``finally`` block
+    may never get a chance to release the Redis lock. The API calls this only
+    after revoking the specific history task requested by the same user.
+    """
+    redis = Redis.from_url(settings.redis_url)
+    redis.delete(_history_control_key(user_id), _account_lock_key(user_id), _history_task_key(user_id))
 
 
 class HistoryImportInterrupted(RuntimeError):
@@ -438,7 +481,7 @@ async def _queue_pending_fit(db, user: User, callback: ProgressCallback | None) 
     return queued
 
 
-async def _historical(user_id: str, days: int, mode: str = "optimized", callback: ProgressCallback | None = None):
+async def _historical(user_id: str, days: int, mode: str = "optimized", callback: ProgressCallback | None = None, task_id: str | None = None):
     async with SessionLocal() as db:
         user = await db.get(User, user_id)
         conn = await db.scalar(select(GarminConnection).where(GarminConnection.user_id == user.id)) if user else None
@@ -446,7 +489,7 @@ async def _historical(user_id: str, days: int, mode: str = "optimized", callback
             return {"status": "not_connected"}
         setting = await db.get(GarminSyncSetting, user.id)
         mode = "full" if mode == "full" else "optimized"
-        run = GarminSyncRun(user_id=user.id, sync_type="historical", status="running", domains={"mode": mode})
+        run = GarminSyncRun(user_id=user.id, sync_type="historical", status="running", domains={"mode": mode, "task_id": task_id})
         db.add(run)
         await db.commit()
         await db.refresh(run)
@@ -696,6 +739,26 @@ async def _historical(user_id: str, days: int, mode: str = "optimized", callback
                 run.finished_at = datetime.now(timezone.utc)
             await db.commit()
             return {"status": "reauth_required"}
+        except GarminRequestTimeout as exc:
+            await db.rollback()
+            run = await db.get(GarminSyncRun, run_id)
+            conn = await db.scalar(select(GarminConnection).where(GarminConnection.user_id == user_id))
+            if conn:
+                conn.last_error_code = "GARMIN_REQUEST_TIMEOUT"
+                conn.last_error_at = datetime.now(timezone.utc)
+            if run:
+                run.status = "request_timeout"
+                run.error_code = "GARMIN_REQUEST_TIMEOUT"
+                run.error_message_safe = f"{exc.domain}:{exc.seconds}s"
+                run.finished_at = datetime.now(timezone.utc)
+            await db.commit()
+            return {
+                "status": "request_timeout",
+                "resume_safe": True,
+                "domain": exc.domain,
+                "timeout_seconds": exc.seconds,
+                "mode": mode,
+            }
         except GarminConnectTooManyRequestsError:
             await db.rollback()
             run = await db.get(GarminSyncRun, run_id)
@@ -728,12 +791,16 @@ def historical_import(self, user_id: str, days: int = 365, mode: str = "optimize
     if not lock.acquire(blocking=False):
         return {"status": "already_running"}
 
+    task_id = str(self.request.id)
+    _set_current_history_import_task(user_id, task_id)
+
     def callback(meta: dict[str, Any]) -> None:
         self.update_state(state="PROGRESS", meta=meta)
 
     try:
-        return asyncio.run(_historical(user_id, days, mode=mode, callback=callback))
+        return asyncio.run(_historical(user_id, days, mode=mode, callback=callback, task_id=task_id))
     finally:
+        _clear_current_history_import_task(user_id, task_id)
         try:
             lock.release()
         except Exception:

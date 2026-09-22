@@ -17,6 +17,13 @@ from pengucoach.db.models import (
 from pengucoach.garmin.gateway.factory import gateway_from_connection, serialize_refreshed_token
 
 
+class GarminRequestTimeout(RuntimeError):
+    def __init__(self, domain: str, seconds: int) -> None:
+        self.domain = domain
+        self.seconds = seconds
+        super().__init__(f"GARMIN_REQUEST_TIMEOUT:{domain}:{seconds}s")
+
+
 def _hash_payload(payload: object) -> str:
     raw = json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str).encode()
     return hashlib.sha256(raw).hexdigest()
@@ -67,11 +74,14 @@ async def _store_raw(db: AsyncSession, user: User, domain: str, day: date, paylo
     return False
 
 
-async def _call(domain: str, func: Callable[[], Any], domains: dict[str, Any]) -> Any:
+async def _call(domain: str, func: Callable[[], Any], domains: dict[str, Any], timeout_seconds: int = 90) -> Any:
     try:
-        value = await asyncio.to_thread(func)
+        value = await asyncio.wait_for(asyncio.to_thread(func), timeout=timeout_seconds)
         domains[domain] = {"ok": True, "available": value not in (None, {}, [])}
         return value
+    except asyncio.TimeoutError as exc:
+        domains[domain] = {"ok": False, "error": "GarminRequestTimeout", "timeout_seconds": timeout_seconds}
+        raise GarminRequestTimeout(domain, timeout_seconds) from exc
     except GarminConnectTooManyRequestsError:
         raise
     except GarminConnectAuthenticationError:

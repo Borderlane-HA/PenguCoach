@@ -16,6 +16,15 @@ const taskName=(task:string,de:boolean)=>({coach_chat:de?"Coach Chat":"Coach cha
 const taskSub=(task:string,de:boolean)=>({coach_chat:de?"Freier Chat mit intelligentem Trainingskontext":"Free chat with smart training context",activity_analysis:de?"Tiefe Einheitenanalyse mit frei wählbarem Kontext":"Deep session analysis with configurable context",training_plan:de?"Periodisierte Pläne aus Ziel und Trainingsdaten":"Periodized plans from goals and training data"}[task]??"");
 const taskIcon=(task:string)=>task==="coach_chat"?"✦":task==="activity_analysis"?"⌁":"◫";
 const recommended:{[k:string]:{ctx:number;out:number}}={coach_chat:{ctx:8192,out:2500},activity_analysis:{ctx:16384,out:8000},training_plan:{ctx:16384,out:8000}};
+const providerPreset=(value:string)=>({
+  ollama:{name:"Local Ollama",url:"http://127.0.0.1:11434"},
+  openai:{name:"OpenAI",url:"https://api.openai.com/v1"},
+  anthropic:{name:"Anthropic / Claude",url:"https://api.anthropic.com/v1"},
+  ionos:{name:"IONOS AI Model Hub",url:"https://openai.inference.de-txl.ionos.com/v1"},
+  gemini:{name:"Google Gemini",url:"https://generativelanguage.googleapis.com/v1beta/openai"},
+  xai:{name:"xAI / Grok",url:"https://api.x.ai/v1"},
+  openai_compatible:{name:"OpenAI compatible",url:""},
+}[value]??{name:value,url:""});
 
 export default function AIAdmin(){
   const{lang}=useI18n();const de=lang!=="en";
@@ -66,18 +75,18 @@ export default function AIAdmin(){
 
     <section className="card ai-infra-card">
       <button type="button" className="ai-infra-toggle" onClick={()=>setInfraOpen(v=>!v)}>
-        <div><strong>{bi(lang,"Provider & Modelle","Providers & models")}</strong><small>{bi(lang,"Ollama, OpenAI, Claude und OpenAI-kompatible Endpunkte verwalten.","Manage Ollama, OpenAI, Claude and OpenAI-compatible endpoints.")}</small></div><span>{infraOpen?"−":"+"}</span>
+        <div><strong>{bi(lang,"Provider & Modelle","Providers & models")}</strong><small>{bi(lang,"Ollama, OpenAI, Claude, IONOS AI Model Hub, Gemini, Grok und OpenAI-kompatible Endpunkte verwalten.","Manage Ollama, OpenAI, Claude, IONOS AI Model Hub, Gemini, Grok and OpenAI-compatible endpoints.")}</small></div><span>{infraOpen?"−":"+"}</span>
       </button>
       {infraOpen&&<div className="ai-infra-body">
         <div className="grid2">
           <form className="stack ai-provider-form" onSubmit={create}>
             <h3>{bi(lang,"Provider hinzufügen / testen","Add / test provider")}</h3>
             <div className="grid2">
-              <label>Type<select value={type} onChange={e=>{setType(e.target.value);setFound([]);setFoundProviderId("");if(e.target.value==="ollama")setUrl("http://127.0.0.1:11434");else if(e.target.value==="openai")setUrl("https://api.openai.com/v1");else if(e.target.value==="anthropic")setUrl("https://api.anthropic.com/v1")}}><option value="ollama">Ollama</option><option value="openai">OpenAI</option><option value="anthropic">Anthropic / Claude</option><option value="openai_compatible">OpenAI compatible</option></select></label>
+              <label>Type<select value={type} onChange={e=>{const v=e.target.value,preset=providerPreset(v);setType(v);setName(preset.name);setUrl(preset.url);setFound([]);setFoundProviderId("")}}><option value="ollama">Ollama</option><option value="openai">OpenAI</option><option value="anthropic">Anthropic / Claude</option><option value="ionos">IONOS AI Model Hub</option><option value="gemini">Google Gemini</option><option value="xai">xAI / Grok</option><option value="openai_compatible">OpenAI compatible</option></select></label>
               <label>Name<input value={name} onChange={e=>setName(e.target.value)}/></label>
             </div>
             <label>Base URL<input value={url} onChange={e=>setUrl(e.target.value)}/></label>
-            <label>API Key<input type="password" value={key} onChange={e=>setKey(e.target.value)} placeholder={type==="ollama"?"optional":"required"}/></label>
+            <label>API Key<input type="password" value={key} onChange={e=>setKey(e.target.value)} placeholder={type==="ollama"?"optional":"required"}/></label>{type==="ionos"&&<small>{bi(lang,"IONOS nutzt am OpenAI-kompatiblen Model-Hub-Endpunkt ein Bearer-Token/JWT. Abgelaufene Tokens müssen erneuert werden.","IONOS uses a Bearer token/JWT for the OpenAI-compatible Model Hub endpoint. Expired tokens must be renewed.")}</small>}{type==="gemini"&&<small>{bi(lang,"Gemini wird über Googles offiziellen OpenAI-kompatiblen Endpoint angebunden; verwende einen Gemini API Key.","Gemini is connected through Google's official OpenAI-compatible endpoint; use a Gemini API key.")}</small>}{type==="xai"&&<small>{bi(lang,"Grok wird über die OpenAI-kompatible xAI API angebunden; verwende einen xAI API Key.","Grok is connected through xAI's OpenAI-compatible API; use an xAI API key.")}</small>}
             {externalProviderSelected&&privacy&&<div className={`cloud-ai-provider-note ${cloudAllowed?"allowed":"blocked"}`}><div><strong>{cloudAllowed?bi(lang,"Cloud-KI freigegeben","Cloud AI permitted"):bi(lang,"Externer KI-Provider","External AI provider")}</strong><span>{cloudAllowed?bi(lang,"Gesundheits- und Trainingsdaten dürfen gemäß deiner Datenschutzeinstellung an externe KI-Provider gesendet werden.","According to your privacy setting, health and training data may be sent to external AI providers."):bi(lang,"Dieser Provider verarbeitet Anfragen außerhalb des PenguCoach-Servers. Gesundheits- und Trainingsdaten bleiben gesperrt, bis du Cloud-KI ausdrücklich freigibst.","This provider processes requests outside the PenguCoach server. Health and training data remains blocked until you explicitly permit cloud AI.")}</span></div>{!cloudAllowed&&<div><button type="button" className="compact" onClick={enableCloudAI}>{bi(lang,"Cloud-KI aktivieren","Enable cloud AI")}</button><a className="ghost button-like compact" href="/settings/privacy">{bi(lang,"Datenschutz","Privacy")}</a></div>}</div>}
             <div className="form-actions"><button type="button" className="ghost" onClick={test}>{bi(lang,"Verbindung testen","Test connection")}</button><button>{bi(lang,"Provider speichern","Save provider")}</button></div>
             {type==="anthropic"&&<small>{bi(lang,"Claude-Modelle werden über Anthropic /v1/models erkannt. Kontext- und Output-Limits werden beim Hinzufügen übernommen.","Claude models are discovered through Anthropic /v1/models. Context and output limits are imported when adding them.")}</small>}

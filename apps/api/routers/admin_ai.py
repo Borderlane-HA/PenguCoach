@@ -16,7 +16,7 @@ router = APIRouter(prefix="/admin/ai", tags=["admin-ai"])
 
 class ProviderIn(BaseModel):
     name: str = Field(min_length=2, max_length=128)
-    provider_type: str = Field(pattern=r"^(ollama|openai|anthropic|openai_compatible)$")
+    provider_type: str = Field(pattern=r"^(ollama|openai|anthropic|openai_compatible|ionos|gemini|xai)$")
     base_url: str | None = None
     api_key: str | None = None
     enabled: bool = True

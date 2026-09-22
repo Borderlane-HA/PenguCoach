@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.1.0-alpha.18 - 2026-09-22
+
+### Added
+- first-class AI Studio presets for IONOS AI Model Hub, Google Gemini and xAI/Grok, while retaining generic OpenAI-compatible endpoints
+- hard-stop cancellation for stuck Garmin historical-import jobs; the exact Celery task is tracked server-side/revoked, with Celery inspection as a fallback for pre-upgrade jobs and stale Redis account locks are cleared safely for a fresh resume
+- per-Garmin-domain request timeout protection so one unresponsive upstream call cannot leave a multi-year history import frozen indefinitely
+- automatic segmented generation for large structured training plans; week chunks are validated individually and merged into one Garmin-ready plan
+
+### Changed
+- task-level AI output/context budgets are defaults rather than hidden UI ceilings; explicit task values may exceed the former 8,000-token training-plan default up to the configured model/provider/context limits
+- Training exposes the selected model's configured context/output limits instead of clamping Max. Antwort to the task default
+- large plans with more than 12 sessions show chunk progress (part x/y) while generating and retry only a truncated segment with a larger compact budget
+- Garmin History `Cancel` is now an immediate hard stop; `Pause` remains cooperative and preserves resume-safe markers
+
+### Fixed
+- fixes historical imports remaining visually/runtimely stuck after a worker restart or an upstream Garmin call that never returns
+- fixes the old cancellation flow remaining forever on “wird abgebrochen” when the worker could not reach its next cooperative cancellation checkpoint
+- reduces 8-week / multi-session structured plans exhausting a single 8,000-token JSON response even when only a small recent context window was selected
+
 ## 0.1.0-alpha.17 - 2026-09-22
 
 ### Added

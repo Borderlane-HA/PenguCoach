@@ -28,8 +28,9 @@ export default function GarminSettingsPage(){
   const{lang}=useI18n();
   const[status,setStatus]=useState<Status|null>(null),[email,setEmail]=useState(""),[password,setPassword]=useState(""),[challenge,setChallenge]=useState(""),[code,setCode]=useState("");
   const[msg,setMsg]=useState(""),[syncing,setSyncing]=useState(false),[historyOpen,setHistoryOpen]=useState(false),[syncState,setSyncState]=useState("");
-  const[historyRunning,setHistoryRunning]=useState(false),[historyProgress,setHistoryProgress]=useState<Record<string,any>|null>(null),[historyMode,setHistoryMode]=useState<"optimized"|"full">("optimized"),[historyStopping,setHistoryStopping]=useState(false);
+  const[historyRunning,setHistoryRunning]=useState(false),[historyProgress,setHistoryProgress]=useState<Record<string,any>|null>(null),[historyMode,setHistoryMode]=useState<"optimized"|"full">("optimized"),[historyStopping,setHistoryStopping]=useState(false),[historyJobId,setHistoryJobId]=useState<string|null>(null);
   const noticeTimer=useRef<ReturnType<typeof setTimeout>|null>(null);
+  const ignoredHistoryJobs=useRef<Set<string>>(new Set());
 
   const refresh=()=>api<Status>("/garmin/status").then(setStatus);
   const showNotice=(text:string,timeout=3500)=>{setMsg(text);if(noticeTimer.current)clearTimeout(noticeTimer.current);if(timeout>0)noticeTimer.current=setTimeout(()=>setMsg(""),timeout)};
@@ -39,7 +40,7 @@ export default function GarminSettingsPage(){
     const existing=localStorage.getItem(SYNC_JOB_KEY);
     if(existing){setSyncing(true);void pollSync(existing)}
     const history=localStorage.getItem(HISTORY_JOB_KEY);
-    if(history){setHistoryOpen(true);setHistoryRunning(true);void pollHistory(history)}
+    if(history){setHistoryOpen(true);setHistoryRunning(true);setHistoryJobId(history);void pollHistory(history)}
     return()=>{if(noticeTimer.current)clearTimeout(noticeTimer.current)};
     // eslint-disable-next-line react-hooks/exhaustive-deps
   },[]);
@@ -119,14 +120,16 @@ export default function GarminSettingsPage(){
   }
 
   async function pollHistory(taskId:string){
-    setHistoryRunning(true);
+    setHistoryRunning(true);setHistoryJobId(taskId);
     for(let i=0;i<100000;i++){
+      if(ignoredHistoryJobs.current.has(taskId))return;
       try{
         const j=await api<Job>(`/jobs/${taskId}`);
+        if(ignoredHistoryJobs.current.has(taskId))return;
         if(j.progress){setHistoryProgress(j.progress);if(j.progress.import_mode==="full"||j.progress.import_mode==="optimized")setHistoryMode(j.progress.import_mode)}
         if(j.ready){
           localStorage.removeItem(HISTORY_JOB_KEY);
-          setHistoryRunning(false);setHistoryStopping(false);
+          setHistoryRunning(false);setHistoryStopping(false);setHistoryJobId(null);
           const result=j.result??{};
           if(result.mode==="full"||result.mode==="optimized")setHistoryMode(result.mode);
           setHistoryProgress(j.successful?{phase:"done",state:String(result.status??"success"),...result}:null);
@@ -135,6 +138,7 @@ export default function GarminSettingsPage(){
             const rs=String(result.status??"success");
             if(rs==="already_running")showNotice(bi(lang,"Eine Garmin-Aufgabe läuft bereits.","A Garmin task is already running."),6000);
             else if(rs==="rate_limited")showNotice(bi(lang,"Garmin hat den Import nach mehreren Versuchen begrenzt. Er kann gefahrlos erneut gestartet werden und setzt fehlende Daten fort.","Garmin rate-limited the import after several retries. It can be safely restarted and will continue missing data."),9000);
+            else if(rs==="request_timeout")showNotice(bi(lang,`Ein Garmin-Aufruf (${String(result.domain??"?")}) hat nach ${result.timeout_seconds??90}s nicht geantwortet. Der Import wurde sauber gestoppt und kann fortgesetzt werden.`,`A Garmin request (${String(result.domain??"?")}) did not respond within ${result.timeout_seconds??90}s. The import was stopped safely and can be resumed.`),10000);
             else if(rs==="paused")showNotice(bi(lang,"Historienimport pausiert. Bereits importierte Tage bleiben erhalten; ein Neustart überspringt sie.","History import paused. Already imported days are preserved and skipped on restart."),8000);
             else if(rs==="cancelled")showNotice(bi(lang,"Historienimport abgebrochen. Bereits importierte Daten bleiben erhalten.","History import cancelled. Already imported data is preserved."),8000);
             else{
@@ -157,7 +161,7 @@ export default function GarminSettingsPage(){
     setHistoryRunning(true);setHistoryProgress({phase:"activities",state:"queued",matched:0,pages:0});
     try{
       const r=await api<any>("/garmin/import",{method:"POST",body:JSON.stringify({days,mode:historyMode})});
-      localStorage.setItem(HISTORY_JOB_KEY,r.task_id);
+      localStorage.setItem(HISTORY_JOB_KEY,r.task_id);setHistoryJobId(r.task_id);
       await pollHistory(r.task_id);
     }catch(e){
       setHistoryRunning(false);setHistoryProgress(null);
@@ -168,16 +172,26 @@ export default function GarminSettingsPage(){
   async function controlImport(action:"pause"|"cancel"){
     if(!historyRunning||historyStopping)return;
     setHistoryStopping(true);
+    const id=historyJobId??localStorage.getItem(HISTORY_JOB_KEY);
     try{
-      await api("/garmin/import/control",{method:"POST",body:JSON.stringify({action})});
-      showNotice(action==="pause"?bi(lang,"Pause angefordert – der laufende Garmin-Aufruf wird noch beendet.","Pause requested — the current Garmin request will finish first."):bi(lang,"Abbruch angefordert – bereits importierte Daten bleiben erhalten.","Cancellation requested — already imported data is preserved."),6000);
+      await api("/garmin/import/control",{method:"POST",body:JSON.stringify({action,task_id:id})});
+      if(action==="cancel"){
+        if(id)ignoredHistoryJobs.current.add(id);
+        localStorage.removeItem(HISTORY_JOB_KEY);setHistoryJobId(null);setHistoryRunning(false);setHistoryStopping(false);
+        setHistoryProgress({phase:"stopped",state:"cancelled",message:"Historical import cancelled"});
+        await refresh();
+        showNotice(bi(lang,"Historienimport sofort abgebrochen. Bereits importierte Daten bleiben erhalten; ein neuer Import überspringt fertige Tage.","History import stopped immediately. Already imported data is preserved and completed days are skipped on restart."),8000);
+      }else{
+        setHistoryStopping(false);
+        showNotice(bi(lang,"Pause angefordert. Falls ein Garmin-Aufruf hängt, kannst du weiterhin Abbrechen verwenden.","Pause requested. If a Garmin request is stuck, you can still use Cancel."),7000);
+      }
     }catch(e){setHistoryStopping(false);showNotice(e instanceof Error?e.message:String(e),7000)}
   }
 
   async function disconnect(){
     if(!confirm(bi(lang,"Garmin trennen? Lokale Daten bleiben erhalten.","Disconnect Garmin? Local data is preserved.")))return;
     await api("/garmin/disconnect",{method:"POST"});
-    localStorage.removeItem(SYNC_JOB_KEY);localStorage.removeItem(HISTORY_JOB_KEY);setSyncing(false);setHistoryRunning(false);setSyncState("");setHistoryProgress(null);await refresh();
+    localStorage.removeItem(SYNC_JOB_KEY);localStorage.removeItem(HISTORY_JOB_KEY);setSyncing(false);setHistoryRunning(false);setHistoryJobId(null);setSyncState("");setHistoryProgress(null);await refresh();
   }
 
   const fmt=(value?:string)=>value?new Date(value).toLocaleString(lang==="de"?"de-DE":"en-GB"):"—";
@@ -217,7 +231,7 @@ export default function GarminSettingsPage(){
       <div className="form-actions garmin-settings-actions"><button onClick={saveSettings}>{bi(lang,"Einstellungen speichern","Save settings")}</button><button className="ghost" onClick={disconnect}>{bi(lang,"Garmin trennen","Disconnect Garmin")}</button></div>
     </section>}
 
-    {status?.connected&&status.settings&&<section className="card garmin-history-card"><button type="button" className="garmin-history-toggle" onClick={()=>setHistoryOpen(v=>!v)}><div><span className="eyebrow">HISTORY</span><strong>{bi(lang,"Historie & Ersteinrichtung","History & initial setup")}</strong><small>{bi(lang,"Aktivitäten werden zuerst vollständig geladen. Im optimierten Modus werden ältere Tagesdaten mit den wichtigsten Garmin-Domänen nachgeladen; die letzten 90 Tage bleiben vollständig. Bereits fertige Tage werden beim Neustart übersprungen.","Activities are imported completely first. Optimized mode backfills older days using the key Garmin domains while the most recent 90 days stay full-detail. Completed days are skipped on restart.")}</small></div><span>{historyOpen?"−":"+"}</span></button>{historyOpen&&<div className="garmin-history-body"><div className="grid2"><label>{bi(lang,"Zeitraum","Period")}<select disabled={historyRunning} value={status.settings.historical_days} onChange={e=>patchSettings({historical_days:Number(e.target.value)})}><option value={30}>30 {bi(lang,"Tage","days")}</option><option value={90}>90 {bi(lang,"Tage","days")}</option><option value={365}>1 {bi(lang,"Jahr","year")}</option><option value={730}>2 {bi(lang,"Jahre","years")}</option><option value={1825}>5 {bi(lang,"Jahre","years")}</option><option value={3650}>10 {bi(lang,"Jahre","years")}</option><option value={0}>{bi(lang,"Alle verfügbaren Daten","All available data")}</option></select></label><label>{bi(lang,"Importmodus","Import mode")}<select disabled={historyRunning} value={historyMode} onChange={e=>setHistoryMode(e.target.value as "optimized"|"full")}><option value="optimized">{bi(lang,"Optimiert (empfohlen)","Optimized (recommended)")}</option><option value="full">{bi(lang,"Vollständig (langsamer)","Full detail (slower)")}</option></select></label></div><p className="muted">{historyMode==="optimized"?bi(lang,"Optimiert reduziert bei Tagen älter als 90 Tage die Anzahl der Garmin-Abfragen deutlich: Tagesübersicht, Schlaf, HRV, Stress, Body Battery, Max-Metriken/VO₂ und Körperdaten bleiben erhalten. Die letzten 90 Tage werden vollständig geladen. Bereits mit früheren Versionen vollständig importierte Tage werden weiterverwendet.","Optimized mode substantially reduces Garmin requests for days older than 90 days while retaining daily summary, sleep, HRV, stress, Body Battery, max metrics/VO₂ and body data. The most recent 90 days are loaded in full. Days fully imported by earlier versions are reused."):bi(lang,"Vollständig ruft für jeden historischen Tag alle aktivierten Garmin-Domänen ab. Das liefert maximale Detailtiefe, kann bei mehreren Jahren aber viele Stunden dauern.","Full detail requests every enabled Garmin domain for every historical day. This provides maximum detail but can take many hours across multiple years.")}</p>{historyRunning&&<div className="history-import-progress" role="status"><div className="history-import-progress-head"><span className="sync-spinner"/><div><strong>{bi(lang,"Historienimport läuft","History import running")}</strong><small>{historyText(historyProgress)}</small></div></div>{historyPercent!==null&&<div className="history-progress-track"><i style={{width:`${historyPercent}%`}}/></div>}<div className="history-progress-meta">{historyProgress?.phase==="activities"&&<><span>{bi(lang,"Seiten","Pages")}: {historyProgress.pages??0}</span><span>{bi(lang,"Aktivitäten","Activities")}: {historyProgress.matched??historyProgress.scanned??0}</span>{historyProgress.oldest_date&&<span>{bi(lang,"Älteste bisher","Oldest so far")}: {historyProgress.oldest_date}</span>}</>}{historyProgress?.phase==="wellness"&&<><span>{bi(lang,"Tage","Days")}: {historyProgress.completed_days??0}/{historyProgress.total_days??"?"}</span><span>{bi(lang,"Übersprungen","Skipped")}: {historyProgress.skipped_days??0}</span><span>{historyProgress.detail_level==="core"?bi(lang,"älterer Tag · optimiert","older day · optimized"):bi(lang,"vollständige Details","full detail")}</span></>}</div><div className="row history-import-actions"><button type="button" className="ghost" disabled={historyStopping} onClick={()=>controlImport("pause")}>{historyStopping?bi(lang,"Wird gestoppt…","Stopping…"):bi(lang,"Pausieren","Pause")}</button><button type="button" className="ghost danger" disabled={historyStopping} onClick={()=>controlImport("cancel")}>{bi(lang,"Abbrechen","Cancel")}</button></div></div>}<button className="ghost" disabled={historyRunning||syncing} onClick={startImport}>{historyRunning?bi(lang,"Import läuft…","Import running…"):status.settings.historical_days===0?bi(lang,"Alle Daten nachladen","Backfill all data"):bi(lang,"Historie jetzt nachladen","Backfill history now")}</button></div>}</section>}
+    {status?.connected&&status.settings&&<section className="card garmin-history-card"><button type="button" className="garmin-history-toggle" onClick={()=>setHistoryOpen(v=>!v)}><div><span className="eyebrow">HISTORY</span><strong>{bi(lang,"Historie & Ersteinrichtung","History & initial setup")}</strong><small>{bi(lang,"Aktivitäten werden zuerst vollständig geladen. Im optimierten Modus werden ältere Tagesdaten mit den wichtigsten Garmin-Domänen nachgeladen; die letzten 90 Tage bleiben vollständig. Bereits fertige Tage werden beim Neustart übersprungen.","Activities are imported completely first. Optimized mode backfills older days using the key Garmin domains while the most recent 90 days stay full-detail. Completed days are skipped on restart.")}</small></div><span>{historyOpen?"−":"+"}</span></button>{historyOpen&&<div className="garmin-history-body"><div className="grid2"><label>{bi(lang,"Zeitraum","Period")}<select disabled={historyRunning} value={status.settings.historical_days} onChange={e=>patchSettings({historical_days:Number(e.target.value)})}><option value={30}>30 {bi(lang,"Tage","days")}</option><option value={90}>90 {bi(lang,"Tage","days")}</option><option value={365}>1 {bi(lang,"Jahr","year")}</option><option value={730}>2 {bi(lang,"Jahre","years")}</option><option value={1825}>5 {bi(lang,"Jahre","years")}</option><option value={3650}>10 {bi(lang,"Jahre","years")}</option><option value={0}>{bi(lang,"Alle verfügbaren Daten","All available data")}</option></select></label><label>{bi(lang,"Importmodus","Import mode")}<select disabled={historyRunning} value={historyMode} onChange={e=>setHistoryMode(e.target.value as "optimized"|"full")}><option value="optimized">{bi(lang,"Optimiert (empfohlen)","Optimized (recommended)")}</option><option value="full">{bi(lang,"Vollständig (langsamer)","Full detail (slower)")}</option></select></label></div><p className="muted">{historyMode==="optimized"?bi(lang,"Optimiert reduziert bei Tagen älter als 90 Tage die Anzahl der Garmin-Abfragen deutlich: Tagesübersicht, Schlaf, HRV, Stress, Body Battery, Max-Metriken/VO₂ und Körperdaten bleiben erhalten. Die letzten 90 Tage werden vollständig geladen. Bereits mit früheren Versionen vollständig importierte Tage werden weiterverwendet.","Optimized mode substantially reduces Garmin requests for days older than 90 days while retaining daily summary, sleep, HRV, stress, Body Battery, max metrics/VO₂ and body data. The most recent 90 days are loaded in full. Days fully imported by earlier versions are reused."):bi(lang,"Vollständig ruft für jeden historischen Tag alle aktivierten Garmin-Domänen ab. Das liefert maximale Detailtiefe, kann bei mehreren Jahren aber viele Stunden dauern.","Full detail requests every enabled Garmin domain for every historical day. This provides maximum detail but can take many hours across multiple years.")}</p>{historyRunning&&<div className="history-import-progress" role="status"><div className="history-import-progress-head"><span className="sync-spinner"/><div><strong>{bi(lang,"Historienimport läuft","History import running")}</strong><small>{historyText(historyProgress)}</small></div></div>{historyPercent!==null&&<div className="history-progress-track"><i style={{width:`${historyPercent}%`}}/></div>}<div className="history-progress-meta">{historyProgress?.phase==="activities"&&<><span>{bi(lang,"Seiten","Pages")}: {historyProgress.pages??0}</span><span>{bi(lang,"Aktivitäten","Activities")}: {historyProgress.matched??historyProgress.scanned??0}</span>{historyProgress.oldest_date&&<span>{bi(lang,"Älteste bisher","Oldest so far")}: {historyProgress.oldest_date}</span>}</>}{historyProgress?.phase==="wellness"&&<><span>{bi(lang,"Tage","Days")}: {historyProgress.completed_days??0}/{historyProgress.total_days??"?"}</span><span>{bi(lang,"Übersprungen","Skipped")}: {historyProgress.skipped_days??0}</span><span>{historyProgress.detail_level==="core"?bi(lang,"älterer Tag · optimiert","older day · optimized"):bi(lang,"vollständige Details","full detail")}</span></>}</div><div className="row history-import-actions"><button type="button" className="ghost" disabled={historyStopping} onClick={()=>controlImport("pause")}>{historyStopping?bi(lang,"Anfrage läuft…","Requesting…"):bi(lang,"Pausieren","Pause")}</button><button type="button" className="ghost danger" disabled={historyStopping} onClick={()=>controlImport("cancel")}>{bi(lang,"Sofort abbrechen","Stop now")}</button></div></div>}<button className="ghost" disabled={historyRunning||syncing} onClick={startImport}>{historyRunning?bi(lang,"Import läuft…","Import running…"):status.settings.historical_days===0?bi(lang,"Alle Daten nachladen","Backfill all data"):bi(lang,"Historie jetzt nachladen","Backfill history now")}</button></div>}</section>}
 
     {status?.last_error_code&&<section className="card subtle"><strong className="status-warn">{status.last_error_code}</strong></section>}
   </AppShell>;

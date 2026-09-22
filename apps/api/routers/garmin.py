@@ -12,7 +12,8 @@ from pengucoach.db.models import GarminConnection, GarminSyncRun, GarminSyncSett
 from pengucoach.db.session import get_db
 from pengucoach.garmin.auth.service import garmin_auth_service
 from pengucoach.garmin.zones import training_zone_snapshot
-from worker.tasks.garmin_sync import clear_history_import_control, historical_import, set_history_import_control, sync_user
+from worker.celery_app import app
+from worker.tasks.garmin_sync import clear_history_import_control, current_history_import_task, force_clear_history_import_state, historical_import, set_history_import_control, sync_user
 
 router = APIRouter(prefix="/garmin", tags=["garmin"])
 
@@ -47,6 +48,34 @@ class ImportRequest(BaseModel):
 
 class ImportControlRequest(BaseModel):
     action: Literal["pause", "cancel"]
+    task_id: str | None = Field(default=None, max_length=128)
+
+
+def _discover_history_task_id(user_id: str) -> str | None:
+    """Best-effort fallback for an import started before task-id tracking existed."""
+    try:
+        inspector = app.control.inspect(timeout=1.0)
+        for getter in (inspector.active, inspector.reserved, inspector.scheduled):
+            workers = getter() or {}
+            for tasks in workers.values():
+                for item in tasks or []:
+                    request = item.get("request") if isinstance(item, dict) else None
+                    candidate = request if isinstance(request, dict) else item
+                    if not isinstance(candidate, dict):
+                        continue
+                    if candidate.get("name") != "worker.tasks.garmin_sync.historical_import":
+                        continue
+                    args = candidate.get("args")
+                    args_repr = candidate.get("argsrepr")
+                    if (isinstance(args, (list, tuple)) and args and str(args[0]) == user_id) or user_id in str(args_repr or args or ""):
+                        task_id = candidate.get("id")
+                        if task_id:
+                            return str(task_id)
+    except Exception:
+        # Cancellation must still clear stale DB/Redis state even when no worker
+        # answers Celery inspection (for example directly after a restart).
+        return None
+    return None
 
 
 @router.get("/status")
@@ -116,9 +145,35 @@ async def start_import(payload: ImportRequest, user: User = Depends(safety_confi
 
 
 @router.post("/import/control")
-async def control_import(payload: ImportControlRequest, user: User = Depends(safety_confirmed_user)):
-    set_history_import_control(str(user.id), payload.action)
-    return {"accepted": True, "action": payload.action, "resume_safe": True}
+async def control_import(
+    payload: ImportControlRequest,
+    user: User = Depends(safety_confirmed_user),
+    db: AsyncSession = Depends(get_db),
+):
+    user_id = str(user.id)
+    set_history_import_control(user_id, payload.action)
+    if payload.action == "cancel":
+        # Cooperative cancellation is still signalled first, but a history
+        # request can be stuck inside an upstream Garmin call. Revoke the exact
+        # Celery task as a hard fallback and clear the lock that a terminated
+        # child process cannot release in its finally block.
+        task_id = payload.task_id or current_history_import_task(user_id) or _discover_history_task_id(user_id)
+        if task_id:
+            app.control.revoke(task_id, terminate=True, signal="SIGTERM")
+        rows = (await db.scalars(select(GarminSyncRun).where(
+            GarminSyncRun.user_id == user.id,
+            GarminSyncRun.sync_type == "historical",
+            GarminSyncRun.status == "running",
+        ).order_by(GarminSyncRun.started_at.desc()).limit(5))).all()
+        now = datetime.now(timezone.utc)
+        for row in rows:
+            row.status = "cancelled"
+            row.finished_at = now
+            row.error_code = None
+        await db.commit()
+        force_clear_history_import_state(user_id)
+        return {"accepted": True, "action": "cancel", "resume_safe": True, "hard_stop": bool(task_id), "task_id": task_id}
+    return {"accepted": True, "action": "pause", "resume_safe": True, "hard_stop": False}
 
 
 @router.get("/zones")

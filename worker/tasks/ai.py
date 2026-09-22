@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import asyncio
+import copy
+import math
 import uuid
 from collections.abc import Callable
 from typing import Any
@@ -13,7 +15,8 @@ from pengucoach.db.models import AiRun, Conversation, Message, User, UserPrefere
 from pengucoach.db.session import SessionLocal
 from pengucoach.llm.job_control import cancel_requested, clear_cancel
 from pengucoach.llm.service import AiGenerationCancelled, chat, task_settings
-from pengucoach.training_plan.generation import normalize_training_plan_answer, training_plan_instruction
+from pengucoach.training_plan.generation import merge_plan_segments, normalize_training_plan_answer, training_plan_instruction
+from pengucoach.training_plan.structured import extract_structured_plan, render_plan_markdown
 from worker.celery_app import app
 
 ProgressCallback = Callable[[dict[str, Any]], None]
@@ -74,12 +77,15 @@ def _progress_callback(task, payload: dict[str, Any], kind: str) -> ProgressCall
 
     def emit(meta: dict[str, Any]) -> None:
         stage = str(meta.get("stage") or "generation")
+        chunk_index = meta.get("chunk_index")
+        chunk_count = meta.get("chunk_count")
+        chunk = f" · Teil {chunk_index}/{chunk_count}" if de and chunk_index and chunk_count else (f" · part {chunk_index}/{chunk_count}" if chunk_index and chunk_count else "")
         if stage == "connecting":
-            message = f"{base} · Modell wird vorbereitet" if de else f"{base} · preparing model"
+            message = (f"{base}{chunk} · Modell wird vorbereitet" if de else f"{base}{chunk} · preparing model")
         elif stage == "finalizing":
-            message = f"{base} · wird abgeschlossen" if de else f"{base} · finalizing"
+            message = (f"{base}{chunk} · wird abgeschlossen" if de else f"{base}{chunk} · finalizing")
         else:
-            message = base
+            message = f"{base}{chunk}"
         task.update_state(state="PROGRESS", meta={**meta, "message": message})
 
     return emit
@@ -250,39 +256,179 @@ async def _training_plan(
         config = await task_settings(db, "training_plan", locale)
         prompt = str(payload.get("prompt") or config["default_prompt"]).strip()
         g = context["goal"]
-        if locale.startswith("de"):
-            user_message = (
-                f"Erstelle einen {g['weeks']}-Wochen-Trainingsplan für '{g['goal_type']}', "
-                f"{g['days_per_week']} Trainingstage pro Woche, etwa {g['session_minutes']} Minuten pro Einheit. "
-                f"Ziel: {g['goal_text'] or 'keine Zusatzangabe'}. Equipment: {g['equipment'] or 'nicht angegeben'}. "
-                f"Einschränkungen: {g['constraints'] or 'keine'}. Erfahrung: {g['experience']}. "
-                f"Nutze ausschließlich den ausgewählten Trainingskontext der letzten {context_days} Tage."
-            )
-        else:
-            user_message = (
-                f"Create a {g['weeks']}-week training plan for goal '{g['goal_type']}', "
-                f"{g['days_per_week']} training days per week and about {g['session_minutes']} minutes per session. "
+        total_weeks = int(g["weeks"])
+        days_per_week = int(g["days_per_week"])
+        expected_sessions = max(1, total_weeks * days_per_week)
+        requested_max = int(payload.get("max_tokens") or config["max_output_tokens"])
+
+        def base_message(weeks: int) -> str:
+            if locale.startswith("de"):
+                return (
+                    f"Erstelle einen {weeks}-Wochen-Trainingsplan für '{g['goal_type']}', "
+                    f"{days_per_week} Trainingstage pro Woche, etwa {g['session_minutes']} Minuten pro Einheit. "
+                    f"Ziel: {g['goal_text'] or 'keine Zusatzangabe'}. Equipment: {g['equipment'] or 'nicht angegeben'}. "
+                    f"Einschränkungen: {g['constraints'] or 'keine'}. Erfahrung: {g['experience']}. "
+                    f"Nutze ausschließlich den ausgewählten Trainingskontext der letzten {context_days} Tage."
+                )
+            return (
+                f"Create a {weeks}-week training plan for goal '{g['goal_type']}', "
+                f"{days_per_week} training days per week and about {g['session_minutes']} minutes per session. "
                 f"Goal details: {g['goal_text'] or 'none supplied'}. Equipment: {g['equipment'] or 'not specified'}. "
                 f"Constraints: {g['constraints'] or 'none supplied'}. Experience: {g['experience']}. "
                 f"Use only the selected training context from the last {context_days} days."
             )
-        answer = await chat(
-            db,
-            [{"role": "user", "content": user_message}],
-            context,
-            locale,
-            task="training_plan",
-            local_only=local_only,
-            model_id=_u(payload.get("model_id")),
-            instruction_prompt=training_plan_instruction(prompt),
-            requested_max_tokens=payload.get("max_tokens"),
-            requested_context_window_tokens=payload.get("context_window_tokens"),
-            progress_callback=progress_callback,
-            cancel_check=cancel_check,
-        )
-        if cancel_check and cancel_check():
-            raise AiGenerationCancelled("AI_JOB_CANCELLED")
-        content, plan_meta = normalize_training_plan_answer(answer, locale)
+
+        # Large structured plans are generated in small week segments. This keeps
+        # local models from spending the entire output budget on a single huge JSON
+        # document. PenguCoach validates every segment and merges it deterministically.
+        chunked = expected_sessions > 12
+        if not chunked:
+            answer = await chat(
+                db,
+                [{"role": "user", "content": base_message(total_weeks)}],
+                context,
+                locale,
+                task="training_plan",
+                local_only=local_only,
+                model_id=_u(payload.get("model_id")),
+                instruction_prompt=training_plan_instruction(prompt),
+                requested_max_tokens=requested_max,
+                requested_context_window_tokens=payload.get("context_window_tokens"),
+                progress_callback=progress_callback,
+                cancel_check=cancel_check,
+            )
+            if cancel_check and cancel_check():
+                raise AiGenerationCancelled("AI_JOB_CANCELLED")
+            content, plan_meta = normalize_training_plan_answer(answer, locale)
+            generation_chunks = 1
+        else:
+            chunk_weeks = max(1, min(3, 10 // max(1, days_per_week)))
+            chunk_count = math.ceil(total_weeks / chunk_weeks)
+            segments = []
+            usage_totals = {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}
+            last_answer: dict[str, Any] | None = None
+            previous_outline: list[dict[str, Any]] = []
+            any_budget_adjusted = False
+            any_context_truncated = False
+
+            for chunk_index in range(chunk_count):
+                if cancel_check and cancel_check():
+                    raise AiGenerationCancelled("AI_JOB_CANCELLED")
+                start_week = chunk_index * chunk_weeks + 1
+                end_week = min(total_weeks, start_week + chunk_weeks - 1)
+                local_weeks = end_week - start_week + 1
+                segment_context = copy.deepcopy(context)
+                segment_goal = dict(g)
+                segment_goal.update({
+                    "weeks": local_weeks,
+                    "plan_total_weeks": total_weeks,
+                    "plan_week_start": start_week,
+                    "plan_week_end": end_week,
+                })
+                segment_context["goal"] = segment_goal
+                if previous_outline:
+                    segment_context["previous_plan_segment"] = previous_outline[-12:]
+                segment_instruction = training_plan_instruction(prompt) + (
+                    f"\n\nSEGMENT GENERATION: This is overall weeks {start_week}-{end_week} of a {total_weeks}-week plan. "
+                    f"Return only these {local_weeks} weeks. In the JSON use local week numbers 1..{local_weeks}; "
+                    "PenguCoach will remap them to the absolute calendar weeks. Preserve sensible progression from the "
+                    "previous_plan_segment context when supplied. Do not repeat earlier weeks."
+                )
+                if locale.startswith("de"):
+                    segment_message = base_message(local_weeks) + (
+                        f" Erzeuge jetzt ausschließlich den Abschnitt für Gesamtwoche {start_week} bis {end_week} von {total_weeks}. "
+                        f"Im JSON nummerierst du diese Abschnittswochen lokal von 1 bis {local_weeks}."
+                    )
+                else:
+                    segment_message = base_message(local_weeks) + (
+                        f" Generate only the segment for overall weeks {start_week} through {end_week} of {total_weeks}. "
+                        f"Number these segment weeks locally from 1 through {local_weeks} in the JSON."
+                    )
+                segment_sessions = max(1, local_weeks * days_per_week)
+                compact_budget = min(requested_max, max(1800, segment_sessions * 230 + 450))
+
+                def segment_progress(meta: dict[str, Any], *, ci=chunk_index + 1, cc=chunk_count) -> None:
+                    if progress_callback:
+                        progress_callback({**meta, "chunk_index": ci, "chunk_count": cc})
+
+                answer_part = await chat(
+                    db,
+                    [{"role": "user", "content": segment_message}],
+                    segment_context,
+                    locale,
+                    task="training_plan",
+                    local_only=local_only,
+                    model_id=_u(payload.get("model_id")),
+                    instruction_prompt=segment_instruction,
+                    requested_max_tokens=compact_budget,
+                    requested_context_window_tokens=payload.get("context_window_tokens"),
+                    progress_callback=segment_progress,
+                    cancel_check=cancel_check,
+                )
+                # If a compact segment alone hits its cap, retry just that segment
+                # once with a larger allowance instead of discarding the whole plan.
+                if answer_part.get("truncated") and compact_budget < requested_max:
+                    retry_budget = min(requested_max, max(compact_budget + 512, compact_budget * 2))
+                    answer_part = await chat(
+                        db,
+                        [{"role": "user", "content": segment_message}],
+                        segment_context,
+                        locale,
+                        task="training_plan",
+                        local_only=local_only,
+                        model_id=_u(payload.get("model_id")),
+                        instruction_prompt=segment_instruction + "\nThe previous compact attempt hit its output cap. Be more concise and finish the JSON.",
+                        requested_max_tokens=retry_budget,
+                        requested_context_window_tokens=payload.get("context_window_tokens"),
+                        progress_callback=segment_progress,
+                        cancel_check=cancel_check,
+                    )
+                if answer_part.get("truncated"):
+                    raise RuntimeError(f"TRAINING_PLAN_SEGMENT_TRUNCATED:{start_week}-{end_week}")
+                segment, segment_error = extract_structured_plan(str(answer_part.get("content") or ""))
+                if segment is None:
+                    raise RuntimeError(f"TRAINING_PLAN_SEGMENT_INVALID:{start_week}-{end_week}:{segment_error}")
+                for session in segment.sessions:
+                    session.week += start_week - 1
+                segments.append(segment)
+                previous_outline.extend({
+                    "week": session.week,
+                    "day": session.day,
+                    "sport": session.sport,
+                    "name": session.name,
+                    "duration_min": session.duration_min,
+                } for session in segment.sessions)
+                part_usage = answer_part.get("usage") or {}
+                for key in usage_totals:
+                    value = part_usage.get(key)
+                    if isinstance(value, int):
+                        usage_totals[key] += value
+                any_budget_adjusted = any_budget_adjusted or bool(answer_part.get("output_budget_adjusted"))
+                any_context_truncated = any_context_truncated or bool(answer_part.get("context_truncated"))
+                last_answer = answer_part
+
+            merged = merge_plan_segments(segments, total_weeks)
+            content = render_plan_markdown(merged, locale)
+            plan_meta = {
+                "structured_plan": merged.model_dump(mode="json"),
+                "structured_plan_valid": True,
+                "structured_plan_error": None,
+            }
+            assert last_answer is not None
+            answer = {
+                **last_answer,
+                "content": content,
+                "usage": usage_totals,
+                "max_output_tokens": requested_max,
+                "requested_max_output_tokens": requested_max,
+                "output_budget_adjusted": any_budget_adjusted,
+                "context_truncated": any_context_truncated,
+                "truncated": False,
+                "stop_reason": "chunked_complete",
+                "generation_chunks": chunk_count,
+            }
+            generation_chunks = chunk_count
+
         metadata = {
             "goal": context["goal"],
             "training_context": {"days": context_days, "data": context_data},
@@ -296,6 +442,7 @@ async def _training_plan(
             "context_truncated": answer.get("context_truncated", False),
             "stop_reason": answer.get("stop_reason"),
             "truncated": answer.get("truncated", False),
+            "generation_chunks": generation_chunks,
             "local": answer.get("local"),
             "locale": locale,
             **plan_meta,
