@@ -1,3 +1,4 @@
+from typing import Literal
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -11,7 +12,7 @@ from pengucoach.db.models import GarminConnection, GarminSyncRun, GarminSyncSett
 from pengucoach.db.session import get_db
 from pengucoach.garmin.auth.service import garmin_auth_service
 from pengucoach.garmin.zones import training_zone_snapshot
-from worker.tasks.garmin_sync import historical_import, sync_user
+from worker.tasks.garmin_sync import clear_history_import_control, historical_import, set_history_import_control, sync_user
 
 router = APIRouter(prefix="/garmin", tags=["garmin"])
 
@@ -41,6 +42,11 @@ class SyncSettingsRequest(BaseModel):
 
 class ImportRequest(BaseModel):
     days: int = Field(default=365, ge=0, le=9132)
+    mode: Literal["optimized", "full"] = "optimized"
+
+
+class ImportControlRequest(BaseModel):
+    action: Literal["pause", "cancel"]
 
 
 @router.get("/status")
@@ -104,8 +110,15 @@ async def sync_now(user: User = Depends(safety_confirmed_user), db: AsyncSession
 async def start_import(payload: ImportRequest, user: User = Depends(safety_confirmed_user), db: AsyncSession = Depends(get_db)):
     conn = await db.scalar(select(GarminConnection).where(GarminConnection.user_id == user.id))
     if not conn or conn.status != "connected": raise HTTPException(status_code=409, detail="GARMIN_NOT_CONNECTED")
-    task = historical_import.apply_async(args=[str(user.id), payload.days], queue="garmin")
-    return {"queued": True, "task_id": task.id, "days": payload.days, "scope": "all" if payload.days == 0 else "days"}
+    clear_history_import_control(str(user.id))
+    task = historical_import.apply_async(args=[str(user.id), payload.days, payload.mode], queue="garmin")
+    return {"queued": True, "task_id": task.id, "days": payload.days, "mode": payload.mode, "scope": "all" if payload.days == 0 else "days"}
+
+
+@router.post("/import/control")
+async def control_import(payload: ImportControlRequest, user: User = Depends(safety_confirmed_user)):
+    set_history_import_control(str(user.id), payload.action)
+    return {"accepted": True, "action": payload.action, "resume_safe": True}
 
 
 @router.get("/zones")

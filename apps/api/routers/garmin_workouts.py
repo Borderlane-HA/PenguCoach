@@ -14,7 +14,7 @@ from pengucoach.db.session import get_db
 from pengucoach.garmin.gateway.workouts import session_exportability, supported_workout_sports
 from pengucoach.training_plan.calendar import scheduled_date, selected_sessions
 from pengucoach.training_plan.structured import TrainingPlanDocument
-from worker.tasks.garmin_workouts import export_plan
+from worker.tasks.garmin_workouts import delete_plan, export_plan
 
 router = APIRouter(prefix="/garmin/workout-export", tags=["garmin-workout-export"])
 
@@ -127,3 +127,25 @@ async def queue_workout_export(
         raise HTTPException(status_code=422, detail="NO_TRAINING_SESSIONS_SELECTED")
     task = export_plan.apply_async(args=[str(user.id), payload.model_dump(mode="json")], queue="garmin")
     return {"task_id": task.id, "status": "queued", "sessions": len(sessions)}
+
+
+@router.post("/delete-plan/{plan_run_id}/jobs")
+async def queue_plan_garmin_cleanup(
+    plan_run_id: uuid.UUID,
+    user: User = Depends(safety_confirmed_user),
+    db: AsyncSession = Depends(get_db),
+):
+    run = await db.get(AiRun, plan_run_id)
+    if not run or run.user_id != user.id or run.task_type != "training_plan":
+        raise HTTPException(status_code=404, detail="TRAINING_PLAN_NOT_FOUND")
+    exports = (await db.scalars(select(GarminWorkoutExport).where(
+        GarminWorkoutExport.user_id == user.id,
+        GarminWorkoutExport.plan_run_id == plan_run_id,
+    ))).all()
+    needs_remote = any(row.workout_id or row.scheduled_workout_id for row in exports)
+    if needs_remote:
+        conn = await db.scalar(select(GarminConnection).where(GarminConnection.user_id == user.id))
+        if not conn or conn.status != "connected" or not conn.token_ciphertext:
+            raise HTTPException(status_code=409, detail="GARMIN_NOT_CONNECTED")
+    task = delete_plan.apply_async(args=[str(user.id), str(plan_run_id)], queue="garmin")
+    return {"task_id": task.id, "status": "queued", "garmin_entries": sum(1 for row in exports if row.workout_id or row.scheduled_workout_id)}

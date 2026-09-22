@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from pengucoach.auth.dependencies import safety_confirmed_user
 from pengucoach.coach.context import SOURCE_NOTICE, build_activity_analysis_context, build_coach_context, build_training_plan_context
-from pengucoach.db.models import AiRun, Conversation, Message, User, UserPreference
+from pengucoach.db.models import AiRun, Conversation, GarminWorkoutExport, Message, User, UserPreference
 from pengucoach.db.session import get_db
 from pengucoach.llm.service import chat, eligible_models, resolve_model, task_settings
 from pengucoach.training_plan.generation import normalize_training_plan_answer, training_plan_instruction
@@ -259,6 +259,27 @@ async def activity_analysis_history(
     return [_run_payload(x) for x in rows]
 
 
+@router.delete("/ai-runs/{run_id}")
+async def delete_ai_run(
+    run_id: uuid.UUID,
+    user: User = Depends(safety_confirmed_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete a stored AI analysis owned by the current user.
+
+    Training plans use their dedicated delete endpoints because exported Garmin
+    calendar entries may need explicit cleanup before the local run disappears.
+    """
+    run = await db.get(AiRun, run_id)
+    if not run or run.user_id != user.id:
+        raise HTTPException(status_code=404, detail="AI_RUN_NOT_FOUND")
+    if run.task_type == "training_plan":
+        raise HTTPException(status_code=409, detail="USE_TRAINING_PLAN_DELETE")
+    await db.delete(run)
+    await db.commit()
+    return {"deleted": True, "run_id": str(run_id)}
+
+
 @router.post("/training-plan")
 async def training_plan(payload: TrainingPlanRequest, user: User = Depends(safety_confirmed_user), db: AsyncSession = Depends(get_db)):
     locale = payload.locale or user.locale
@@ -321,3 +342,44 @@ async def training_plan_history(
         AiRun.user_id == user.id, AiRun.task_type == "training_plan",
     ).order_by(AiRun.created_at.desc()).limit(limit))).all()
     return [_run_payload(x) for x in rows]
+
+
+@router.get("/training-plans/{run_id}/delete-info")
+async def training_plan_delete_info(
+    run_id: uuid.UUID,
+    user: User = Depends(safety_confirmed_user),
+    db: AsyncSession = Depends(get_db),
+):
+    run = await db.get(AiRun, run_id)
+    if not run or run.user_id != user.id or run.task_type != "training_plan":
+        raise HTTPException(status_code=404, detail="TRAINING_PLAN_NOT_FOUND")
+    exports = (await db.scalars(select(GarminWorkoutExport).where(
+        GarminWorkoutExport.user_id == user.id,
+        GarminWorkoutExport.plan_run_id == run.id,
+    ))).all()
+    remote = [row for row in exports if row.workout_id or row.scheduled_workout_id]
+    return {
+        "plan_run_id": str(run.id),
+        "garmin_exports": len(exports),
+        "garmin_exported": len(remote),
+        "has_garmin_calendar_entries": any(bool(row.scheduled_workout_id) for row in remote),
+    }
+
+
+@router.delete("/training-plans/{run_id}")
+async def delete_training_plan_local(
+    run_id: uuid.UUID,
+    user: User = Depends(safety_confirmed_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete the local plan only. Garmin entries are intentionally untouched.
+
+    The Garmin export ledger cascades with the AI run, so the UI asks the user
+    first whether remote calendar/workout cleanup is desired.
+    """
+    run = await db.get(AiRun, run_id)
+    if not run or run.user_id != user.id or run.task_type != "training_plan":
+        raise HTTPException(status_code=404, detail="TRAINING_PLAN_NOT_FOUND")
+    await db.delete(run)
+    await db.commit()
+    return {"deleted": True, "plan_run_id": str(run_id), "garmin_untouched": True}
