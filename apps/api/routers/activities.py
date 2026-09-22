@@ -104,7 +104,7 @@ async def list_activities(
             Activity.name.ilike(pattern),
             Activity.sport_type.ilike(pattern),
             Activity.subsport_type.ilike(pattern),
-            raw_text.ilike(pattern),
+            cast(Activity.raw, String).ilike(pattern),
         ))
 
     paginated = page is not None or per_page is not None

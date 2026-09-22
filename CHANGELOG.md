@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.0-alpha.27 - 2026-09-22
+
+- Fix activity journal CI regression while preserving Alpha.26 source-aware activity search and pagination.
+- Restore the explicit full-text search expression for `Activity.raw`, keeping legacy/imported activity metadata searchable.
+
 ## 0.1.0-alpha.26 - 2026-09-22
 
 - SparkyFitness training sessions are now materialized into the normal PenguCoach activity diary instead of remaining AI-only raw records.
