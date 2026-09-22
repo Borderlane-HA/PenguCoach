@@ -12,7 +12,7 @@ Alpha.23 adds AI usage and cost transparency across local and cloud models, conf
 
 `v0.1.0-alpha.24` is the current end-to-end alpha baseline:
 
-- **SparkyFitness read-only connection:** configurable self-hosted URL + encrypted API key, capability probing, manual sync for sleep, daily/check-in data, HRV/resting-HR custom metrics and paginated workout history. Existing Garmin canonical values are preserved; SparkyFitness fills gaps and adds an additional AI context source.
+- **SparkyFitness read-only connection:** configurable self-hosted URL + encrypted API key, capability probing, multi-year/all-history sync for sleep, daily/check-in data, HRV/resting-HR custom metrics, body/scale values and paginated workout history. Sparky sessions can appear in the normal activity diary with source badges; conservative duplicate matching merges the same Garmin/Sparky workout instead of double-counting it.
 
 - German and English web UI
 - bright health-first responsive web design with desktop sidebar and mobile navigation dock
@@ -31,6 +31,7 @@ Alpha.23 adds AI usage and cost transparency across local and cloud models, conf
 - allow-list based **strict read-only** Garmin data-sync gateway plus a separate opt-in, narrow workout/calendar write gateway
 - configurable automatic sync with jitter, lock, 429 cooldown and reconnect state
 - daily Garmin data ingestion for health, sleep, HRV, stress, Body Battery, hydration, respiration, SpO₂, intensity, training readiness/status, max metrics, body data and activities where the account/device exposes them
+- body composition and profile context for AI/health views: weight, height, BMI, body-fat %, body-water %, muscle mass and bone mass when Garmin or SparkyFitness exposes those values; daily steps and individual metric provenance are shown separately
 - immutable original FIT download
 - FIT parsing and Parquet time-series storage
 - deterministic FIT analytics: HR/pace/power/cadence drift, aerobic decoupling, pace consistency and data coverage

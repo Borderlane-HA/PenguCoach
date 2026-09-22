@@ -9,7 +9,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from pengucoach.db.models import Activity, ActivityMetric, DailyHealth, FitFile, HrvDaily, SleepSession, SourceRecord, User
+from pengucoach.db.models import Activity, ActivityMetric, BodyMeasurement, DailyHealth, FitFile, HrvDaily, SleepSession, SourceRecord, User
 from pengucoach.fit.activity_detail import selected_garmin_extras
 from pengucoach.fit.service import load_activity_detail
 from pengucoach.garmin.zones import activity_zone_time, training_zone_snapshot
@@ -35,10 +35,12 @@ def _context_start_date(end_date: date, lookback_days: int) -> date:
 def _activity_garmin(a: Activity) -> dict[str, Any]:
     raw = a.raw or {}
     source = raw.get("source", "garmin")
-    extra = selected_garmin_extras(raw) if source == "garmin" else {}
+    if source == "garmin" and "sparkyfitness" in raw:
+        source = "garmin+sparkyfitness"
+    extra = selected_garmin_extras(raw) if source in {"garmin", "garmin+sparkyfitness"} else {}
     return {
         "activity_id": str(a.id),
-        "garmin_activity_id": a.garmin_activity_id if source == "garmin" else None,
+        "garmin_activity_id": a.garmin_activity_id if source in {"garmin", "garmin+sparkyfitness"} else None,
         "name": a.name,
         "sport": a.sport_type,
         "subsport": a.subsport_type,
@@ -150,15 +152,90 @@ def _compact_sparky_session(record: SourceRecord) -> dict[str, Any]:
     }
 
 
-async def _sparky_sessions(db: AsyncSession, user_id: uuid.UUID, start_date: date, end_date: date, limit: int = 80) -> list[dict[str, Any]]:
+async def _sparky_sessions(
+    db: AsyncSession,
+    user_id: uuid.UUID,
+    start_date: date,
+    end_date: date,
+    limit: int = 80,
+    exclude_external_ids: set[str] | None = None,
+) -> list[dict[str, Any]]:
     rows = (await db.scalars(select(SourceRecord).where(
         SourceRecord.user_id == user_id,
         SourceRecord.source == "sparkyfitness",
         SourceRecord.domain == "exercise_session",
         SourceRecord.record_date >= start_date,
         SourceRecord.record_date <= end_date,
-    ).order_by(SourceRecord.record_date.desc(), SourceRecord.fetched_at.desc()).limit(limit))).all()
-    return [_compact_sparky_session(x) for x in rows]
+    ).order_by(SourceRecord.record_date.desc(), SourceRecord.fetched_at.desc()).limit(max(limit * 3, limit)))).all()
+    excluded = exclude_external_ids or set()
+    selected = [x for x in rows if not x.external_id or str(x.external_id) not in excluded][:limit]
+    return [_compact_sparky_session(x) for x in selected]
+
+
+def _materialized_sparky_ids(rows: list[Activity]) -> set[str]:
+    ids: set[str] = set()
+    for row in rows:
+        raw = row.raw or {}
+        one = raw.get("sparkyfitness_external_id")
+        if one:
+            ids.add(str(one))
+        for value in raw.get("sparkyfitness_external_ids") or []:
+            ids.add(str(value))
+    return ids
+
+
+def _metric_source(raw: dict[str, Any] | None, field: str) -> str:
+    data = raw or {}
+    sources = data.get("_metric_sources") if isinstance(data, dict) else None
+    if isinstance(sources, dict) and isinstance(sources.get(field), str):
+        return str(sources[field])
+    return _row_source(raw)
+
+
+BODY_CONTEXT_FIELDS = (
+    "weight_kg", "height_cm", "bmi", "body_fat_percent",
+    "body_water_percent", "muscle_mass_kg", "bone_mass_kg",
+)
+
+
+def _body_snapshot(rows: list[BodyMeasurement]) -> dict[str, Any] | None:
+    result: dict[str, Any] = {"sources": {}, "measured_at": None}
+    latest_dt = None
+    for row in sorted(rows, key=lambda x: x.measured_at, reverse=True):
+        for field in BODY_CONTEXT_FIELDS:
+            if result.get(field) is None:
+                value = getattr(row, field, None)
+                if value is not None:
+                    result[field] = value
+                    result["sources"][field] = _metric_source(row.raw, field)
+                    if latest_dt is None or row.measured_at > latest_dt:
+                        latest_dt = row.measured_at
+    if all(result.get(field) is None for field in BODY_CONTEXT_FIELDS):
+        return None
+    result["measured_at"] = latest_dt
+    return result
+
+
+async def _body_context(db: AsyncSession, user_id: uuid.UUID, start_date: date, end_date: date) -> dict[str, Any] | None:
+    recent = list((await db.scalars(select(BodyMeasurement).where(
+        BodyMeasurement.user_id == user_id,
+        BodyMeasurement.measured_at >= datetime.combine(start_date, datetime.min.time(), tzinfo=timezone.utc),
+        BodyMeasurement.measured_at <= datetime.combine(end_date, datetime.max.time(), tzinfo=timezone.utc),
+    ).order_by(BodyMeasurement.measured_at))).all())
+    all_rows = list((await db.scalars(select(BodyMeasurement).where(
+        BodyMeasurement.user_id == user_id
+    ).order_by(BodyMeasurement.measured_at.desc()).limit(1000))).all())
+    latest = _body_snapshot(all_rows)
+    if latest is None and not recent:
+        return None
+    return {
+        "latest": latest,
+        "recent": [{
+            "measured_at": row.measured_at,
+            **{field: getattr(row, field, None) for field in BODY_CONTEXT_FIELDS},
+            "sources": {field: _metric_source(row.raw, field) for field in BODY_CONTEXT_FIELDS if getattr(row, field, None) is not None},
+        } for row in recent[-30:]],
+    }
 
 
 def _health_payload(rows: list[DailyHealth]) -> list[dict[str, Any]]:
@@ -174,6 +251,12 @@ def _health_payload(rows: list[DailyHealth]) -> list[dict[str, Any]]:
         "training_readiness": x.training_readiness,
         "vo2max_running": x.vo2max_running,
         "source": _row_source(x.raw),
+        "sources": {
+            field: _metric_source(x.raw, field) for field in (
+                "steps", "resting_hr", "stress_avg", "body_battery_high",
+                "hydration_ml", "training_readiness", "vo2max_running"
+            ) if getattr(x, field, None) is not None
+        },
     } for x in rows]
 
 
@@ -228,7 +311,8 @@ async def build_coach_context(db: AsyncSession, user: User, days: int = 30) -> d
         metric = await db.scalar(select(ActivityMetric).where(ActivityMetric.activity_id == a.id))
         activity_context.append({"garmin": _activity_garmin(a), "pengucoach": _metric_payload(metric)})
     zones = await training_zone_snapshot(db, user.id)
-    sparky_sessions = await _sparky_sessions(db, user.id, start, end, limit=40)
+    sparky_sessions = await _sparky_sessions(db, user.id, start, end, limit=40, exclude_external_ids=_materialized_sparky_ids(list(activities)))
+    body = await _body_context(db, user.id, start, end)
     return {
         "source_notice": SOURCE_NOTICE,
         "training_zones": zones,
@@ -240,6 +324,7 @@ async def build_coach_context(db: AsyncSession, user: User, days: int = 30) -> d
         "hrv_30d": _hrv_payload(hrv),
         "recent_activities": activity_context[:20],
         "sparkyfitness_sessions": sparky_sessions[:20],
+        "body_profile": body,
     }
 
 
@@ -303,6 +388,7 @@ async def build_activity_analysis_context(
         "splits": (fit_detail.get("splits") or [])[:120],
     }
     scope = {0: "session_only", 1: "activity_day", 3: "three_days", 7: "seven_days"}[lookback_days]
+    body = await _body_context(db, user.id, start_date, end_date)
     lookback: dict[str, Any] = {
         "scope": scope,
         "days": lookback_days,
@@ -312,6 +398,7 @@ async def build_activity_analysis_context(
         "health": _health_payload(health),
         "sleep": _sleep_payload(sleep),
         "hrv": _hrv_payload(hrv),
+        "body_profile": body,
     }
     if lookback_days == 1:
         lookback["summary_day"] = _window_summary(prior, end_date, 1)
@@ -366,6 +453,8 @@ async def build_training_plan_context(
     if include_sleep_hrv or include_recovery or include_daily_activity:
         health, sleep, hrv = await _recovery_window(db, user.id, start, end)
 
+    body = await _body_context(db, user.id, start, end)
+
     lookback: dict[str, Any] = {
         "days": days,
         "from": start,
@@ -378,9 +467,11 @@ async def build_training_plan_context(
             "steps_and_hydration": include_daily_activity,
         },
     }
+    lookback["body_profile"] = body
+
     if include_training:
         lookback["summary_period"] = _window_summary(activities, end, days)
-        lookback["sparkyfitness_sessions"] = await _sparky_sessions(db, user.id, start, end, limit=80)
+        lookback["sparkyfitness_sessions"] = await _sparky_sessions(db, user.id, start, end, limit=80, exclude_external_ids=_materialized_sparky_ids(activities))
         if days > 7:
             lookback["summary_recent_7d"] = _window_summary(activities, end, 7)
         lookback["activities"] = activity_payload
@@ -392,7 +483,7 @@ async def build_training_plan_context(
     if include_recovery or include_daily_activity:
         daily: list[dict[str, Any]] = []
         for row in health:
-            item: dict[str, Any] = {"date": row.date, "source": _row_source(row.raw)}
+            item: dict[str, Any] = {"date": row.date, "source": _row_source(row.raw), "sources": {}}
             if include_recovery:
                 item.update({
                     "resting_hr_bpm": row.resting_hr,
@@ -408,6 +499,9 @@ async def build_training_plan_context(
                     "hydration_ml": row.hydration_ml,
                     "hydration_goal_ml": row.hydration_goal_ml,
                 })
+            for field in ("resting_hr", "stress_avg", "body_battery_high", "body_battery_low", "training_readiness", "vo2max_running", "steps", "hydration_ml", "hydration_goal_ml"):
+                if getattr(row, field, None) is not None:
+                    item["sources"][field] = _metric_source(row.raw, field)
             daily.append(item)
         lookback["daily_health"] = daily
 

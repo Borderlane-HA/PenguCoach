@@ -33,16 +33,23 @@ Capability checks cover:
 
 Direct Garmin data remains authoritative for Garmin-specific metrics such as training readiness, Body Battery, Garmin training load/status, and Garmin workout/calendar operations.
 
-SparkyFitness fills missing general health data such as steps, sleep, body measurements, HRV/resting heart rate where available, and adds workout sessions as a secondary AI context source. Existing Garmin canonical values are not overwritten.
+SparkyFitness fills missing general health data such as steps, sleep, body measurements, HRV/resting heart rate where available. Workout sessions are also materialized into the normal activity diary when they contain enough session-level information. Existing Garmin canonical values are not overwritten.
 
-Because SparkyFitness can itself contain Garmin-synced data, AI context marks SparkyFitness as a secondary source and explicitly warns against double-counting sessions that appear to be the same workout.
+Because SparkyFitness can itself contain Garmin-synced data, PenguCoach performs conservative duplicate matching by sport family, start time, duration and distance. A likely match is kept as one activity with `Garmin + SparkyFitness` provenance; otherwise the Sparky session receives its own local activity row. AI context uses the same provenance to avoid double-counting.
 
 ## Sync
 
-The SparkyFitness settings page offers a configurable 7–366 day sync window and independent toggles for:
+The SparkyFitness settings page offers 7/14/30/90/180/366 day windows, 2/5/10 year windows and **All data**, plus independent toggles for:
 
 - training & activities;
 - sleep;
 - daily health, HRV and body data.
 
-Imported raw records remain in PenguCoach after disconnecting the SparkyFitness account.
+Long health/sleep ranges are read in one-year chunks to avoid oversized API responses. Sleep prefers `/sleep/details` and falls back to `/sleep`. The settings page shows the oldest/newest locally stored dates per major domain.
+
+Imported raw records and materialized activity rows remain in PenguCoach after disconnecting the SparkyFitness account.
+
+
+## Body and smart-scale data
+
+PenguCoach reads body/check-in values when SparkyFitness exposes them, including weight, height, BMI, body-fat percentage, body-water percentage, muscle mass and bone mass. These values remain read-only and keep per-metric provenance so Garmin values are not silently overwritten.

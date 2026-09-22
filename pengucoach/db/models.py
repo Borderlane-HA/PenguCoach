@@ -224,10 +224,12 @@ class BodyMeasurement(Base):
     user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), index=True)
     measured_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
     weight_kg: Mapped[float | None] = mapped_column(Float, nullable=True)
+    height_cm: Mapped[float | None] = mapped_column(Float, nullable=True)
     bmi: Mapped[float | None] = mapped_column(Float, nullable=True)
     body_fat_percent: Mapped[float | None] = mapped_column(Float, nullable=True)
     body_water_percent: Mapped[float | None] = mapped_column(Float, nullable=True)
     muscle_mass_kg: Mapped[float | None] = mapped_column(Float, nullable=True)
+    bone_mass_kg: Mapped[float | None] = mapped_column(Float, nullable=True)
     raw: Mapped[dict] = mapped_column(JSONB, default=dict)
 
 

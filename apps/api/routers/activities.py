@@ -16,7 +16,18 @@ from worker.tasks.fit import analyze_fit
 router = APIRouter(prefix="/activities", tags=["activities"])
 
 
+def _activity_sources(x: Activity) -> list[str]:
+    raw = x.raw or {}
+    primary = str(raw.get("source") or "garmin")
+    sources: list[str] = [primary]
+    if "sparkyfitness" in raw and "sparkyfitness" not in sources:
+        sources.append("sparkyfitness")
+    return sources
+
+
 def _summary(x: Activity) -> dict:
+    raw = x.raw or {}
+    sources = _activity_sources(x)
     return {
         "id": str(x.id),
         "garmin_activity_id": x.garmin_activity_id,
@@ -39,8 +50,10 @@ def _summary(x: Activity) -> dict:
         "aerobic_training_effect": x.aerobic_training_effect,
         "anaerobic_training_effect": x.anaerobic_training_effect,
         "fit_status": x.fit_status,
-        "source": (x.raw or {}).get("source", "garmin"),
-        "original_filename": (x.raw or {}).get("filename"),
+        "source": sources[0],
+        "sources": sources,
+        "source_detail": raw.get("sparkyfitness_provider"),
+        "original_filename": raw.get("filename"),
     }
 
 
@@ -58,6 +71,7 @@ async def list_activities(
     per_page: int | None = Query(default=None, ge=10, le=100),
     q: str | None = Query(default=None, max_length=120),
     sport: str | None = None,
+    source: str | None = Query(default=None, pattern="^(garmin|sparkyfitness|manual)$"),
     user: User = Depends(safety_confirmed_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -68,9 +82,19 @@ async def list_activities(
     the activity journal. Search is performed server-side over the complete
     activity history, not just the currently visible page.
     """
-    base_filters = [Activity.user_id == user.id]
+    scope_filters = [Activity.user_id == user.id]
     if sport:
-        base_filters.append(Activity.sport_type == sport)
+        scope_filters.append(Activity.sport_type == sport)
+    base_filters = list(scope_filters)
+    raw_text = cast(Activity.raw, String)
+    if source == "garmin":
+        # Native Garmin IDs are positive. Activities enriched from SparkyFitness
+        # remain part of the Garmin view as well.
+        base_filters.append(Activity.garmin_activity_id > 0)
+    elif source == "sparkyfitness":
+        base_filters.append(raw_text.ilike('%sparkyfitness%'))
+    elif source == "manual":
+        base_filters.append(raw_text.ilike('%manual_upload%'))
 
     filtered = list(base_filters)
     term = (q or "").strip()
@@ -80,7 +104,7 @@ async def list_activities(
             Activity.name.ilike(pattern),
             Activity.sport_type.ilike(pattern),
             Activity.subsport_type.ilike(pattern),
-            cast(Activity.raw, String).ilike(pattern),
+            raw_text.ilike(pattern),
         ))
 
     paginated = page is not None or per_page is not None
@@ -92,7 +116,7 @@ async def list_activities(
 
     current_page = page or 1
     page_size = per_page or 50
-    total = int((await db.scalar(select(func.count(Activity.id)).where(*base_filters))) or 0)
+    total = int((await db.scalar(select(func.count(Activity.id)).where(*scope_filters))) or 0)
     filtered_total = int((await db.scalar(select(func.count(Activity.id)).where(*filtered))) or 0)
     analyzed_total = int((await db.scalar(select(func.count(Activity.id)).where(
         Activity.user_id == user.id, Activity.fit_status == "parsed"
@@ -101,7 +125,16 @@ async def list_activities(
     # representation here so the same expression also works in lightweight
     # test databases without PostgreSQL-specific JSON operators.
     manual_total = int((await db.scalar(select(func.count(Activity.id)).where(
-        Activity.user_id == user.id, cast(Activity.raw, String).ilike('%manual_upload%')
+        Activity.user_id == user.id, raw_text.ilike('%manual_upload%')
+    ))) or 0)
+    garmin_total = int((await db.scalar(select(func.count(Activity.id)).where(
+        Activity.user_id == user.id, Activity.garmin_activity_id > 0
+    ))) or 0)
+    sparky_total = int((await db.scalar(select(func.count(Activity.id)).where(
+        Activity.user_id == user.id, raw_text.ilike('%sparkyfitness%')
+    ))) or 0)
+    merged_total = int((await db.scalar(select(func.count(Activity.id)).where(
+        Activity.user_id == user.id, Activity.garmin_activity_id > 0, raw_text.ilike('%sparkyfitness%')
     ))) or 0)
 
     pages = max(1, (filtered_total + page_size - 1) // page_size)
@@ -119,7 +152,11 @@ async def list_activities(
         "filtered_total": filtered_total,
         "analyzed_total": analyzed_total,
         "manual_total": manual_total,
+        "garmin_total": garmin_total,
+        "sparky_total": sparky_total,
+        "merged_total": merged_total,
         "query": term,
+        "source_filter": source,
     }
 
 
@@ -219,6 +256,8 @@ async def enqueue_fit(
     db: AsyncSession = Depends(get_db),
 ):
     row = await _owned_activity(activity_id, user, db)
+    if "garmin" not in _activity_sources(row):
+        raise HTTPException(status_code=409, detail="FIT_NOT_AVAILABLE_FOR_ACTIVITY_SOURCE")
     conn = await db.scalar(select(GarminConnection).where(GarminConnection.user_id == user.id))
     if not conn or conn.status != "connected":
         raise HTTPException(status_code=409, detail="GARMIN_NOT_CONNECTED")

@@ -20,14 +20,14 @@ router = APIRouter(prefix="/sparkyfitness", tags=["sparkyfitness"])
 class ConnectRequest(BaseModel):
     base_url: str = Field(min_length=8, max_length=2048)
     api_key: str = Field(min_length=8, max_length=4096)
-    sync_days: int = Field(default=30, ge=1, le=366)
+    sync_days: int = Field(default=30, ge=0, le=36525)
     sync_sleep: bool = True
     sync_daily_health: bool = True
     sync_activities: bool = True
 
 
 class SettingsRequest(BaseModel):
-    sync_days: int = Field(default=30, ge=1, le=366)
+    sync_days: int = Field(default=30, ge=0, le=36525)
     sync_sleep: bool = True
     sync_daily_health: bool = True
     sync_activities: bool = True
@@ -44,12 +44,22 @@ async def status(user: User = Depends(safety_confirmed_user), db: AsyncSession =
         SourceRecord.user_id == user.id,
         SourceRecord.source == "sparkyfitness",
     ).group_by(SourceRecord.domain))).all())
+    range_rows = (await db.execute(select(
+        SourceRecord.domain, func.min(SourceRecord.record_date), func.max(SourceRecord.record_date)
+    ).where(
+        SourceRecord.user_id == user.id, SourceRecord.source == "sparkyfitness"
+    ).group_by(SourceRecord.domain))).all()
+    ranges = {domain: {
+        "oldest": oldest.isoformat() if oldest else None,
+        "newest": newest.isoformat() if newest else None,
+    } for domain, oldest, newest in range_rows}
     if not conn:
         return {
             "connected": False,
             "status": "disconnected",
             "read_only": True,
             "counts": counts,
+            "ranges": ranges,
             "settings": {"sync_days": 30, "sync_sleep": True, "sync_daily_health": True, "sync_activities": True},
         }
     return {
@@ -59,6 +69,7 @@ async def status(user: User = Depends(safety_confirmed_user), db: AsyncSession =
         "base_url": conn.base_url,
         "capabilities": conn.capabilities or {},
         "counts": counts,
+        "ranges": ranges,
         "last_validated_at": conn.last_validated_at,
         "last_successful_sync_at": conn.last_successful_sync_at,
         "last_error_code": conn.last_error_code,

@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.1.0-alpha.26 - 2026-09-22
+
+- SparkyFitness training sessions are now materialized into the normal PenguCoach activity diary instead of remaining AI-only raw records.
+- Activity rows expose provenance badges and source filters for Garmin, SparkyFitness and manual imports; likely Garmin/Sparky duplicates are merged conservatively by sport, start time, duration and distance instead of being shown twice.
+- Sparky-only activities use the available SparkyFitness session summary without pretending an original FIT file exists; Garmin/FIT re-analysis is disabled for those rows.
+- Health summary cards now use the latest non-null value in the selected period rather than blindly reading the final date row, fixing cases where the sleep graph had data while the top sleep card showed an em dash.
+- Health cards display Garmin / SparkyFitness / combined provenance for the value they show.
+- SparkyFitness sync supports 2, 5 and 10 year windows plus **All data**. Long date-range endpoints are chunked into one-year windows while activity history keeps paginating until the requested range is complete.
+- Sleep sync prefers SparkyFitness `/sleep/details` and falls back to `/sleep`; parsing accepts additional v1.7.x camelCase/duration variants.
+- SparkyFitness settings show oldest/newest locally stored dates for training sessions, sleep and daily metrics and report newly materialized vs Garmin-merged activities after a sync.
+- Today and Health now expose daily steps plus body composition (weight, height, BMI, body-fat %, body-water %, muscle mass and bone mass) when Garmin/SparkyFitness provides the values.
+- Health provenance is tracked per metric, so one day can correctly show steps from SparkyFitness while resting HR or Body Battery remains Garmin-sourced.
+- Coach, activity analysis and training planning receive the latest available body profile/body-composition context, including its per-metric source; steps retain their own source as well.
+- Garmin account-profile refresh supplies height when available; SparkyFitness profile/check-in parsing accepts common v1.7.x body/scale field names and backfills provenance for older Sparky-imported values.
+- Adds Alembic migration `0006_body_profile_metrics` for optional height and bone-mass storage. Sparky-only activities continue to use stable negative synthetic IDs.
+
 ## 0.1.0-alpha.25
 
 - Repair release for incomplete GitHub web uploads of alpha.24.

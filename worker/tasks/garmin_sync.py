@@ -27,6 +27,7 @@ from pengucoach.garmin.sync.service import (
     _upsert_activities,
     run_incremental_sync,
     sync_day,
+    upsert_garmin_profile,
 )
 
 ALL_HISTORY_MAX_DAYS = 365 * 25 + 7
@@ -142,12 +143,18 @@ async def _sync(user_id: str):
             return {"status": "not_connected"}
         result = await run_incremental_sync(db, user, conn)
         if result.get("status") == "success":
-            # Zone profiles are account-level Garmin training settings. Refresh
-            # them separately from day data so AI analysis/planning can use the
-            # user's actual configured HR/power zones. Failures here do not make
-            # an otherwise successful daily sync unusable.
+            # Account-level profile values (for example height) and training
+            # zones are refreshed separately from daily health. Both are
+            # read-only and failures must not invalidate an otherwise useful
+            # day sync.
             try:
                 zone_gateway, _ = await gateway_from_connection(conn)
+                try:
+                    profile = await asyncio.to_thread(zone_gateway.get_user_profile)
+                    await upsert_garmin_profile(db, user, profile)
+                    result["profile"] = {"synced": True}
+                except Exception as exc:
+                    result["profile"] = {"synced": False, "error": type(exc).__name__}
                 result["training_zones"] = await sync_training_zones(db, user, zone_gateway)
                 await db.commit()
             except (GarminConnectAuthenticationError, GarminConnectTooManyRequestsError):

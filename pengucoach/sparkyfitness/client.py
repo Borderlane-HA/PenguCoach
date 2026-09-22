@@ -99,7 +99,7 @@ class SparkyFitnessClient:
         # each individual probe describes the data that PenguCoach may read.
         identity_endpoint = await self.probe("/identity/user")
         activities = await self.probe("/v2/exercise-entries/history", params={"page": 1, "pageSize": 1})
-        sleep = await self.probe("/sleep", params={"startDate": today, "endDate": today})
+        sleep = await self.probe("/sleep/details", params={"startDate": today, "endDate": today}) or await self.probe("/sleep", params={"startDate": today, "endDate": today})
         checkins = await self.probe(f"/measurements/check-in-measurements-range/{today}/{today}")
         custom_metrics = await self.probe("/measurements/custom-categories")
         dashboard = await self.probe("/dashboard/stats", params={"date": today})
