@@ -10,7 +10,9 @@ PenguCoach is designed as a local-first, multi-user platform that reads Garmin C
 
 Alpha.23 adds AI usage and cost transparency across local and cloud models, configurable response-quality profiles, and a dedicated Garmin activity-catalogue repair path. Per-model input/output prices can be stored in AI Studio; completed AI runs snapshot the active prices and actual provider token usage so historical costs stay stable when prices change. Coach, activity analysis and training planning expose Very low / Low / Standard / High response profiles, with Standard retaining the previous behavior. Garmin data synchronization stays read-only; the new activities-only history action fills gaps in the local activity catalogue without repeating years of wellness requests.
 
-`v0.1.0-alpha.23` is the current end-to-end alpha baseline:
+`v0.1.0-alpha.24` is the current end-to-end alpha baseline:
+
+- **SparkyFitness read-only connection:** configurable self-hosted URL + encrypted API key, capability probing, manual sync for sleep, daily/check-in data, HRV/resting-HR custom metrics and paginated workout history. Existing Garmin canonical values are preserved; SparkyFitness fills gaps and adds an additional AI context source.
 
 - German and English web UI
 - bright health-first responsive web design with desktop sidebar and mobile navigation dock
@@ -225,3 +227,8 @@ Garmin and Garmin Connect are trademarks of Garmin Ltd. or its subsidiaries. Pen
 ### Activity AI context scopes
 
 Activity deep analysis supports four explicit context scopes: **Nur dieses Training / This training only**, **Dieser Tag / This day**, **3 Tage / 3 days**, and **7 Tage / 7 days**. The day/multi-day scopes include available Garmin wellness/recovery data such as sleep, HRV, resting heart rate, stress, Body Battery, Training Readiness, steps and hydration. Missing Garmin values remain null and are never invented.
+
+
+### SparkyFitness
+
+See [`docs/SPARKYFITNESS.md`](docs/SPARKYFITNESS.md) for connection setup, read-only scope, source precedence and sync behavior.

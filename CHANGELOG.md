@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.0-alpha.24 - 2026-09-22
+
+- Added **SparkyFitness v1.7.x** as a first-class read-only connection next to Garmin.
+- SparkyFitness base URL and API key are configured per PenguCoach user; the key is encrypted at rest and never returned by the API.
+- Added capability probing for workouts, sleep, check-ins, custom metrics and dashboard reads using SparkyFitness API-key authentication.
+- Added manual SparkyFitness sync for a configurable 7-366 day window. Existing Garmin health/sleep values are preserved; SparkyFitness fills missing general values and keeps raw provenance.
+- Apple Health / other SparkyFitness workout sessions are stored as a separate read-only source and made available to Coach and training-plan context with duplicate-source warnings.
+- Added HRV and resting-heart-rate discovery from SparkyFitness custom measurement categories plus body/check-in import.
+- Added Alembic migration `0005_sparkyfitness_connection`.
+
 ## 0.1.0-alpha.23 - 2026-09-22
 
 ### Added
