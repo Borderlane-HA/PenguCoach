@@ -1,7 +1,8 @@
 from datetime import date, datetime, time, timedelta, timezone
 from typing import Any
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel, Field, model_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -18,8 +19,32 @@ BODY_FIELDS = (
 )
 
 
+class ManualBodyMeasurementIn(BaseModel):
+    measured_on: date = Field(default_factory=date.today)
+    weight_kg: float | None = Field(default=None, ge=20, le=500)
+    height_cm: float | None = Field(default=None, ge=50, le=260)
+    body_fat_percent: float | None = Field(default=None, ge=1, le=75)
+    body_water_percent: float | None = Field(default=None, ge=10, le=90)
+    muscle_mass_kg: float | None = Field(default=None, ge=1, le=300)
+    bone_mass_kg: float | None = Field(default=None, ge=0.1, le=30)
+
+    @model_validator(mode="after")
+    def require_value(self):
+        if all(getattr(self, field) is None for field in (
+            "weight_kg", "height_cm", "body_fat_percent", "body_water_percent",
+            "muscle_mass_kg", "bone_mass_kg",
+        )):
+            raise ValueError("BODY_MEASUREMENT_EMPTY")
+        return self
+
+
 def _source(raw: dict | None) -> str:
     data = raw or {}
+    if data.get("source") == "manual_body":
+        return "manual"
+    metric_sources = data.get("_metric_sources") if isinstance(data, dict) else None
+    if isinstance(metric_sources, dict) and metric_sources and set(metric_sources.values()) == {"manual"}:
+        return "manual"
     if "sparkyfitness" not in data:
         return "garmin"
     non_meta = {key for key in data.keys() if not str(key).startswith("_")}
@@ -197,6 +222,11 @@ async def health_range(
     sleeps = (await db.scalars(sleep_stmt)).all()
     hrvs = (await db.scalars(hrv_stmt)).all()
     body_rows = await _body_rows(db, user.id, start)
+    # Current body/profile values are fallbacks rather than period-only facts:
+    # a manually entered height/weight remains useful until a newer Garmin or
+    # SparkyFitness measurement supplies that same metric. Charts still honour
+    # the selected period, while the current cards use the latest known value.
+    body_all_rows = await _body_rows(db, user.id)
     return {
         "days": None if all_data else days,
         "all": all_data,
@@ -218,8 +248,79 @@ async def health_range(
             "source": _metric_source(x.raw, "overnight_average") or _source(x.raw),
         } for x in hrvs],
         "body": [_body_row(x) for x in body_rows],
-        "body_latest": _body_latest(body_rows),
+        "body_latest": _body_latest(body_all_rows),
     }
+
+
+@router.put("/body/manual")
+async def save_manual_body_measurement(
+    payload: ManualBodyMeasurementIn,
+    user: User = Depends(safety_confirmed_user),
+    db: AsyncSession = Depends(get_db),
+):
+    day_start = datetime.combine(payload.measured_on, time.min, tzinfo=timezone.utc)
+    day_end = datetime.combine(payload.measured_on, time.max, tzinfo=timezone.utc)
+    rows = list((await db.scalars(select(BodyMeasurement).where(
+        BodyMeasurement.user_id == user.id,
+        BodyMeasurement.measured_at >= day_start,
+        BodyMeasurement.measured_at <= day_end,
+    ).order_by(BodyMeasurement.measured_at.desc()))).all())
+    row = next((item for item in rows if (item.raw or {}).get("source") == "manual_body"), None)
+    if row is None:
+        # Keep the manual snapshot at the end of its calendar day. A measurement
+        # from Garmin/SparkyFitness on a later day naturally supersedes it, while
+        # the manual fallback remains available indefinitely if no newer value
+        # exists for a specific metric.
+        row = BodyMeasurement(
+            user_id=user.id,
+            measured_at=datetime.combine(payload.measured_on, time(23, 59, 59), tzinfo=timezone.utc),
+            raw={"source": "manual_body", "_metric_sources": {}},
+        )
+        db.add(row)
+    values = payload.model_dump(exclude={"measured_on"}, exclude_none=True)
+    sources = dict((row.raw or {}).get("_metric_sources") or {})
+    for field, value in values.items():
+        setattr(row, field, value)
+        sources[field] = "manual"
+
+    # BMI is deterministic and useful to Coach/Training. Recalculate it only
+    # when this manual entry actually changes weight or height; the other part
+    # may come from the latest known profile value. This avoids relabelling
+    # unrelated connected-source metrics as manual.
+    if "weight_kg" in values or "height_cm" in values:
+        all_rows = await _body_rows(db, user.id)
+        latest = _body_latest([item for item in all_rows if item.id != row.id]) or {}
+        effective_weight = row.weight_kg if row.weight_kg is not None else latest.get("weight_kg")
+        effective_height = row.height_cm if row.height_cm is not None else latest.get("height_cm")
+        if effective_weight and effective_height:
+            row.bmi = round(float(effective_weight) / ((float(effective_height) / 100.0) ** 2), 2)
+            sources["bmi"] = "manual"
+    row.raw = {"source": "manual_body", "_metric_sources": sources}
+    await db.commit()
+    await db.refresh(row)
+    return {"saved": True, "measurement": _body_row(row), "current": _body_latest(await _body_rows(db, user.id))}
+
+
+@router.delete("/body/manual/{measured_on}")
+async def delete_manual_body_measurement(
+    measured_on: date,
+    user: User = Depends(safety_confirmed_user),
+    db: AsyncSession = Depends(get_db),
+):
+    day_start = datetime.combine(measured_on, time.min, tzinfo=timezone.utc)
+    day_end = datetime.combine(measured_on, time.max, tzinfo=timezone.utc)
+    rows = list((await db.scalars(select(BodyMeasurement).where(
+        BodyMeasurement.user_id == user.id,
+        BodyMeasurement.measured_at >= day_start,
+        BodyMeasurement.measured_at <= day_end,
+    ))).all())
+    manual = [row for row in rows if (row.raw or {}).get("source") == "manual_body"]
+    if not manual:
+        raise HTTPException(status_code=404, detail="MANUAL_BODY_MEASUREMENT_NOT_FOUND")
+    for row in manual:
+        await db.delete(row)
+    await db.commit()
+    return {"deleted": True, "date": measured_on.isoformat()}
 
 
 @router.get("/vo2-history")

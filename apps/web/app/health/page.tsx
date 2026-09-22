@@ -12,7 +12,7 @@ type Vo2Data={running:Vo2Point[];cycling:Vo2Point[];latest?:{running?:number|nul
 type BodyLatest={weight_kg?:number;height_cm?:number;bmi?:number;body_fat_percent?:number;body_water_percent?:number;muscle_mass_kg?:number;bone_mass_kg?:number;sources?:Record<string,string>;measured_at?:string};
 
 function latestWith<T=any>(rows:any[],key:string):T|undefined{for(let i=(rows?.length??0)-1;i>=0;i--){const v=rows[i]?.[key];if(v!==null&&v!==undefined&&v!=="")return rows[i] as T}return undefined}
-function sourceLabel(source?:string){if(source==="sparkyfitness")return "SparkyFitness";if(source==="garmin+sparkyfitness")return "Garmin + SparkyFitness";return source||"Garmin"}
+function sourceLabel(source?:string){if(source==="sparkyfitness")return "SparkyFitness";if(source==="garmin+sparkyfitness")return "Garmin + SparkyFitness";if(source==="manual")return "Manuell";return source||"Garmin"}
 function rowMetricSource(row:any,key:string){return sourceLabel(row?.sources?.[key]??row?.source)}
 function bodyMetricSource(body:BodyLatest|undefined,key:string){return sourceLabel(body?.sources?.[key])}
 
@@ -21,17 +21,30 @@ export default function Health(){
   const[data,setData]=useState<any>({health:[],sleep:[],hrv:[],body:[],body_latest:null});
   const[period,setPeriod]=useState("30");
   const[vo2,setVo2]=useState<Vo2Data>({running:[],cycling:[]});
+  const[manualOpen,setManualOpen]=useState(false),[manualSaving,setManualSaving]=useState(false),[manualError,setManualError]=useState("");
+  const[manual,setManual]=useState<Record<string,string>>({measured_on:new Date().toISOString().slice(0,10),weight_kg:"",height_cm:"",body_fat_percent:"",body_water_percent:"",muscle_mass_kg:"",bone_mass_kg:""});
 
-  useEffect(()=>{
+  function load(){
     const suffix=period==="all"?"?all=true":`?days=${Number(period)}`;
-    void Promise.all([
-      api<any>(`/health/range${suffix}`),
-      api<Vo2Data>(`/health/vo2-history${suffix}`),
-    ]).then(([range,vo2Range])=>{setData(range);setVo2(vo2Range)});
-  },[period]);
+    return Promise.all([api<any>(`/health/range${suffix}`),api<Vo2Data>(`/health/vo2-history${suffix}`)]).then(([range,vo2Range])=>{setData(range);setVo2(vo2Range)});
+  }
+  useEffect(()=>{void load()},[period]);
 
   const latestRhr=latestWith(data.health??[],"resting_hr"),latestSteps=latestWith(data.health??[],"steps"),latestBattery=latestWith(data.health??[],"body_battery_high"),latestStress=latestWith(data.health??[],"stress_avg"),latestHydration=latestWith(data.health??[],"hydration_ml"),sleep=latestWith(data.sleep??[],"duration_seconds"),hrv=latestWith(data.hrv??[],"overnight_average");
   const body:BodyLatest|undefined=data.body_latest??undefined;
+  function openManual(){
+    setManual({measured_on:new Date().toISOString().slice(0,10),weight_kg:"",height_cm:"",body_fat_percent:"",body_water_percent:"",muscle_mass_kg:"",bone_mass_kg:""});
+    setManualError("");setManualOpen(true);
+  }
+  async function saveManual(){
+    setManualSaving(true);setManualError("");
+    try{
+      const payload:any={measured_on:manual.measured_on};
+      for(const key of ["weight_kg","height_cm","body_fat_percent","body_water_percent","muscle_mass_kg","bone_mass_kg"]){const raw=manual[key]?.trim();if(raw)payload[key]=Number(raw)}
+      await api("/health/body/manual",{method:"PUT",body:JSON.stringify(payload)});
+      await load();setManualOpen(false);
+    }catch(e){setManualError(e instanceof Error?e.message:String(e))}finally{setManualSaving(false)}
+  }
   const periodLabel=useMemo(()=>{
     if(period==="all")return bi(lang,"Alle Daten","All data");
     const days=Number(period);
@@ -63,7 +76,7 @@ export default function Health(){
 
     <section className="health-metric-grid health-page-metrics">{cards.map(c=><div className={`health-metric-card tone-${c.tone}`} key={c.label}><div className="health-metric-top"><span className="health-metric-dot"/><span className="metric-label">{c.label}</span></div><div className="metric-value">{String(c.value)}</div><div className="kpi-note">{c.note}</div></div>)}</section>
 
-    <section className="card body-composition-card"><div className="section-heading"><div><span className="eyebrow">{bi(lang,"Körperzusammensetzung","Body composition")}</span><h2>{bi(lang,"Aktuelle Körperwerte","Current body metrics")}</h2><p>{bi(lang,"Gewicht und Waagenwerte aus Garmin oder SparkyFitness. Fehlende Werte bleiben leer und werden nicht geschätzt.","Weight and smart-scale metrics from Garmin or SparkyFitness. Missing values remain empty and are never estimated.")}</p></div><span className="period-badge">{periodLabel}</span></div><div className="body-metric-grid">{bodyCards.map(item=><div className="body-metric" key={item.key}><small>{item.label}</small><strong>{item.value}</strong><span>{body?.[item.key as keyof BodyLatest]!=null?bodyMetricSource(body,item.key):bi(lang,"Keine Daten","No data")}</span></div>)}</div></section>
+    <section className="card body-composition-card"><div className="section-heading"><div><span className="eyebrow">{bi(lang,"Körperzusammensetzung","Body composition")}</span><h2>{bi(lang,"Aktuelle Körperwerte","Current body metrics")}</h2><p>{bi(lang,"Garmin, SparkyFitness oder manuell gepflegte Werte. Ein manueller Wert bleibt aktiv, bis für dieselbe Kennzahl eine neuere Messung eintrifft.","Garmin, SparkyFitness or manually maintained values. A manual value stays active until a newer measurement for the same metric arrives.")}</p></div><div className="body-heading-actions"><span className="period-badge">{periodLabel}</span><button type="button" className="ghost" onClick={openManual}>{bi(lang,"Manuell erfassen","Add manually")}</button></div></div><div className="body-metric-grid">{bodyCards.map(item=><div className="body-metric" key={item.key}><small>{item.label}</small><strong>{item.value}</strong><span>{body?.[item.key as keyof BodyLatest]!=null?bodyMetricSource(body,item.key):bi(lang,"Keine Daten","No data")}</span></div>)}</div>{manualOpen&&<div className="manual-body-editor"><div className="manual-body-intro"><strong>{bi(lang,"Körperwerte manuell pflegen","Maintain body metrics manually")}</strong><small>{bi(lang,"Ideal ohne Smart-Waage. Leere Felder werden nicht erfunden; ältere vorhandene Werte bleiben als Fallback verfügbar.","Useful without a smart scale. Empty fields are never invented; older known values remain available as fallback.")}</small></div><div className="manual-body-grid"><label>{bi(lang,"Datum","Date")}<input type="date" value={manual.measured_on} onChange={e=>setManual({...manual,measured_on:e.target.value})}/></label><label>{bi(lang,"Gewicht","Weight")}<span className="unit-input"><input type="number" min="20" max="500" step="0.1" placeholder={body?.weight_kg!=null?body.weight_kg.toFixed(1):""} value={manual.weight_kg} onChange={e=>setManual({...manual,weight_kg:e.target.value})}/><b>kg</b></span></label><label>{bi(lang,"Größe","Height")}<span className="unit-input"><input type="number" min="50" max="260" step="0.1" placeholder={body?.height_cm!=null?body.height_cm.toFixed(0):""} value={manual.height_cm} onChange={e=>setManual({...manual,height_cm:e.target.value})}/><b>cm</b></span></label><label>{bi(lang,"Körperfett","Body fat")}<span className="unit-input"><input type="number" min="1" max="75" step="0.1" placeholder={body?.body_fat_percent!=null?body.body_fat_percent.toFixed(1):""} value={manual.body_fat_percent} onChange={e=>setManual({...manual,body_fat_percent:e.target.value})}/><b>%</b></span></label><label>{bi(lang,"Körperwasser","Body water")}<span className="unit-input"><input type="number" min="10" max="90" step="0.1" placeholder={body?.body_water_percent!=null?body.body_water_percent.toFixed(1):""} value={manual.body_water_percent} onChange={e=>setManual({...manual,body_water_percent:e.target.value})}/><b>%</b></span></label><label>{bi(lang,"Muskelmasse","Muscle mass")}<span className="unit-input"><input type="number" min="1" max="300" step="0.1" placeholder={body?.muscle_mass_kg!=null?body.muscle_mass_kg.toFixed(1):""} value={manual.muscle_mass_kg} onChange={e=>setManual({...manual,muscle_mass_kg:e.target.value})}/><b>kg</b></span></label><label>{bi(lang,"Knochenmasse","Bone mass")}<span className="unit-input"><input type="number" min="0.1" max="30" step="0.1" placeholder={body?.bone_mass_kg!=null?body.bone_mass_kg.toFixed(1):""} value={manual.bone_mass_kg} onChange={e=>setManual({...manual,bone_mass_kg:e.target.value})}/><b>kg</b></span></label></div>{manualError&&<div className="status-bad">{manualError}</div>}<div className="manual-body-actions"><button type="button" className="ghost" onClick={()=>setManualOpen(false)}>{bi(lang,"Abbrechen","Cancel")}</button><button type="button" className="primary" disabled={manualSaving} onClick={()=>void saveManual()}>{manualSaving?bi(lang,"Speichert…","Saving…"):bi(lang,"Körperwerte speichern","Save body metrics")}</button></div></div>}</section>
 
     <section className="card vo2-history-card">
       <div className="section-heading vo2-heading"><div><span className="eyebrow">VO₂MAX · GARMIN</span><h2>{bi(lang,"Laufen & Radfahren","Running & cycling")} · {periodLabel}</h2><p>{bi(lang,"Sportartspezifische Garmin-VO₂max-Werte aus deinen Aktivitätszusammenfassungen im ausgewählten Zeitraum.","Sport-specific Garmin VO₂ max values from activity summaries in the selected period.")}</p></div><div className="vo2-current"><div><small>{bi(lang,"Laufen","Running")}</small><strong>{vo2.latest?.running??"—"}</strong></div><div><small>{bi(lang,"Radfahren","Cycling")}</small><strong>{vo2.latest?.cycling??"—"}</strong></div><span>ml/kg/min</span></div></div>

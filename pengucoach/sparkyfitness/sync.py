@@ -5,6 +5,7 @@ import json
 import uuid
 from datetime import date, datetime, time, timedelta, timezone
 from typing import Any, Iterable
+from urllib.parse import quote
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -92,25 +93,74 @@ def _session_id(item: dict[str, Any], index: int) -> str:
 
 
 def _nested_first(item: dict[str, Any], *keys: str) -> Any:
-    value = _first(item, *keys)
-    if value is not None:
-        return value
-    for container in ("activity", "activity_details", "activityDetails", "garmin_activity_details", "garminActivityDetails", "workout", "session", "exercise"):
+    # SparkyFitness' relational exercise-entry row is the authoritative source
+    # for headline distance/duration/calories. Its own report UI prefers these
+    # columns over compact history/provider blobs, so PenguCoach mirrors that
+    # precedence when the detail row has been loaded.
+    for container in ("exercise_entry_details", "exerciseEntryDetails"):
         nested = item.get(container)
         if isinstance(nested, dict):
             value = _first(nested, *keys)
             if value is not None:
                 return value
+            for inner_name in ("entry", "data"):
+                inner = nested.get(inner_name)
+                if isinstance(inner, dict):
+                    value = _first(inner, *keys)
+                    if value is not None:
+                        return value
+    value = _first(item, *keys)
+    if value is not None:
+        return value
+    for container in (
+        "provider_activity_details", "providerActivityDetails", "activity", "activity_details", "activityDetails",
+        "garmin_activity_details", "garminActivityDetails", "workout", "session", "exercise", "entry", "data",
+    ):
+        nested = item.get(container)
+        if isinstance(nested, dict):
+            value = _first(nested, *keys)
+            if value is not None:
+                return value
+            for inner_name in ("activity", "details", "entry", "data"):
+                inner = nested.get(inner_name)
+                if isinstance(inner, dict):
+                    value = _first(inner, *keys)
+                    if value is not None:
+                        return value
     return None
 
 
 def _duration_seconds(item: dict[str, Any]) -> int | None:
-    seconds = _num(_nested_first(item, "duration_seconds", "durationSeconds", "duration_in_seconds", "durationInSeconds", "elapsed_seconds", "elapsedSeconds", "total_timer_time", "totalTimerTime"))
+    detail = item.get("exercise_entry_details") or item.get("exerciseEntryDetails")
+    if isinstance(detail, dict):
+        detail_seconds = _num(_first(
+            detail, "duration_seconds", "durationSeconds", "duration_in_seconds", "durationInSeconds",
+            "elapsed_seconds", "elapsedSeconds", "elapsed_time_seconds", "elapsedTimeSeconds",
+        ))
+        if detail_seconds is not None:
+            return max(0, int(round(detail_seconds)))
+        detail_minutes = _num(_first(detail, "duration_minutes", "durationMinutes", "duration"))
+        if detail_minutes is not None:
+            return max(0, int(round(detail_minutes * 60)))
+    seconds = _num(_nested_first(
+        item, "duration_seconds", "durationSeconds", "duration_in_seconds", "durationInSeconds",
+        "elapsed_seconds", "elapsedSeconds", "elapsed_time_seconds", "elapsedTimeSeconds",
+        "total_timer_time", "totalTimerTime",
+    ))
     if seconds is not None:
         return max(0, int(round(seconds)))
     minutes = _num(_nested_first(item, "duration_minutes", "durationMinutes", "minutes"))
     if minutes is not None:
         return max(0, int(round(minutes * 60)))
+    # SparkyFitness' relational exercise_entries API stores the headline duration
+    # in minutes. Keep this behind the explicit minute fields so provider blobs
+    # that expose seconds under another canonical key still win.
+    relational_minutes = _num(_nested_first(item, "duration"))
+    if relational_minutes is not None and (
+        _nested_first(item, "exercise_name", "exerciseName", "calories_burned", "caloriesBurned") is not None
+        or "exercise_entry_details" in item
+    ):
+        return max(0, int(round(relational_minutes * 60)))
     start = _as_dt(_nested_first(item, "started_at", "start_time", "startTime", "start_at", "startAt", "timestamp"))
     end = _as_dt(_nested_first(item, "ended_at", "end_time", "endTime", "end_at", "endAt"))
     if start and end and end >= start:
@@ -131,7 +181,22 @@ def _distance_m(item: dict[str, Any]) -> float | None:
     unit = str(_nested_first(item, "distance_unit", "distanceUnit", "unit") or "").lower()
     if "km" in unit or "kilomet" in unit:
         return max(0.0, raw * 1000.0)
+    # SparkyFitness exercise_entries.distance is stored in kilometres and is
+    # exactly what the Sparky UI uses for the headline activity distance.
+    if _nested_first(item, "exercise_name", "exerciseName", "duration_minutes", "durationMinutes", "calories_burned", "caloriesBurned") is not None or "exercise_entry_details" in item:
+        return max(0.0, raw * 1000.0)
     return max(0.0, raw)
+
+
+def _avg_speed_mps(item: dict[str, Any]) -> float | None:
+    explicit = _num(_nested_first(item, "avg_speed_mps", "avgSpeedMps", "averageSpeed", "avg_speed"))
+    if explicit is not None and explicit > 0:
+        return explicit
+    distance = _distance_m(item)
+    duration = _duration_seconds(item)
+    if distance is not None and duration and duration > 0:
+        return distance / duration
+    return None
 
 
 def _sport(item: dict[str, Any]) -> str:
@@ -191,6 +256,103 @@ def _provider(item: dict[str, Any]) -> str | None:
     return str(value).strip()[:128] if value else None
 
 
+def _activity_entry_id(item: dict[str, Any]) -> str | None:
+    value = _first(item, "id", "exercise_entry_id", "exerciseEntryId", "entry_id", "entryId")
+    return str(value) if value not in (None, "") else None
+
+
+def _activity_candidate(item: dict[str, Any]) -> bool:
+    session_marker = _nested_first(
+        item, "activity_id", "activityId", "workout_id", "workoutId",
+        "session_id", "sessionId", "workout_session_id", "workoutSessionId",
+        "exercise_preset_entry_id", "exercisePresetEntryId",
+    )
+    session_name = _nested_first(item, "activity_name", "activityName", "workout_name", "workoutName")
+    has_activity_container = any(isinstance(item.get(k), dict) for k in (
+        "activity", "activity_details", "activityDetails", "garmin_activity_details", "garminActivityDetails",
+        "workout", "session", "exercise_entry_details", "exerciseEntryDetails",
+    ))
+    return not (
+        _duration_seconds(item) is None and _distance_m(item) is None
+        and session_marker is None and session_name is None and not has_activity_container
+    )
+
+
+def _activity_detail_missing(item: dict[str, Any]) -> bool:
+    values = (
+        _distance_m(item),
+        _duration_seconds(item),
+        _num(_nested_first(item, "calories_burned", "caloriesBurned", "calories", "active_calories", "activeCalories")),
+        _num(_nested_first(item, "avg_heart_rate", "avgHeartRate", "averageHeartRate", "average_hr", "avg_hr")),
+        _num(_nested_first(item, "elevation_gain_meters", "elevationGainMeters", "elevation_gain", "elevationGain", "totalAscent")),
+    )
+    # History rows are intentionally compact. Enrich when at least one useful
+    # headline metric is absent; the relational entry endpoint is lightweight
+    # and is the same source SparkyFitness itself prefers in its report UI.
+    return any(value is None for value in values)
+
+
+def _activity_core_missing(item: dict[str, Any]) -> bool:
+    return any(value is None for value in (
+        _distance_m(item),
+        _duration_seconds(item),
+        _num(_nested_first(item, "calories_burned", "caloriesBurned", "calories", "active_calories", "activeCalories")),
+    ))
+
+
+def _unwrap_detail_payload(payload: Any) -> dict[str, Any] | None:
+    if not isinstance(payload, dict):
+        return None
+    for key in ("entry", "exerciseEntry", "exercise_entry", "data"):
+        nested = payload.get(key)
+        if isinstance(nested, dict) and any(k in nested for k in (
+            "duration_minutes", "distance", "calories_burned", "exercise_name", "source", "provider_name"
+        )):
+            return nested
+    return payload
+
+
+async def _enrich_activity_item(client: SparkyFitnessClient, item: dict[str, Any]) -> tuple[dict[str, Any], int]:
+    if not _activity_candidate(item) or not _activity_detail_missing(item):
+        return item, 0
+    entry_id = _activity_entry_id(item)
+    if not entry_id:
+        return item, 0
+    enriched = dict(item)
+    requests = 0
+    try:
+        payload = await client.request(f"/exercise-entries/{quote(entry_id, safe='')}")
+        requests += 1
+        detail = _unwrap_detail_payload(payload)
+        if detail:
+            enriched["exercise_entry_details"] = detail
+    except SparkyFitnessError as exc:
+        # Detail enrichment is best-effort; a history row is still useful even
+        # if an older SparkyFitness version/API key cannot read its detail.
+        if exc.status_code not in {400, 404}:
+            raise
+
+    # Provider details can carry HR/elevation/cadence not present in the
+    # relational row. Only ask for them when summary metrics are still missing.
+    provider = _provider(enriched)
+    # Avoid doubling request volume for a large history. Provider-detail blobs
+    # are a fallback when even Sparky's authoritative relational row lacks a
+    # core headline metric; HR/elevation already present relationally are used
+    # without another network round-trip.
+    if provider and _activity_core_missing(enriched):
+        try:
+            payload = await client.request(
+                f"/exercises/activity-details/{quote(entry_id, safe='')}/{quote(provider, safe='')}"
+            )
+            requests += 1
+            if isinstance(payload, dict):
+                enriched["provider_activity_details"] = payload
+        except SparkyFitnessError as exc:
+            if exc.status_code not in {400, 404}:
+                raise
+    return enriched, requests
+
+
 def _synthetic_activity_id(external_id: str) -> int:
     value = int.from_bytes(hashlib.sha256(f"sparkyfitness:{external_id}".encode()).digest()[:8], "big") & ((1 << 62) - 1)
     return -max(1, value)
@@ -217,16 +379,7 @@ async def _merge_activity(db: AsyncSession, user_id: uuid.UUID, item: dict[str, 
     # rather than a complete workout. Only expose rows with session-level
     # evidence in the activity diary; every row is still kept as SourceRecord
     # for AI/context use.
-    session_marker = _nested_first(
-        item, "activity_id", "activityId", "workout_id", "workoutId",
-        "session_id", "sessionId", "workout_session_id", "workoutSessionId",
-        "exercise_preset_entry_id", "exercisePresetEntryId",
-    )
-    session_name = _nested_first(item, "activity_name", "activityName", "workout_name", "workoutName")
-    has_activity_container = any(isinstance(item.get(k), dict) for k in (
-        "activity", "activity_details", "activityDetails", "garmin_activity_details", "garminActivityDetails", "workout", "session"
-    ))
-    if duration is None and distance is None and session_marker is None and session_name is None and not has_activity_container:
+    if not _activity_candidate(item):
         return "skipped", None
 
     window_start = started_at - timedelta(minutes=3)
@@ -269,9 +422,12 @@ async def _merge_activity(db: AsyncSession, user_id: uuid.UUID, item: dict[str, 
                 "duration_seconds": duration,
                 "moving_seconds": duration,
                 "distance_m": distance,
-                "calories": _num(_nested_first(item, "calories", "active_calories", "activeCalories", "total_calories", "totalCalories")),
-                "avg_hr": _int(_nested_first(item, "avg_hr", "average_hr", "averageHeartRate", "avgHeartRate", "heart_rate_avg")),
-                "max_hr": _int(_nested_first(item, "max_hr", "maxHeartRate", "maximumHeartRate", "heart_rate_max")),
+                "calories": _num(_nested_first(item, "calories_burned", "caloriesBurned", "calories", "active_calories", "activeCalories", "total_calories", "totalCalories")),
+                "avg_hr": _int(_nested_first(item, "avg_heart_rate", "avgHeartRate", "avg_hr", "average_hr", "averageHeartRate", "heart_rate_avg")),
+                "max_hr": _int(_nested_first(item, "max_heart_rate", "maxHeartRate", "max_hr", "maximumHeartRate", "heart_rate_max")),
+                "avg_speed": _avg_speed_mps(item),
+                "avg_cadence": _num(_nested_first(item, "avg_cadence", "avgCadence", "averageCadence")),
+                "elevation_gain": _num(_nested_first(item, "elevation_gain_meters", "elevationGainMeters", "elevation_gain", "elevationGain", "totalAscent")),
             }.items():
                 if value is not None:
                     setattr(existing, field, value)
@@ -287,12 +443,13 @@ async def _merge_activity(db: AsyncSession, user_id: uuid.UUID, item: dict[str, 
         duration_seconds=duration,
         moving_seconds=duration,
         distance_m=distance,
-        calories=_num(_nested_first(item, "calories", "active_calories", "activeCalories", "total_calories", "totalCalories")),
-        avg_hr=_int(_nested_first(item, "avg_hr", "average_hr", "averageHeartRate", "avgHeartRate", "heart_rate_avg")),
-        max_hr=_int(_nested_first(item, "max_hr", "maxHeartRate", "maximumHeartRate", "heart_rate_max")),
+        calories=_num(_nested_first(item, "calories_burned", "caloriesBurned", "calories", "active_calories", "activeCalories", "total_calories", "totalCalories")),
+        avg_hr=_int(_nested_first(item, "avg_heart_rate", "avgHeartRate", "avg_hr", "average_hr", "averageHeartRate", "heart_rate_avg")),
+        max_hr=_int(_nested_first(item, "max_heart_rate", "maxHeartRate", "max_hr", "maximumHeartRate", "heart_rate_max")),
+        avg_speed=_avg_speed_mps(item),
         avg_power=_num(_nested_first(item, "avg_power", "averagePower", "avgPower")),
-        avg_cadence=_num(_nested_first(item, "avg_cadence", "averageCadence", "avgCadence")),
-        elevation_gain=_num(_nested_first(item, "elevation_gain", "elevationGain", "totalAscent")),
+        avg_cadence=_num(_nested_first(item, "avg_cadence", "avgCadence", "averageCadence")),
+        elevation_gain=_num(_nested_first(item, "elevation_gain_meters", "elevationGainMeters", "elevation_gain", "elevationGain", "totalAscent")),
         training_load=_num(_nested_first(item, "training_load", "trainingLoad")),
         fit_status="unavailable",
         raw={
@@ -626,6 +783,8 @@ async def _sync_activities(
     merged = 0
     updated = 0
     skipped = 0
+    detail_requests = 0
+    enriched_sessions = 0
     while page <= 5000:
         payload = await client.request("/v2/exercise-entries/history", params={"page": page, "pageSize": 100})
         items = _list_payload(payload)
@@ -635,6 +794,11 @@ async def _sync_activities(
         oldest: date | None = None
         reached_older = False
         for index, item in enumerate(items):
+            original_item = item
+            item, detail_count = await _enrich_activity_item(client, item)
+            detail_requests += detail_count
+            if item is not original_item:
+                enriched_sessions += 1
             day = _session_date(item)
             if day and (oldest is None or day < oldest):
                 oldest = day
@@ -671,6 +835,7 @@ async def _sync_activities(
             progress({
                 "phase": "activities", "pages": pages, "sessions": seen, "page": page,
                 "created": created, "merged": merged, "updated": updated, "skipped": skipped,
+                "enriched": enriched_sessions, "detail_requests": detail_requests,
             })
         await db.flush()
         if start is not None and ((oldest and oldest < start) or reached_older):
@@ -688,6 +853,7 @@ async def _sync_activities(
         "pages": pages, "sessions": seen, "changed": changed,
         "activities_created": created, "activities_merged": merged,
         "activities_updated": updated, "activities_skipped": skipped,
+        "activities_enriched": enriched_sessions, "detail_requests": detail_requests,
     }
 
 

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.0-alpha.28 - 2026-09-22
+
+- SparkyFitness activity sync now enriches compact history rows from `/exercise-entries/{id}` before materializing them, matching SparkyFitness' own preference for relational activity stats. HealthKit/Apple Health sessions can therefore carry their stored distance, duration, calories, heart rate, cadence, speed and elevation into PenguCoach instead of showing zero/empty summary cards.
+- Provider activity details are used as a bounded fallback only when core relational distance/duration/calorie data are still missing, avoiding two extra API requests for every historical session.
+- Existing Sparky-only activities are updated on the next sync, so previously imported rows can be repaired without deleting/reimporting them.
+- Health adds manual body/profile entry for weight, height, body-fat %, body-water %, muscle mass and bone mass. BMI is derived deterministically when weight and height are available.
+- Manual body metrics are source-labelled `Manual` and remain the current fallback per metric until a newer Garmin or SparkyFitness measurement for that metric arrives; AI Coach/training context automatically receives the same latest-value semantics.
+- Current body/profile cards no longer disappear merely because their latest measurement is older than the Health page's selected chart period; charts still respect the selected period.
+
 ## 0.1.0-alpha.27 - 2026-09-22
 
 - Fix activity journal CI regression while preserving Alpha.26 source-aware activity search and pagination.

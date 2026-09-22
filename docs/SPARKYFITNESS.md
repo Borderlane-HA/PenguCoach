@@ -33,7 +33,7 @@ Capability checks cover:
 
 Direct Garmin data remains authoritative for Garmin-specific metrics such as training readiness, Body Battery, Garmin training load/status, and Garmin workout/calendar operations.
 
-SparkyFitness fills missing general health data such as steps, sleep, body measurements, HRV/resting heart rate where available. Workout sessions are also materialized into the normal activity diary when they contain enough session-level information. Existing Garmin canonical values are not overwritten.
+SparkyFitness fills missing general health data such as steps, sleep, body measurements, HRV/resting heart rate where available. Workout sessions are also materialized into the normal activity diary when they contain enough session-level information. Before materialization, PenguCoach enriches compact history rows from SparkyFitness `GET /exercise-entries/{id}` and prefers those relational headline values for distance, duration, calories and other available activity stats. Provider activity details are only used as a fallback when core values are still absent. Existing Garmin canonical values are not overwritten.
 
 Because SparkyFitness can itself contain Garmin-synced data, PenguCoach performs conservative duplicate matching by sport family, start time, duration and distance. A likely match is kept as one activity with `Garmin + SparkyFitness` provenance; otherwise the Sparky session receives its own local activity row. AI context uses the same provenance to avoid double-counting.
 
@@ -52,4 +52,6 @@ Imported raw records and materialized activity rows remain in PenguCoach after d
 
 ## Body and smart-scale data
 
-PenguCoach reads body/check-in values when SparkyFitness exposes them, including weight, height, BMI, body-fat percentage, body-water percentage, muscle mass and bone mass. These values remain read-only and keep per-metric provenance so Garmin values are not silently overwritten.
+PenguCoach reads body/check-in values when SparkyFitness exposes them, including weight, height, BMI, body-fat percentage, body-water percentage, muscle mass and bone mass. These connected-source values remain read-only and keep per-metric provenance so Garmin values are not silently overwritten.
+
+Users without a smart scale can enter the same body/profile values manually on the Health page. Manual values are stored locally in PenguCoach and remain the current fallback for each metric until a newer Garmin or SparkyFitness measurement for that metric becomes available. They are included in Coach/training context with `manual` provenance.
