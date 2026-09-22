@@ -118,8 +118,11 @@ JSON schema/semantics:
 - target is {{"type":"none"}} or {{"type":"heart_rate_zone","zone":1..5}} or
   {{"type":"power_zone","zone":1..7}}. Prefer the user's Garmin zones from context when available.
 - a repeat step has repeat>=2 and nested steps. Example: 6 x (3 min interval + 2 min recovery).
-- strength sessions should populate strength_exercises with plain English exercise names plus sets/reps/rest_seconds;
-  steps may be empty for strength.
+- strength sessions should populate strength_exercises with canonical plain English Garmin exercise names plus sets/reps/rest_seconds;
+  prefer simple catalogue names such as Squat, Push-up, Lunge, Plank, Side Plank, Deadlift, Row, Leg Press, Bench Press,
+  and Calf Raise instead of localized names or phrases like "or similar"; steps may be empty for strength.
+- for every timed non-strength session, the durations of all steps (including repeat multiplicity) should add up to
+  duration_min * 60 within about 60 seconds. Do not duplicate a main/work step merely to fill text.
 - keep intensity conservative when source data is incomplete. Do not invent measured values.
 - honor fixed days/constraints and requested training days per week.
 - the structured plan is the source of truth; it must contain enough detail to render the human-readable plan.

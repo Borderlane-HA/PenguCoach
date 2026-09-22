@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.0-alpha.20 - 2026-09-22
+
+### Garmin workout export
+
+- Strength export now resolves common localized/German AI exercise labels to Garmin's canonical exercise catalogue (for example Kniebeugen→Squat, Liegestütz→Push-up, Ausfallschritte→Lunge, Plank/Planke, Kreuzheben→Deadlift, Rudern→Row, Beinpressen→Leg Press, Bankdrücken→Bench Press, Wadenheben→Calf Raise). Existing saved alpha.19 plans can therefore be retried without regeneration.
+- Human annotations and alternatives such as `Kreuzheben (oder ähnliches)` or `Bankdrücken oder Liegestütz` are sanitized before Garmin exercise resolution; exact catalogue names still take precedence and unsafe fuzzy matching is deliberately avoided.
+- Garmin sport types Mobility, Yoga, Pilates, HIIT and Cardio are now exported through the generic Garmin workout endpoint using a timed main step when the plan has no finer-grained steps.
+- Calendar export errors are rendered more readably and the calendar gains icons for mobility/yoga/Pilates/HIIT/cardio.
+- Future AI plans are instructed to use simple canonical Garmin exercise names and to keep timed step totals consistent with the declared session duration.
+
 ## 0.1.0-alpha.19 - 2026-09-22
 
 ### Changed

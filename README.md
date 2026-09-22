@@ -8,9 +8,9 @@ PenguCoach is designed as a local-first, multi-user platform that reads Garmin C
 
 ## Current alpha scope
 
-Alpha.19 hardens structured training-plan generation for local Ollama models: the 8,000-token default is accepted correctly, large plan segments receive a realistic per-call budget, and Ollama uses schema-constrained JSON with thinking disabled for the structured plan phase. Alpha.18 already added IONOS AI Model Hub, Google Gemini and xAI/Grok presets plus hard-stop recovery for stuck Garmin history imports. Long Ollama jobs remain observable and cancellable with live token progress. Garmin data synchronization stays read-only; only the explicit workout/calendar gateway may create or remove PenguCoach-managed workouts after user action.
+Alpha.20 hardens Garmin workout export: localized/common strength-exercise labels are mapped to Garmin catalogue identifiers, and Mobility/Yoga/Pilates/HIIT/Cardio can be written through Garmin's generic workout endpoint. Alpha.19 hardened structured Ollama plan generation with schema-constrained JSON and reliable per-segment budgets. Long Ollama jobs remain observable and cancellable with live token progress. Garmin data synchronization stays read-only; only the explicit workout/calendar gateway may create or remove PenguCoach-managed workouts after user action.
 
-`v0.1.0-alpha.19` is the current end-to-end alpha baseline:
+`v0.1.0-alpha.20` is the current end-to-end alpha baseline:
 
 - German and English web UI
 - bright health-first responsive web design with desktop sidebar and mobile navigation dock
@@ -44,7 +44,7 @@ Alpha.19 hardens structured training-plan generation for local Ollama models: th
 - selectable training-plan briefing window (3/7/14/21/28 days, default 7) plus opt-in context categories for training/FIT, Garmin zones, sleep/HRV, recovery/stress and steps/hydration
 - live approximate Ollama output-token progress and user cancellation for Coach, activity analysis and training-plan background jobs
 - validated structured training-plan sessions/steps with weekly calendar review, optional-session selection, start-date mapping, legacy-plan management and deletion
-- explicit opt-in Garmin workout export for supported running/cycling/swimming/walking/hiking/strength sessions, with duplicate protection, reload-safe progress and optional Garmin cleanup when a plan is deleted
+- explicit opt-in Garmin workout export for running/cycling/swimming/walking/hiking/strength plus timed cardio/mobility/yoga/Pilates/HIIT sessions, with localized strength-exercise resolution, duplicate protection, reload-safe progress and optional Garmin cleanup when a plan is deleted
 - task-specific default/fallback model routing, bilingual DE/EN prompts, freely configurable context windows and output-token caps with recommended presets
 - clearer AI Studio fixed-model assignment indicator and compact provider/model management actions
 - persisted AI analysis/plan runs plus reload-safe background AI jobs
