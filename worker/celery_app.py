@@ -12,6 +12,7 @@ app.conf.update(
         "worker.tasks.fit.*": {"queue": "fit"},
         "worker.tasks.scheduler.*": {"queue": "maintenance"},
         "worker.tasks.ai.*": {"queue": "maintenance"},
+        "worker.tasks.sparkyfitness_sync.*": {"queue": "maintenance"},
     },
     beat_schedule={
         "schedule-due-garmin-syncs": {"task": "worker.tasks.scheduler.schedule_due_garmin_syncs", "schedule": 60.0},
@@ -23,4 +24,5 @@ app.conf.imports = (
     "worker.tasks.fit",
     "worker.tasks.scheduler",
     "worker.tasks.ai",
+    "worker.tasks.sparkyfitness_sync",
 )

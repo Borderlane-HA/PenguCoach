@@ -7,7 +7,7 @@ import {bi,useI18n} from "../lib/i18n";
 
 type Me={username:string;role:string;locale:string;safety_required:boolean;app_version:string};
 type Appearance={theme:string;has_avatar:boolean;has_app_icon:boolean;avatar_version?:number;app_icon_version?:number};
-type IconName="today"|"health"|"activities"|"training"|"coach"|"garmin"|"privacy"|"appearance"|"ai"|"users"|"logout";
+type IconName="today"|"health"|"activities"|"training"|"coach"|"garmin"|"sparky"|"privacy"|"appearance"|"ai"|"users"|"logout";
 
 function Icon({name}:{name:IconName}){
   const common={width:20,height:20,viewBox:"0 0 24 24",fill:"none",stroke:"currentColor",strokeWidth:1.8,strokeLinecap:"round" as const,strokeLinejoin:"round" as const,"aria-hidden":true};
@@ -17,6 +17,7 @@ function Icon({name}:{name:IconName}){
   if(name==="training")return <svg {...common}><path d="M6 7v10M18 7v10M3 10v4M21 10v4M6 12h12"/></svg>;
   if(name==="coach")return <svg {...common}><path d="m12 3 1.2 3.4L16.5 8l-3.3 1.6L12 13l-1.2-3.4L7.5 8l3.3-1.6L12 3Z"/><path d="m18.5 13 .8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8.8-2.2ZM5.5 14l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7.7-1.8Z"/></svg>;
   if(name==="garmin")return <svg {...common}><rect x="7" y="4" width="10" height="16" rx="3"/><path d="M9 1h6M9 23h6M10 9l2-2 2 2M10 14h4"/></svg>;
+  if(name==="sparky")return <svg {...common}><path d="M12 3 5 12h5l-1 9 7-10h-5l1-8Z"/></svg>;
   if(name==="privacy")return <svg {...common}><path d="M12 3 5 6v5c0 4.7 2.7 8.1 7 10 4.3-1.9 7-5.3 7-10V6l-7-3Z"/><path d="m9.5 12 1.6 1.6 3.4-3.6"/></svg>;
   if(name==="appearance")return <svg {...common}><circle cx="12" cy="12" r="9"/><path d="M12 3v18M3 12h18M6.2 6.2l11.6 11.6M17.8 6.2 6.2 17.8"/></svg>;
   if(name==="ai")return <svg {...common}><rect x="6" y="6" width="12" height="12" rx="3"/><path d="M9 10h6M9 14h4M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M18 9h4M2 15h4M18 15h4"/></svg>;
@@ -41,6 +42,7 @@ export default function AppShell({children,title}:{children:React.ReactNode;titl
   ],[lang]);
   const settings=useMemo(()=>[
     {href:"/settings/garmin",icon:"garmin" as IconName,label:"Garmin"},
+    {href:"/settings/sparkyfitness",icon:"sparky" as IconName,label:"SparkyFitness"},
     {href:"/settings/appearance",icon:"appearance" as IconName,label:bi(lang,"Darstellung","Appearance")},
     {href:"/settings/privacy",icon:"privacy" as IconName,label:bi(lang,"Datenschutz","Privacy")},
   ],[lang]);

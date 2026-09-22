@@ -9,16 +9,18 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from pengucoach.db.models import Activity, ActivityMetric, DailyHealth, FitFile, HrvDaily, SleepSession, User
+from pengucoach.db.models import Activity, ActivityMetric, DailyHealth, FitFile, HrvDaily, SleepSession, SourceRecord, User
 from pengucoach.fit.activity_detail import selected_garmin_extras
 from pengucoach.fit.service import load_activity_detail
 from pengucoach.garmin.zones import activity_zone_time, training_zone_snapshot
 
 
 SOURCE_NOTICE = (
-    "Each activity summary contains a source field. Garmin summaries are authoritative official totals when present; "
-    "manual_upload summaries come from the imported FIT/GPX/TCX file. PenguCoach analytics are locally calculated "
-    "supplements. Missing values are null and must not be invented."
+    "Each summary contains a source field. Direct Garmin summaries are authoritative Garmin totals when present; "
+    "SparkyFitness is a secondary read-only source that can include Apple Health and other providers and may overlap "
+    "with direct Garmin data. Do not double-count apparently identical sessions. manual_upload summaries come from "
+    "imported FIT/GPX/TCX files. PenguCoach analytics are locally calculated supplements. Missing values are null and "
+    "must not be invented."
 )
 
 
@@ -118,6 +120,47 @@ def _window_summary(rows: list[Activity], end_date: date, days: int) -> dict[str
     }
 
 
+def _row_source(raw: dict[str, Any] | None) -> str:
+    data = raw or {}
+    if "sparkyfitness" not in data:
+        return "garmin"
+    # New rows created only from SparkyFitness contain just the namespaced raw payload.
+    # Existing Garmin rows retain their original raw keys and are therefore mixed-source.
+    return "sparkyfitness" if set(data.keys()) <= {"sparkyfitness"} else "garmin+sparkyfitness"
+
+
+def _compact_sparky_session(record: SourceRecord) -> dict[str, Any]:
+    payload = record.payload if isinstance(record.payload, dict) else {}
+    def first(*keys: str):
+        for key in keys:
+            value = payload.get(key)
+            if value is not None:
+                return value
+        return None
+    return {
+        "date": record.record_date,
+        "name": first("name", "workout_name", "title", "exercise_name"),
+        "sport": first("sport", "sport_type", "activity_type", "exercise_type", "category"),
+        "duration_minutes": first("duration_minutes", "total_duration_minutes", "duration"),
+        "distance": first("distance", "distance_km", "distance_m"),
+        "calories": first("calories_burned", "calories"),
+        "avg_heart_rate": first("avg_heart_rate", "average_heart_rate", "avg_hr"),
+        "provider_source": first("source", "provider", "provider_name"),
+        "source": "sparkyfitness",
+    }
+
+
+async def _sparky_sessions(db: AsyncSession, user_id: uuid.UUID, start_date: date, end_date: date, limit: int = 80) -> list[dict[str, Any]]:
+    rows = (await db.scalars(select(SourceRecord).where(
+        SourceRecord.user_id == user_id,
+        SourceRecord.source == "sparkyfitness",
+        SourceRecord.domain == "exercise_session",
+        SourceRecord.record_date >= start_date,
+        SourceRecord.record_date <= end_date,
+    ).order_by(SourceRecord.record_date.desc(), SourceRecord.fetched_at.desc()).limit(limit))).all()
+    return [_compact_sparky_session(x) for x in rows]
+
+
 def _health_payload(rows: list[DailyHealth]) -> list[dict[str, Any]]:
     return [{
         "date": x.date,
@@ -130,7 +173,7 @@ def _health_payload(rows: list[DailyHealth]) -> list[dict[str, Any]]:
         "hydration_goal_ml": x.hydration_goal_ml,
         "training_readiness": x.training_readiness,
         "vo2max_running": x.vo2max_running,
-        "source": "garmin",
+        "source": _row_source(x.raw),
     } for x in rows]
 
 
@@ -143,7 +186,7 @@ def _sleep_payload(rows: list[SleepSession]) -> list[dict[str, Any]]:
         "light_s": x.light_seconds,
         "rem_s": x.rem_seconds,
         "awake_s": x.awake_seconds,
-        "source": "garmin",
+        "source": _row_source(x.raw),
     } for x in rows]
 
 
@@ -155,7 +198,7 @@ def _hrv_payload(rows: list[HrvDaily]) -> list[dict[str, Any]]:
         "baseline_low_ms": x.garmin_baseline_low,
         "baseline_high_ms": x.garmin_baseline_high,
         "status": x.garmin_status,
-        "source": "garmin",
+        "source": _row_source(x.raw),
     } for x in rows]
 
 
@@ -185,6 +228,7 @@ async def build_coach_context(db: AsyncSession, user: User, days: int = 30) -> d
         metric = await db.scalar(select(ActivityMetric).where(ActivityMetric.activity_id == a.id))
         activity_context.append({"garmin": _activity_garmin(a), "pengucoach": _metric_payload(metric)})
     zones = await training_zone_snapshot(db, user.id)
+    sparky_sessions = await _sparky_sessions(db, user.id, start, end, limit=40)
     return {
         "source_notice": SOURCE_NOTICE,
         "training_zones": zones,
@@ -195,6 +239,7 @@ async def build_coach_context(db: AsyncSession, user: User, days: int = 30) -> d
         "sleep_30d": _sleep_payload(sleep),
         "hrv_30d": _hrv_payload(hrv),
         "recent_activities": activity_context[:20],
+        "sparkyfitness_sessions": sparky_sessions[:20],
     }
 
 
@@ -335,6 +380,7 @@ async def build_training_plan_context(
     }
     if include_training:
         lookback["summary_period"] = _window_summary(activities, end, days)
+        lookback["sparkyfitness_sessions"] = await _sparky_sessions(db, user.id, start, end, limit=80)
         if days > 7:
             lookback["summary_recent_7d"] = _window_summary(activities, end, 7)
         lookback["activities"] = activity_payload
@@ -346,7 +392,7 @@ async def build_training_plan_context(
     if include_recovery or include_daily_activity:
         daily: list[dict[str, Any]] = []
         for row in health:
-            item: dict[str, Any] = {"date": row.date, "source": "garmin"}
+            item: dict[str, Any] = {"date": row.date, "source": _row_source(row.raw)}
             if include_recovery:
                 item.update({
                     "resting_hr_bpm": row.resting_hr,

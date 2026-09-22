@@ -11,6 +11,13 @@ from pengucoach.db.session import get_db
 router = APIRouter(prefix="/health", tags=["health"])
 
 
+def _source(raw: dict | None) -> str:
+    data = raw or {}
+    if "sparkyfitness" not in data:
+        return "garmin"
+    return "sparkyfitness" if set(data.keys()) <= {"sparkyfitness"} else "garmin+sparkyfitness"
+
+
 def _health(x: DailyHealth) -> dict:
     return {
         "date": x.date.isoformat(),
@@ -30,7 +37,7 @@ def _health(x: DailyHealth) -> dict:
         "training_readiness": x.training_readiness,
         "vo2max_running": x.vo2max_running,
         "updated_at": x.updated_at,
-        "source": "garmin",
+        "source": _source(x.raw),
     }
 
 
@@ -137,12 +144,14 @@ async def health_range(
             "deep_seconds": x.deep_seconds,
             "rem_seconds": x.rem_seconds,
             "avg_spo2": x.avg_spo2,
+            "source": _source(x.raw),
         } for x in sleeps],
         "hrv": [{
             "date": x.date.isoformat(),
             "overnight_average": x.overnight_average,
             "highest_5min": x.highest_5min,
             "status": x.garmin_status,
+            "source": _source(x.raw),
         } for x in hrvs],
     }
 

@@ -1,4 +1,6 @@
 from pathlib import Path
+import json
+import re
 import tomllib
 
 
@@ -12,10 +14,13 @@ def test_dashboard_exposes_resolved_application_version():
 
 def test_release_versions_are_aligned():
     project_version = tomllib.loads(Path("pyproject.toml").read_text())["project"]["version"]
-    package_text = Path("apps/web/package.json").read_text()
+    package_version = json.loads(Path("apps/web/package.json").read_text())["version"]
     config_text = Path("pengucoach/common/config.py").read_text()
     init_text = Path("pengucoach/__init__.py").read_text()
-    assert project_version == "0.1.0-alpha.23"
-    assert '"version": "0.1.0-alpha.23"' in package_text
-    assert 'app_version: str = "0.1.0-alpha.23"' in config_text
-    assert '__version__ = "0.1.0-alpha.23"' in init_text
+    config_match = re.search(r'app_version:\s*str\s*=\s*"([^"]+)"', config_text)
+    init_match = re.search(r'__version__\s*=\s*"([^"]+)"', init_text)
+    assert config_match is not None
+    assert init_match is not None
+    assert package_version == project_version
+    assert config_match.group(1) == project_version
+    assert init_match.group(1) == project_version

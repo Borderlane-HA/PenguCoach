@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.0-alpha.25
+
+- Repair release for incomplete GitHub web uploads of alpha.24.
+- Re-ships the complete SparkyFitness read-only integration, frontend route, worker task, API router and Alembic migration.
+- Adds repository-surface regression checks for the SparkyFitness frontend and package paths.
+- No schema changes beyond the existing alpha.24 migration `0005_sparkyfitness_connection.py`.
+
 ## 0.1.0-alpha.24 - 2026-09-22
 
 - Added **SparkyFitness v1.7.x** as a first-class read-only connection next to Garmin.

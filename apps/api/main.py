@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from apps.api.routers import activities, admin_ai, admin_users, auth, coach, garmin, garmin_workouts, health, jobs, setup, settings as user_settings
+from apps.api.routers import activities, admin_ai, admin_users, auth, coach, garmin, garmin_workouts, health, jobs, setup, sparkyfitness, settings as user_settings
 from pengucoach.common.config import settings
 
 
@@ -15,7 +15,7 @@ async def lifespan(_: FastAPI):
 
 app = FastAPI(title="PenguCoach API", version=settings.resolved_app_version, lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=[settings.frontend_origin], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
-for router in (setup.router, auth.router, garmin.router, garmin_workouts.router, health.router, activities.router, jobs.router, coach.router, user_settings.router, admin_ai.router, admin_users.router): app.include_router(router, prefix="/api/v1")
+for router in (setup.router, auth.router, garmin.router, garmin_workouts.router, sparkyfitness.router, health.router, activities.router, jobs.router, coach.router, user_settings.router, admin_ai.router, admin_users.router): app.include_router(router, prefix="/api/v1")
 
 
 @app.get("/health")
