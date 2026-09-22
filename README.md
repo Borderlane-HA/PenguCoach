@@ -8,9 +8,9 @@ PenguCoach is designed as a local-first, multi-user platform that reads Garmin C
 
 ## Current alpha scope
 
-Alpha.16 builds on the structured training-plan/Garmin calendar workflow with plan and AI-history management, safe Garmin cleanup on plan deletion, a budget-aware plan generator, and a substantially faster resumable historical-import mode. Garmin data synchronization remains read-only; only the explicit workout/calendar gateway may create or remove PenguCoach-managed workouts after user action.
+Alpha.17 makes long local AI jobs observable and interruptible: Ollama responses stream through the worker with live approximate output-token progress, training-plan context is explicitly selectable, and Coach/analysis/plan jobs can be cancelled. The structured Garmin-calendar workflow, safe plan cleanup and resumable historical import remain intact. Garmin data synchronization stays read-only; only the explicit workout/calendar gateway may create or remove PenguCoach-managed workouts after user action.
 
-`v0.1.0-alpha.16` is the current end-to-end alpha baseline:
+`v0.1.0-alpha.17` is the current end-to-end alpha baseline:
 
 - German and English web UI
 - bright health-first responsive web design with desktop sidebar and mobile navigation dock
@@ -41,6 +41,8 @@ Alpha.16 builds on the structured training-plan/Garmin calendar workflow with pl
 - evidence-constrained Coach chat using local Garmin/FIT facts with selectable models and token budgets
 - per-activity AI deep analysis with Training-only / This day / 3-day / 7-day training-recovery context and an editable predefined prompt
 - AI training-plan generation for strength, muscle gain, cardio, hybrid, running, cycling, mobility and custom goals
+- selectable training-plan briefing window (3/7/14/21/28 days, default 7) plus opt-in context categories for training/FIT, Garmin zones, sleep/HRV, recovery/stress and steps/hydration
+- live approximate Ollama output-token progress and user cancellation for Coach, activity analysis and training-plan background jobs
 - validated structured training-plan sessions/steps with weekly calendar review, optional-session selection, start-date mapping, legacy-plan management and deletion
 - explicit opt-in Garmin workout export for supported running/cycling/swimming/walking/hiking/strength sessions, with duplicate protection, reload-safe progress and optional Garmin cleanup when a plan is deleted
 - task-specific default/fallback model routing, bilingual DE/EN prompts, freely configurable context windows and output-token caps with recommended presets
@@ -52,7 +54,7 @@ Alpha.16 builds on the structured training-plan/Garmin calendar workflow with pl
 - `pengucoach-update`, `pengucoach-backup`, `pengucoach-status`, `pengucoach-db-utf8`
 - Docker Compose for development/alternative deployments
 
-Advanced long-term baselines, a correlation explorer and the full LangGraph multi-agent workflow remain planned work. Training-plan generation remains AI-assisted and uses the locally stored 7/28-day context. Garmin write access is limited to the explicit workout/calendar export path; PenguCoach does not create or manage Garmin Coach adaptive plans.
+Advanced long-term baselines, a correlation explorer and the full LangGraph multi-agent workflow remain planned work. Training-plan generation remains AI-assisted and uses only the recent context window and data categories selected for that request. Garmin write access is limited to the explicit workout/calendar export path; PenguCoach does not create or manage Garmin Coach adaptive plans.
 
 ## Proxmox installation
 
@@ -147,9 +149,9 @@ Since `0.1.0-alpha.3`, parsed FIT activities include a richer deterministic deta
 
 Since `0.1.0-alpha.4`, each activity can be sent to an eligible configured LLM for a deep analysis. The UI shows the effective default model, permits choosing another eligible model, supports Training-only / This day / 3-day / 7-day context scopes, and exposes the predefined analysis prompt for editing. Garmin activity totals are marked as the primary official values; locally calculated FIT analytics are supplied separately.
 
-The Training page can generate and persist plans for muscle gain, endurance/cardio, hybrid, cycling, running race goals, strength, general fitness, mobility and custom goals. Plan generation uses deterministic 7- and 28-day activity/load summaries plus available Garmin recovery data.
+The Training page can generate and persist plans for muscle gain, endurance/cardio, hybrid, cycling, running race goals, strength, general fitness, mobility and custom goals. The briefing window is selectable between 3, 7, 14, 21 and 28 days (7 by default), and the user chooses whether training/FIT analytics, Garmin zones, sleep/HRV, recovery/stress and optional steps/hydration are included.
 
-AI controls are configured in the **AI Studio**. Each task has a default/fallback model, separate German and English prompts, a configurable context window and a hard response-token ceiling. For Ollama, the context window is sent as `num_ctx` and the response budget as `num_predict`. Long local-model generations run in the background so page reloads do not lose the job. Local Ollama remains usable without enabling cloud-health processing.
+AI controls are configured in the **AI Studio**. Each task has a default/fallback model, separate German and English prompts, a configurable context window and a hard response-token ceiling. For Ollama, the context window is sent as `num_ctx` and the response budget as `num_predict`. Ollama generation is streamed through the worker so long responses are not limited by the old single-response wait timeout; the UI shows approximate live output-token progress. Long local-model generations run in the background so page reloads do not lose the job, and Coach/analysis/plan jobs can be cancelled. Local Ollama remains usable without enabling cloud-health processing.
 
 See [`docs/AI_ANALYSIS_AND_PLANNING.md`](docs/AI_ANALYSIS_AND_PLANNING.md).
 

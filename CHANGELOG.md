@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.1.0-alpha.17 - 2026-09-22
+
+### Added
+- selectable training-plan context windows of 3, 7, 14, 21 or 28 days, defaulting to 7 days
+- per-plan context-category selection for Training/FIT analytics, Garmin zones, sleep/HRV, recovery/stress signals and optional steps/hydration
+- live approximate output-token progress for streamed Ollama Coach, activity-analysis and training-plan jobs; final Ollama token counts remain authoritative
+- cancellation controls for Coach requests, per-activity AI analyses and training-plan generation, with cooperative worker cancellation and no persisted AI result after cancellation
+- Coach cancellation restores the submitted text so it can be edited and resent
+
+### Changed
+- Ollama `/api/chat` generation now uses streaming instead of waiting for one complete response; the local read timeout is a between-chunk/first-token safeguard rather than a five-minute total generation ceiling
+- training-plan context contains only the selected time window instead of always combining hidden 7-day and 28-day context
+- training-plan activity context now includes available PenguCoach FIT analytics alongside Garmin activity facts
+- plan metadata stores the selected context window and context categories for later review
+- historical release/change-list documents were removed from `docs/`; release history is maintained in this root changelog, while current feature documentation keeps stable filenames
+
+### Fixed
+- fixes long local Ollama plans failing after roughly ten minutes when the former 300-second non-streaming HTTP wait timed out and the automatic retry hit the same timeout again
+- failed AI background jobs now expose an exception type/details instead of collapsing empty timeout messages to a generic `AI job failed` where possible
+
 ## 0.1.0-alpha.16 - 2026-09-22
 
 ### Added

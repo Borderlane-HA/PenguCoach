@@ -52,6 +52,14 @@ class ActivityAnalysisRequest(BaseModel):
     locale: Literal["de", "en"] | None = None
 
 
+class TrainingContextSelection(BaseModel):
+    training: bool = True
+    zones: bool = True
+    sleep_hrv: bool = True
+    recovery: bool = True
+    daily_activity: bool = False
+
+
 class TrainingPlanRequest(BaseModel):
     goal_type: Literal[
         "muscle_gain", "cardio_endurance", "hybrid", "cycling_endurance", "running_5k",
@@ -68,6 +76,8 @@ class TrainingPlanRequest(BaseModel):
     model_id: uuid.UUID | None = None
     max_tokens: int | None = Field(default=None, ge=128, le=65536)
     context_window_tokens: int | None = Field(default=None, ge=2048, le=1048576)
+    context_days: Literal[3, 7, 14, 21, 28] = 7
+    context_data: TrainingContextSelection = Field(default_factory=TrainingContextSelection)
     locale: Literal["de", "en"] | None = None
 
 
@@ -283,7 +293,16 @@ async def delete_ai_run(
 @router.post("/training-plan")
 async def training_plan(payload: TrainingPlanRequest, user: User = Depends(safety_confirmed_user), db: AsyncSession = Depends(get_db)):
     locale = payload.locale or user.locale
-    context = await build_training_plan_context(db, user, days=28)
+    context = await build_training_plan_context(
+        db,
+        user,
+        days=payload.context_days,
+        include_training=payload.context_data.training,
+        include_zones=payload.context_data.zones,
+        include_sleep_hrv=payload.context_data.sleep_hrv,
+        include_recovery=payload.context_data.recovery,
+        include_daily_activity=payload.context_data.daily_activity,
+    )
     context["goal"] = {
         "goal_type": payload.goal_type, "goal_text": payload.goal_text, "experience": payload.experience,
         "weeks": payload.weeks, "days_per_week": payload.days_per_week, "session_minutes": payload.session_minutes,
@@ -317,10 +336,14 @@ async def training_plan(payload: TrainingPlanRequest, user: User = Depends(safet
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     content, plan_meta = normalize_training_plan_answer(answer, str(locale))
     metadata = _answer_metadata(answer, locale=str(locale), goal=context["goal"])
+    metadata["training_context"] = {
+        "days": payload.context_days,
+        "data": payload.context_data.model_dump(),
+    }
     metadata.update(plan_meta)
     run = AiRun(
         user_id=user.id, task_type="training_plan", model_id=uuid.UUID(answer["model_id"]),
-        provider_name=answer["provider"], model_name=answer["model"], prompt=prompt, lookback_days=28,
+        provider_name=answer["provider"], model_name=answer["model"], prompt=prompt, lookback_days=payload.context_days,
         max_output_tokens=answer["max_output_tokens"], content=content, metadata_json=metadata,
     )
     db.add(run)

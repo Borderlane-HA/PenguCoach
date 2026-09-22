@@ -277,26 +277,96 @@ async def build_activity_analysis_context(
     return {"source_notice": SOURCE_NOTICE, "activity": current, "lookback": lookback}
 
 
-async def build_training_plan_context(db: AsyncSession, user: User, days: int = 28) -> dict[str, Any]:
-    days = max(7, min(90, days))
+async def build_training_plan_context(
+    db: AsyncSession,
+    user: User,
+    days: int = 7,
+    *,
+    include_training: bool = True,
+    include_zones: bool = True,
+    include_sleep_hrv: bool = True,
+    include_recovery: bool = True,
+    include_daily_activity: bool = False,
+) -> dict[str, Any]:
+    """Build the explicitly selected training-plan context.
+
+    Training plans intentionally use a short recent window (3/7/14/21/28 days).
+    The caller also chooses which categories are disclosed to the model so the
+    prompt mirrors the briefing a human coach would receive.
+    """
+    days = days if days in {3, 7, 14, 21, 28} else 7
     end = datetime.now(timezone.utc).date()
     start = end - timedelta(days=days - 1)
     start_dt = datetime.combine(start, datetime.min.time(), tzinfo=timezone.utc)
-    activities = list((await db.scalars(select(Activity).where(
-        Activity.user_id == user.id, Activity.started_at >= start_dt
-    ).order_by(Activity.started_at))).all())
-    health, sleep, hrv = await _recovery_window(db, user.id, start, end)
-    zones = await training_zone_snapshot(db, user.id)
+
+    activities: list[Activity] = []
+    activity_payload: list[dict[str, Any]] = []
+    if include_training:
+        activities = list((await db.scalars(select(Activity).where(
+            Activity.user_id == user.id, Activity.started_at >= start_dt
+        ).order_by(Activity.started_at))).all())
+        metric_map: dict[uuid.UUID, ActivityMetric] = {}
+        activity_ids = [a.id for a in activities]
+        if activity_ids:
+            metrics = list((await db.scalars(select(ActivityMetric).where(ActivityMetric.activity_id.in_(activity_ids)))).all())
+            metric_map = {m.activity_id: m for m in metrics}
+        activity_payload = [
+            {"garmin": _activity_garmin(a), "pengucoach_fit": _metric_payload(metric_map.get(a.id))}
+            for a in activities[-40:]
+        ]
+
+    health: list[DailyHealth] = []
+    sleep: list[SleepSession] = []
+    hrv: list[HrvDaily] = []
+    if include_sleep_hrv or include_recovery or include_daily_activity:
+        health, sleep, hrv = await _recovery_window(db, user.id, start, end)
+
+    lookback: dict[str, Any] = {
+        "days": days,
+        "from": start,
+        "to": end,
+        "selected_data": {
+            "training_and_fit": include_training,
+            "training_zones": include_zones,
+            "sleep_and_hrv": include_sleep_hrv,
+            "recovery": include_recovery,
+            "steps_and_hydration": include_daily_activity,
+        },
+    }
+    if include_training:
+        lookback["summary_period"] = _window_summary(activities, end, days)
+        if days > 7:
+            lookback["summary_recent_7d"] = _window_summary(activities, end, 7)
+        lookback["activities"] = activity_payload
+
+    if include_sleep_hrv:
+        lookback["sleep"] = _sleep_payload(sleep)
+        lookback["hrv"] = _hrv_payload(hrv)
+
+    if include_recovery or include_daily_activity:
+        daily: list[dict[str, Any]] = []
+        for row in health:
+            item: dict[str, Any] = {"date": row.date, "source": "garmin"}
+            if include_recovery:
+                item.update({
+                    "resting_hr_bpm": row.resting_hr,
+                    "stress_avg": row.stress_avg,
+                    "body_battery_high": row.body_battery_high,
+                    "body_battery_low": row.body_battery_low,
+                    "training_readiness": row.training_readiness,
+                    "vo2max_running": row.vo2max_running,
+                })
+            if include_daily_activity:
+                item.update({
+                    "steps": row.steps,
+                    "hydration_ml": row.hydration_ml,
+                    "hydration_goal_ml": row.hydration_goal_ml,
+                })
+            daily.append(item)
+        lookback["daily_health"] = daily
+
     return {
         "source_notice": SOURCE_NOTICE,
-        "training_zones": zones,
-        "lookback": {
-            "days": days,
-            "summary_7d": _window_summary(activities, end, 7),
-            "summary_28d": _window_summary(activities, end, min(28, days)),
-            "activities": [_activity_garmin(a) for a in activities[-40:]],
-            "health": _health_payload(health[-28:]),
-            "sleep": _sleep_payload(sleep[-28:]),
-            "hrv": _hrv_payload(hrv[-28:]),
-        },
+        "training_zones": await training_zone_snapshot(db, user.id) if include_zones else None,
+        "lookback": lookback,
     }

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pengucoach"
-version = "0.1.0-alpha.16"
+version = "0.1.0-alpha.17"
 description = "Self-hosted AI training and health coach"
 readme = "README.md"
 requires-python = ">=3.12"

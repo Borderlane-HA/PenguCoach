@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import asyncio
 import copy
 import json
+import time
 import uuid
+from collections.abc import Callable
 from typing import Any
 
 import httpx
@@ -12,6 +15,19 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from pengucoach.common.config import settings
 from pengucoach.db.models import LlmModel, LlmProvider, LlmRoute
 from pengucoach.security.crypto import SecretBox
+
+
+class AiGenerationCancelled(RuntimeError):
+    """Raised when the user cancels a cooperative AI generation."""
+
+
+ProgressCallback = Callable[[dict[str, Any]], None]
+CancelCheck = Callable[[], bool]
+
+
+def _emit_progress(callback: ProgressCallback | None, **payload: Any) -> None:
+    if callback is not None:
+        callback(payload)
 
 
 SYSTEM_PROMPT_DE = """Du bist PenguCoach, ein selbst gehosteter Assistent für Trainings- und Wellnessanalyse.
@@ -100,8 +116,8 @@ from PenguCoach-calculated metrics. Reply exclusively in English."""
 
 TRAINING_PLAN_PROMPT_DE = """Erstelle einen praktischen, periodisierten Trainingsplan aus dem angegebenen Ziel und dem bereitgestellten
 Trainingskontext. Beachte Wochenanzahl, Trainingstage und typische Sessiondauer. Balanciere Trainingsreiz und Erholung.
-Nutze verfügbare 7- und 28-Tage-Daten zu Umfang, Belastung und Erholung als Kontext, ohne medizinische Trainingsbereitschaft
-zu behaupten. Wenn training_zones vorhanden sind, verwende die von Garmin konfigurierten Herzfrequenz- und Leistungszonen
+Nutze ausschließlich den im Kontext ausgewählten Zeitraum und die dort freigegebenen Daten zu Training, Belastung und Erholung.
+Behaupte keine medizinische Trainingsbereitschaft und ergänze keine nicht ausgewählten Datenquellen. Wenn training_zones vorhanden sind, verwende die von Garmin konfigurierten Herzfrequenz- und Leistungszonen
 für konkrete Intensitätsvorgaben (z. B. Z2 Grundlage oder Z4 Intervalle) und nenne die gelieferten Grenzen, wenn sinnvoll.
 Erfinde keine Zonen, FTP- oder Schwellenwerte. Berücksichtige Progression und leichtere/regenerative Einheiten. Für Kraftziele: große Bewegungsmuster,
 Sätze/Wiederholungen und RPE/RIR-Leitplanken, ohne unbekannte Gewichte zu erfinden. Für Ausdauerziele: lockere aerobe
@@ -112,7 +128,7 @@ Erholungssignalen. Erfinde keine Gesundheitsdaten. Antworte ausschließlich auf 
 
 TRAINING_PLAN_PROMPT_EN = """Create a practical, periodized training plan using the user's stated goal and the supplied recent training context.
 Respect the requested number of weeks, training days and typical session duration. Balance training stimulus and recovery.
-Use recent 7- and 28-day volume/load and recovery data as context when available, but do not infer medical readiness.
+Use only the selected lookback period and the data categories explicitly supplied in context. Do not infer medical readiness or add unselected data sources.
 If training_zones are supplied, use Garmin-configured heart-rate and power zones for concrete intensity prescriptions
 (e.g. Z2 aerobic work or Z4 intervals) and include supplied bounds when useful. Never invent zones, FTP or thresholds.
 Include progression and easier/recovery sessions. For strength goals include major movement patterns, sets/reps and
@@ -302,9 +318,19 @@ def _bounded_context(context: dict[str, Any], max_chars: int) -> tuple[str, dict
             "activity": working.get("activity"),
             "lookback": {
                 "days": working.get("lookback", {}).get("days"),
+                "from": working.get("lookback", {}).get("from"),
+                "to": working.get("lookback", {}).get("to"),
+                "selected_data": working.get("lookback", {}).get("selected_data"),
+                "summary_period": working.get("lookback", {}).get("summary_period"),
+                "summary_recent_7d": working.get("lookback", {}).get("summary_recent_7d"),
+                # Activity analysis still uses these legacy summary keys.
                 "summary_3d": working.get("lookback", {}).get("summary_3d"),
                 "summary_7d": working.get("lookback", {}).get("summary_7d"),
                 "summary_28d": working.get("lookback", {}).get("summary_28d"),
+                "activities": (working.get("lookback", {}).get("activities") or [])[:6],
+                "daily_health": (working.get("lookback", {}).get("daily_health") or [])[-7:],
+                "sleep": (working.get("lookback", {}).get("sleep") or [])[-7:],
+                "hrv": (working.get("lookback", {}).get("hrv") or [])[-7:],
             },
             "goal": working.get("goal"),
             "training_zones": working.get("training_zones"),
@@ -362,6 +388,8 @@ async def chat(
     instruction_prompt: str | None = None,
     requested_max_tokens: int | None = None,
     requested_context_window_tokens: int | None = None,
+    progress_callback: ProgressCallback | None = None,
+    cancel_check: CancelCheck | None = None,
 ) -> dict[str, Any]:
     config = await task_settings(db, task, locale)
     selected = await resolve_model(db, task, local_only=local_only, model_id=model_id)
@@ -453,8 +481,27 @@ async def chat(
     bounded_messages.reverse()
     prompt_messages = [{"role": "system", "content": system_content}] + bounded_messages
 
-    timeout_seconds = max(settings.ai_request_timeout_seconds, 300) if provider.is_local else settings.ai_request_timeout_seconds
-    timeout = httpx.Timeout(timeout_seconds)
+    if cancel_check and cancel_check():
+        raise AiGenerationCancelled("AI_JOB_CANCELLED")
+
+    _emit_progress(
+        progress_callback,
+        stage="connecting",
+        message="AI model is preparing the response",
+        max_output_tokens=max_tokens,
+        context_window_tokens=context_window_tokens,
+        output_tokens_estimate=0,
+        output_tokens_exact=None,
+    )
+
+    # For local Ollama generation the response is streamed below. The read timeout
+    # therefore applies to a gap between chunks rather than to the total generation
+    # duration. A generous first-token/read gap avoids the former 300 s hard wait
+    # that made long 8k-token local plans fail after roughly five minutes.
+    if provider.provider_type == "ollama":
+        timeout = httpx.Timeout(connect=30.0, read=max(float(settings.ai_request_timeout_seconds), 900.0), write=60.0, pool=60.0)
+    else:
+        timeout = httpx.Timeout(float(settings.ai_request_timeout_seconds))
     usage: dict[str, Any] = {}
     stop_reason: str | None = None
 
@@ -512,31 +559,111 @@ async def chat(
                 usage["total_tokens"] = usage["input_tokens"] + usage["output_tokens"]
         elif provider.provider_type == "ollama":
             base = (provider.base_url or "http://127.0.0.1:11434").rstrip("/")
-            response = await client.post(
+            parts: list[str] = []
+            generated_chars = 0
+            stream_events = 0
+            last_progress = 0.0
+            last_cancel_check = 0.0
+            final_chunk: dict[str, Any] = {}
+            started = time.monotonic()
+            async with client.stream(
+                "POST",
                 base + "/api/chat",
                 json={
                     "model": model.model_identifier,
                     "messages": prompt_messages,
-                    "stream": False,
+                    "stream": True,
                     "options": {
                         "temperature": model.temperature,
                         "num_predict": max_tokens,
                         "num_ctx": context_window_tokens,
                     },
                 },
-            )
-            response.raise_for_status()
-            body = response.json()
-            text = body.get("message", {}).get("content", "")
-            stop_reason = body.get("done_reason")
+            ) as response:
+                response.raise_for_status()
+                cancel_event = asyncio.Event()
+
+                async def watch_cancel() -> None:
+                    if not cancel_check:
+                        return
+                    while not cancel_event.is_set():
+                        await asyncio.sleep(0.5)
+                        if cancel_check():
+                            cancel_event.set()
+                            await response.aclose()
+                            return
+
+                cancel_task = asyncio.create_task(watch_cancel())
+                try:
+                    async for line in response.aiter_lines():
+                        now = time.monotonic()
+                        if cancel_event.is_set() or (cancel_check and now - last_cancel_check >= 0.75 and cancel_check()):
+                            raise AiGenerationCancelled("AI_JOB_CANCELLED")
+                        last_cancel_check = now
+                        if not line:
+                            continue
+                        chunk = json.loads(line)
+                        message_chunk = chunk.get("message") or {}
+                        piece = str(message_chunk.get("content") or "")
+                        thinking_piece = str(message_chunk.get("thinking") or "")
+                        if piece:
+                            parts.append(piece)
+                        if piece or thinking_piece:
+                            generated_chars += len(piece) + len(thinking_piece)
+                            stream_events += 1
+                        if chunk.get("done"):
+                            final_chunk = chunk
+                        if (piece or thinking_piece) and (now - last_progress >= 0.6 or stream_events % 32 == 0):
+                            last_progress = now
+                            estimate = max(stream_events, max(1, round(generated_chars / 3.7)))
+                            _emit_progress(
+                                progress_callback,
+                                stage="generation",
+                                message="AI response is being generated",
+                                max_output_tokens=max_tokens,
+                                output_tokens_estimate=min(max_tokens, estimate),
+                                output_tokens_exact=None,
+                                generated_chars=generated_chars,
+                                elapsed_seconds=round(now - started, 1),
+                                streaming=True,
+                            )
+                except httpx.HTTPError as exc:
+                    if cancel_event.is_set() or (cancel_check and cancel_check()):
+                        raise AiGenerationCancelled("AI_JOB_CANCELLED") from exc
+                    raise
+                finally:
+                    cancel_event.set()
+                    cancel_task.cancel()
+                    try:
+                        await cancel_task
+                    except asyncio.CancelledError:
+                        pass
+            if cancel_check and cancel_check():
+                raise AiGenerationCancelled("AI_JOB_CANCELLED")
+            text = "".join(parts)
+            stop_reason = final_chunk.get("done_reason")
             usage = {
-                "input_tokens": body.get("prompt_eval_count"),
-                "output_tokens": body.get("eval_count"),
+                "input_tokens": final_chunk.get("prompt_eval_count"),
+                "output_tokens": final_chunk.get("eval_count"),
             }
             if usage["input_tokens"] is not None and usage["output_tokens"] is not None:
                 usage["total_tokens"] = usage["input_tokens"] + usage["output_tokens"]
+            _emit_progress(
+                progress_callback,
+                stage="finalizing",
+                message="AI response received · finalizing",
+                max_output_tokens=max_tokens,
+                output_tokens_estimate=usage.get("output_tokens") or max(stream_events, round(generated_chars / 3.7)),
+                output_tokens_exact=usage.get("output_tokens"),
+                input_tokens=usage.get("input_tokens"),
+                elapsed_seconds=round(time.monotonic() - started, 1),
+                streaming=True,
+            )
         else:
             raise RuntimeError("UNSUPPORTED_LLM_PROVIDER")
+
+    if cancel_check and cancel_check():
+        raise AiGenerationCancelled("AI_JOB_CANCELLED")
 
     output_tokens = usage.get("output_tokens")
     truncated = stop_reason in {"length", "max_tokens"} or (

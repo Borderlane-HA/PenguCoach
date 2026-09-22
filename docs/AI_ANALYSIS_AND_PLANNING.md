@@ -46,7 +46,9 @@ The Training page can generate a periodized plan for:
 - mobility,
 - custom goals.
 
-Inputs include experience, plan duration, days per week, typical session duration, available equipment, constraints and a free-text goal. The context uses the previous 7 and 28 days of Garmin/FIT training plus available recovery measurements. Plans are persisted in `ai_runs`. Since alpha.14, newly generated plans also carry a validated structured calendar representation; users can review/select sessions and, after explicitly enabling the separate Garmin workout exporter, schedule supported structured workouts in Garmin Connect. Normal Garmin data synchronization remains read-only.
+Inputs include experience, plan duration, days per week, typical session duration, available equipment, constraints and a free-text goal. The user explicitly selects a recent 3, 7, 14, 21 or 28 day context window (7 days by default) and which data categories may be supplied to the model: training/FIT analytics, Garmin zones, sleep/HRV, recovery/stress and optional steps/hydration. No hidden 28-day window is appended. Plans are persisted in `ai_runs` together with the selected context metadata. Newly generated plans also carry a validated structured calendar representation; users can review/select sessions and, after explicitly enabling the separate Garmin workout exporter, schedule supported structured workouts in Garmin Connect. Normal Garmin data synchronization remains read-only.
+
+Local Ollama requests are streamed. This removes a former whole-response timeout failure mode for long plan generations, exposes approximate live output-token progress, and permits cooperative cancellation of a running generation. The final Ollama `eval_count` is stored as the exact output-token count when supplied by Ollama.
 
 ## Model routing
 
