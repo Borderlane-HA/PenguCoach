@@ -1,0 +1,93 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: pengucoach
+      POSTGRES_USER: pengucoach
+      POSTGRES_PASSWORD: pengucoach
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pengucoach -d pengucoach"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:8-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  api:
+    build:
+      context: .
+      dockerfile: docker/api.Dockerfile
+    command: ["sh", "-lc", "alembic -c alembic.ini upgrade head && uvicorn apps.api.main:app --host 0.0.0.0 --port 8000"]
+    env_file: .env
+    environment:
+      PENGUCOACH_DATABASE_URL: postgresql+asyncpg://pengucoach:pengucoach@postgres:5432/pengucoach
+      PENGUCOACH_REDIS_URL: redis://redis:6379/0
+      PENGUCOACH_FRONTEND_ORIGIN: http://localhost:3000
+      PENGUCOACH_DATA_DIR: /data
+    volumes:
+      - app_data:/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+
+  worker:
+    build:
+      context: .
+      dockerfile: docker/api.Dockerfile
+    command: ["celery", "-A", "worker.celery_app:app", "worker", "-l", "INFO", "-Q", "garmin,fit,maintenance", "--concurrency=2"]
+    env_file: .env
+    environment:
+      PENGUCOACH_DATABASE_URL: postgresql+asyncpg://pengucoach:pengucoach@postgres:5432/pengucoach
+      PENGUCOACH_REDIS_URL: redis://redis:6379/0
+      PENGUCOACH_DATA_DIR: /data
+    volumes:
+      - app_data:/data
+    depends_on:
+      api:
+        condition: service_started
+      redis:
+        condition: service_healthy
+
+  scheduler:
+    build:
+      context: .
+      dockerfile: docker/api.Dockerfile
+    command: ["celery", "-A", "worker.celery_app:app", "beat", "-l", "INFO"]
+    env_file: .env
+    environment:
+      PENGUCOACH_DATABASE_URL: postgresql+asyncpg://pengucoach:pengucoach@postgres:5432/pengucoach
+      PENGUCOACH_REDIS_URL: redis://redis:6379/0
+    depends_on:
+      api:
+        condition: service_started
+      redis:
+        condition: service_healthy
+
+  web:
+    build:
+      context: apps/web
+      dockerfile: Dockerfile
+    depends_on:
+      - api
+    ports:
+      - "3000:3000"
+
+volumes:
+  postgres_data:
+  redis_data:
+  app_data:
