@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
@@ -6,9 +7,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from pengucoach.auth.dependencies import admin_user
-from pengucoach.db.models import LlmModel, LlmProvider, LlmRoute, User
+from pengucoach.db.models import AiRun, LlmModel, LlmProvider, LlmRoute, User
 from pengucoach.db.session import get_db
 from pengucoach.llm.service import TASK_DEFAULTS, task_settings, test_provider
+from pengucoach.llm.usage import calculate_cost_eur, model_pricing, period_start
 from pengucoach.security.crypto import SecretBox
 
 router = APIRouter(prefix="/admin/ai", tags=["admin-ai"])
@@ -38,6 +40,8 @@ class ModelIn(BaseModel):
     context_window: int | None = Field(default=None, ge=1024, le=4_000_000)
     provider_max_output_tokens: int | None = Field(default=None, ge=128, le=1_000_000)
     temperature: float = Field(default=0.2, ge=0, le=2)
+    input_cost_per_million_eur: float | None = Field(default=None, ge=0, le=100000)
+    output_cost_per_million_eur: float | None = Field(default=None, ge=0, le=100000)
     enabled: bool = True
 
 
@@ -47,6 +51,8 @@ class ModelUpdate(BaseModel):
     context_window: int | None = Field(default=None, ge=1024, le=4_000_000)
     provider_max_output_tokens: int | None = Field(default=None, ge=128, le=1_000_000)
     temperature: float = Field(default=0.2, ge=0, le=2)
+    input_cost_per_million_eur: float | None = Field(default=None, ge=0, le=100000)
+    output_cost_per_million_eur: float | None = Field(default=None, ge=0, le=100000)
     enabled: bool = True
 
 
@@ -75,6 +81,8 @@ def _model_payload(x: LlmModel, provider: LlmProvider | None) -> dict:
         "enabled": x.enabled,
         "context_window": x.context_window,
         "provider_max_output_tokens": meta.get("provider_max_output_tokens"),
+        "input_cost_per_million_eur": model_pricing(meta)["input_eur_per_million"],
+        "output_cost_per_million_eur": model_pricing(meta)["output_eur_per_million"],
         "temperature": x.temperature,
     }
 
@@ -177,7 +185,11 @@ async def create_model(payload: ModelIn, _: User = Depends(admin_user), db: Asyn
         enabled=payload.enabled,
         context_window=payload.context_window,
         temperature=payload.temperature,
-        metadata_json={"provider_max_output_tokens": payload.provider_max_output_tokens} if payload.provider_max_output_tokens else {},
+        metadata_json={
+            **({"provider_max_output_tokens": payload.provider_max_output_tokens} if payload.provider_max_output_tokens else {}),
+            **({"input_cost_per_million_eur": payload.input_cost_per_million_eur} if payload.input_cost_per_million_eur is not None else {}),
+            **({"output_cost_per_million_eur": payload.output_cost_per_million_eur} if payload.output_cost_per_million_eur is not None else {}),
+        },
     )
     db.add(row)
     await db.commit()
@@ -206,6 +218,14 @@ async def update_model(model_id: uuid.UUID, payload: ModelUpdate, _: User = Depe
         meta["provider_max_output_tokens"] = payload.provider_max_output_tokens
     else:
         meta.pop("provider_max_output_tokens", None)
+    for key, value in (
+        ("input_cost_per_million_eur", payload.input_cost_per_million_eur),
+        ("output_cost_per_million_eur", payload.output_cost_per_million_eur),
+    ):
+        if value is None:
+            meta.pop(key, None)
+        else:
+            meta[key] = value
     row.metadata_json = meta
     await db.commit()
     return {"saved": True}
@@ -219,6 +239,107 @@ async def delete_model(model_id: uuid.UUID, _: User = Depends(admin_user), db: A
     await db.delete(row)
     await db.commit()
     return {"deleted": True}
+
+
+
+def _usage_aggregate(rows: list[AiRun]) -> dict:
+    total = {"requests": 0, "input_tokens": 0, "output_tokens": 0, "total_tokens": 0, "cost_eur": 0.0, "priced_requests": 0, "unpriced_requests": 0, "elapsed_seconds": 0.0, "timed_requests": 0, "timed_output_tokens": 0}
+    models: dict[str, dict] = {}
+    tasks: dict[str, dict] = {}
+    for row in rows:
+        meta = row.metadata_json if isinstance(row.metadata_json, dict) else {}
+        usage = meta.get("usage") if isinstance(meta.get("usage"), dict) else {}
+        input_tokens = int(usage.get("input_tokens") or 0)
+        output_tokens = int(usage.get("output_tokens") or 0)
+        total_tokens = int(usage.get("total_tokens") or (input_tokens + output_tokens))
+        cost = meta.get("cost_eur")
+        if cost is None:
+            pricing = meta.get("pricing") if isinstance(meta.get("pricing"), dict) else None
+            cost = calculate_cost_eur(usage, pricing)
+        cost_value = float(cost) if cost is not None else None
+        elapsed_raw = meta.get("elapsed_seconds")
+        elapsed_value = float(elapsed_raw) if isinstance(elapsed_raw, (int, float)) and float(elapsed_raw) >= 0 else None
+        total["requests"] += 1
+        total["input_tokens"] += input_tokens
+        total["output_tokens"] += output_tokens
+        total["total_tokens"] += total_tokens
+        if cost_value is None:
+            total["unpriced_requests"] += 1
+        else:
+            total["priced_requests"] += 1
+            total["cost_eur"] += cost_value
+        if elapsed_value is not None:
+            total["elapsed_seconds"] += elapsed_value
+            total["timed_requests"] += 1
+            total["timed_output_tokens"] += output_tokens
+        model_key = str(row.model_id) if row.model_id else f"legacy:{row.provider_name}:{row.model_name}"
+        model = models.setdefault(model_key, {
+            "model_id": str(row.model_id) if row.model_id else None,
+            "model": row.model_name or "Unknown",
+            "provider": row.provider_name or "Unknown",
+            "requests": 0, "input_tokens": 0, "output_tokens": 0, "total_tokens": 0,
+            "cost_eur": 0.0, "priced_requests": 0, "unpriced_requests": 0, "elapsed_seconds": 0.0, "timed_requests": 0, "timed_output_tokens": 0,
+        })
+        task = tasks.setdefault(row.task_type, {
+            "task_type": row.task_type, "requests": 0, "input_tokens": 0, "output_tokens": 0,
+            "total_tokens": 0, "cost_eur": 0.0, "priced_requests": 0, "unpriced_requests": 0, "elapsed_seconds": 0.0, "timed_requests": 0, "timed_output_tokens": 0,
+        })
+        for target in (model, task):
+            target["requests"] += 1
+            target["input_tokens"] += input_tokens
+            target["output_tokens"] += output_tokens
+            target["total_tokens"] += total_tokens
+            if cost_value is None:
+                target["unpriced_requests"] += 1
+            else:
+                target["priced_requests"] += 1
+                target["cost_eur"] += cost_value
+            if elapsed_value is not None:
+                target["elapsed_seconds"] += elapsed_value
+                target["timed_requests"] += 1
+                target["timed_output_tokens"] += output_tokens
+    def finalize(group: dict) -> None:
+        group["cost_eur"] = round(group["cost_eur"], 8)
+        requests = int(group.get("requests") or 0)
+        timed = int(group.get("timed_requests") or 0)
+        elapsed = float(group.get("elapsed_seconds") or 0.0)
+        group["avg_tokens_per_request"] = round(float(group.get("total_tokens") or 0) / requests, 1) if requests else 0.0
+        group["avg_cost_per_request_eur"] = round(float(group.get("cost_eur") or 0.0) / int(group.get("priced_requests") or 1), 8) if group.get("priced_requests") else None
+        group["avg_output_tokens_per_second"] = round(float(group.get("timed_output_tokens") or 0) / elapsed, 2) if timed and elapsed > 0 else None
+        group["elapsed_seconds"] = round(elapsed, 3)
+    finalize(total)
+    for group in (*models.values(), *tasks.values()):
+        finalize(group)
+    return {"totals": total, "models": list(models.values()), "tasks": list(tasks.values())}
+
+
+@router.get("/usage")
+async def usage_stats(
+    period: str = "month",
+    _: User = Depends(admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    if period not in {"today", "week", "month", "year", "all"}:
+        raise HTTPException(status_code=400, detail="INVALID_USAGE_PERIOD")
+    now = datetime.now(timezone.utc)
+    query = select(AiRun)
+    start = period_start(period, now)
+    if start is not None:
+        query = query.where(AiRun.created_at >= start)
+    rows = (await db.scalars(query.order_by(AiRun.created_at.desc()))).all()
+
+    month_start = period_start("month_current", now)
+    month_rows = (await db.scalars(select(AiRun).where(AiRun.created_at >= month_start))).all()
+    result = _usage_aggregate(list(rows))
+    month_result = _usage_aggregate(list(month_rows))
+    result.update({
+        "period": period,
+        "from": start.isoformat() if start else None,
+        "to": now.isoformat(),
+        "current_month_cost_eur": month_result["totals"]["cost_eur"],
+        "current_month_tokens": month_result["totals"]["total_tokens"],
+    })
+    return result
 
 
 @router.get("/routes")

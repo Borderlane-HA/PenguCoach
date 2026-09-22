@@ -3,17 +3,17 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, EmailStr, Field
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from pengucoach.auth.dependencies import safety_confirmed_user
 from pengucoach.common.config import settings
-from pengucoach.db.models import GarminConnection, GarminSyncRun, GarminSyncSetting, User
+from pengucoach.db.models import Activity, GarminConnection, GarminSyncRun, GarminSyncSetting, User
 from pengucoach.db.session import get_db
 from pengucoach.garmin.auth.service import garmin_auth_service
 from pengucoach.garmin.zones import training_zone_snapshot
 from worker.celery_app import app
-from worker.tasks.garmin_sync import clear_history_import_control, current_history_import_task, force_clear_history_import_state, historical_import, set_history_import_control, sync_user
+from worker.tasks.garmin_sync import activity_catalog_import, clear_history_import_control, current_history_import_task, force_clear_history_import_state, historical_import, set_history_import_control, sync_user
 
 router = APIRouter(prefix="/garmin", tags=["garmin"])
 
@@ -63,7 +63,7 @@ def _discover_history_task_id(user_id: str) -> str | None:
                     candidate = request if isinstance(request, dict) else item
                     if not isinstance(candidate, dict):
                         continue
-                    if candidate.get("name") != "worker.tasks.garmin_sync.historical_import":
+                    if candidate.get("name") not in {"worker.tasks.garmin_sync.historical_import", "worker.tasks.garmin_sync.activity_catalog_import"}:
                         continue
                     args = candidate.get("args")
                     args_repr = candidate.get("argsrepr")
@@ -82,9 +82,19 @@ def _discover_history_task_id(user_id: str) -> str | None:
 async def garmin_status(user: User = Depends(safety_confirmed_user), db: AsyncSession = Depends(get_db)):
     conn = await db.scalar(select(GarminConnection).where(GarminConnection.user_id == user.id))
     sync = await db.get(GarminSyncSetting, user.id)
+    activity_count = int((await db.scalar(select(func.count(Activity.id)).where(Activity.user_id == user.id))) or 0)
+    last_catalog = await db.scalar(select(GarminSyncRun).where(
+        GarminSyncRun.user_id == user.id,
+        GarminSyncRun.sync_type.in_(["historical", "activity_catalog"]),
+    ).order_by(GarminSyncRun.started_at.desc()).limit(1))
+    catalog_meta = None
+    if last_catalog and isinstance(last_catalog.domains, dict):
+        value = last_catalog.domains.get("activities")
+        if isinstance(value, dict):
+            catalog_meta = {**value, "status": last_catalog.status, "finished_at": last_catalog.finished_at}
     if not conn:
-        return {"connected": False, "status": "disconnected", "read_only": True, "settings": {"interval_minutes": settings.garmin_default_interval_minutes}}
-    return {"connected": conn.status == "connected", "status": conn.status, "display_name": conn.garmin_display_name, "last_validated_at": conn.last_validated_at, "last_successful_sync_at": conn.last_successful_sync_at, "next_sync_at": conn.next_sync_at, "cooldown_until": conn.cooldown_until, "last_error_code": conn.last_error_code, "read_only": True, "settings": {"enabled": sync.enabled, "interval_minutes": sync.interval_minutes, "fit_download_enabled": sync.fit_download_enabled, "fit_analysis_enabled": sync.fit_analysis_enabled, "historical_days": sync.historical_days, "sync_health": sync.sync_health, "sync_activities": sync.sync_activities, "sync_body": sync.sync_body, "sync_training": sync.sync_training, "workout_export_enabled": sync.workout_export_enabled} if sync else None}
+        return {"connected": False, "status": "disconnected", "read_only": True, "activity_count": activity_count, "activity_catalog": catalog_meta, "settings": {"interval_minutes": settings.garmin_default_interval_minutes}}
+    return {"connected": conn.status == "connected", "status": conn.status, "display_name": conn.garmin_display_name, "last_validated_at": conn.last_validated_at, "last_successful_sync_at": conn.last_successful_sync_at, "next_sync_at": conn.next_sync_at, "cooldown_until": conn.cooldown_until, "last_error_code": conn.last_error_code, "read_only": True, "activity_count": activity_count, "activity_catalog": catalog_meta, "settings": {"enabled": sync.enabled, "interval_minutes": sync.interval_minutes, "fit_download_enabled": sync.fit_download_enabled, "fit_analysis_enabled": sync.fit_analysis_enabled, "historical_days": sync.historical_days, "sync_health": sync.sync_health, "sync_activities": sync.sync_activities, "sync_body": sync.sync_body, "sync_training": sync.sync_training, "workout_export_enabled": sync.workout_export_enabled} if sync else None}
 
 
 @router.post("/auth/start")
@@ -144,6 +154,16 @@ async def start_import(payload: ImportRequest, user: User = Depends(safety_confi
     return {"queued": True, "task_id": task.id, "days": payload.days, "mode": payload.mode, "scope": "all" if payload.days == 0 else "days"}
 
 
+@router.post("/import/activities")
+async def start_activity_catalog_import(user: User = Depends(safety_confirmed_user), db: AsyncSession = Depends(get_db)):
+    conn = await db.scalar(select(GarminConnection).where(GarminConnection.user_id == user.id))
+    if not conn or conn.status != "connected":
+        raise HTTPException(status_code=409, detail="GARMIN_NOT_CONNECTED")
+    clear_history_import_control(str(user.id))
+    task = activity_catalog_import.apply_async(args=[str(user.id)], queue="garmin")
+    return {"queued": True, "task_id": task.id, "scope": "activities_only"}
+
+
 @router.post("/import/control")
 async def control_import(
     payload: ImportControlRequest,
@@ -162,7 +182,7 @@ async def control_import(
             app.control.revoke(task_id, terminate=True, signal="SIGTERM")
         rows = (await db.scalars(select(GarminSyncRun).where(
             GarminSyncRun.user_id == user.id,
-            GarminSyncRun.sync_type == "historical",
+            GarminSyncRun.sync_type.in_(["historical", "activity_catalog"]),
             GarminSyncRun.status == "running",
         ).order_by(GarminSyncRun.started_at.desc()).limit(5))).all()
         now = datetime.now(timezone.utc)

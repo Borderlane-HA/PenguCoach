@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.1.0-alpha.23 - 2026-09-22
+
+### Added
+- AI Studio can store optional input/output prices per model in EUR per 1 million tokens. Completed AI runs snapshot the active price and provider-reported token usage, so later price edits do not rewrite historical costs.
+- system-wide AI usage dashboard with Today / last 7 days / last 30 days / current year / all-time views, per-model and per-task token/cost totals, optional monthly budget progress, average tokens/request and measured output throughput for newly timed runs.
+- response profiles **Very low / Low / Standard / High** for Coach, activity analysis and training planning. Standard preserves the previous behavior; lower profiles shorten prose/output budgets, while training plans keep all requested sessions and structured Garmin steps.
+- pre-run cost estimates on Coach, Training and activity AI analysis when model pricing is configured; actual cost and quality profile are stored/shown after completion.
+- dedicated Garmin **activities-only catalogue completion** job that paginates the complete activity catalogue, shows the current local activity count and latest scan metadata, queues missing FIT work, and avoids re-fetching years of wellness/day data.
+
+### Changed
+- training-plan segmented generation accounts for every completed attempt/retry in the stored usage/cost total rather than only the final successful segment.
+- Coach requests are persisted as AI runs as well, allowing their token usage to appear in AI Studio statistics from Alpha.23 onward.
+- AI Studio usage is aggregated across the PenguCoach instance for administrators, matching shared provider/API-key costs.
+
+### Notes
+- historical runs without a saved price snapshot remain token-counted but intentionally unpriced; hard-aborted provider requests may not expose authoritative usage and can therefore differ from the provider invoice.
+
 ## 0.1.0-alpha.22 - 2026-09-22
 
 ### Fixed

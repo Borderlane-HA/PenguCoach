@@ -8,9 +8,9 @@ PenguCoach is designed as a local-first, multi-user platform that reads Garmin C
 
 ## Current alpha scope
 
-Alpha.22 is a focused build-fix release on top of the activity pagination and Garmin pre-export editor introduced in Alpha.21: the activity journal now searches and pages across the complete stored history, and every not-yet-exported calendar session can be edited as a Garmin-specific draft before upload. Duration, steps, zones, repeats and strength exercises can be adjusted or removed without rewriting the original AI plan. Garmin data synchronization stays read-only; only the explicit workout/calendar gateway may create or remove PenguCoach-managed workouts after user action.
+Alpha.23 adds AI usage and cost transparency across local and cloud models, configurable response-quality profiles, and a dedicated Garmin activity-catalogue repair path. Per-model input/output prices can be stored in AI Studio; completed AI runs snapshot the active prices and actual provider token usage so historical costs stay stable when prices change. Coach, activity analysis and training planning expose Very low / Low / Standard / High response profiles, with Standard retaining the previous behavior. Garmin data synchronization stays read-only; the new activities-only history action fills gaps in the local activity catalogue without repeating years of wellness requests.
 
-`v0.1.0-alpha.22` is the current end-to-end alpha baseline:
+`v0.1.0-alpha.23` is the current end-to-end alpha baseline:
 
 - German and English web UI
 - bright health-first responsive web design with desktop sidebar and mobile navigation dock
@@ -19,6 +19,7 @@ Alpha.22 is a focused build-fix release on top of the activity pagination and Ga
 - built-in PenguCoach app icon used by default in the UI plus a browser favicon; a custom app icon can still override the sidebar branding
 - simplified Garmin synchronization with one everyday Sync action and a separate history/backfill section
 - scalable Garmin history import: offset-paginated activity catalogue plus resumable daily backfill, default optimized mode for older history, full detail for the latest 90 days, rate-limit retries, live progress and pause/cancel controls
+- dedicated **activities-only catalogue completion** action showing the locally stored activity count and last catalogue scan, so incomplete 200/300-entry histories can be repaired without reloading sleep/stress/daily wellness history
 - live Garmin sync state with reload-safe job polling; the Sync button stays disabled until the worker has actually finished and timestamps refresh automatically
 - first-run administrator setup
 - multi-user local authentication
@@ -35,6 +36,9 @@ Alpha.22 is a focused build-fix release on top of the activity pagination and Ga
 - manual activity import without Garmin: FIT, GPX, TCX and ZIP-contained FIT files are stored locally, normalized into the same activity history and analysed with the same deterministic pipeline
 - health overview and historical charts with one consistent 7/30/90 day, 1 year, 5 year or all-data filter across HRV, resting HR, sleep, stress and sport-specific VO₂ max
 - Ollama, OpenAI, Anthropic, IONOS AI Model Hub, Google Gemini, xAI/Grok and generic OpenAI-compatible provider management
+- optional per-model input/output token pricing plus system-wide AI usage/cost statistics for today, 7 days, 30 days, current year and all time; local models retain token statistics even without prices
+- per-function response profiles (**Very low / Low / Standard / High**) for Coach, activity analysis and training planning, with cost estimates before generation and actual token/cost snapshots after completion
+- optional monthly AI cost budget indicator (informational only), per-model/per-task breakdowns, average tokens/request and measured output throughput for newly timed runs
 - editable/deletable AI models plus saved-provider model discovery
 - current Anthropic Models API discovery with imported Claude context/output capabilities
 - cloud-health AI disabled per user by default; configuring an external provider shows the privacy requirement and offers an explicit one-click enable action; local Ollama can be used without cloud permission

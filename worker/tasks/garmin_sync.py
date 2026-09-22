@@ -784,6 +784,113 @@ async def _historical(user_id: str, days: int, mode: str = "optimized", callback
             raise
 
 
+
+async def _activity_catalog_only(user_id: str, callback: ProgressCallback | None = None, task_id: str | None = None):
+    async with SessionLocal() as db:
+        user = await db.get(User, user_id)
+        conn = await db.scalar(select(GarminConnection).where(GarminConnection.user_id == user.id)) if user else None
+        if not user or not conn or conn.status != "connected":
+            return {"status": "not_connected"}
+        run = GarminSyncRun(
+            user_id=user.id,
+            sync_type="activity_catalog",
+            status="running",
+            domains={"scope": "activities_only", "task_id": task_id},
+        )
+        db.add(run)
+        await db.commit()
+        await db.refresh(run)
+        run_id = run.id
+        try:
+            gateway, raw_client = await gateway_from_connection(conn)
+            _progress(callback, phase="activities", state="running", message="Reading complete Garmin activity catalogue…", requested_scope="all")
+            catalog = await _import_activity_catalog(db, user, gateway, None, callback, run)
+            conn.token_ciphertext = serialize_refreshed_token(raw_client)
+            conn.last_validated_at = datetime.now(timezone.utc)
+            run.status = "success"
+            run.finished_at = datetime.now(timezone.utc)
+            run.domains = {**(run.domains or {}), "activities": {
+                **{k: v for k, v in catalog.items() if not isinstance(v, date)},
+                "oldest": catalog.get("oldest").isoformat() if isinstance(catalog.get("oldest"), date) else None,
+                "newest": catalog.get("newest").isoformat() if isinstance(catalog.get("newest"), date) else None,
+            }}
+            await db.commit()
+            queued_fit = await _queue_pending_fit(db, user, callback)
+            result = {
+                "status": "success",
+                "scope": "activities_only",
+                "activities": {k: (v.isoformat() if isinstance(v, date) else v) for k, v in catalog.items()},
+                "fit_queued": queued_fit,
+            }
+            _progress(callback, phase="done", state="success", message="Activity catalogue completed", **result)
+            return result
+        except HistoryImportInterrupted as interrupted:
+            await db.rollback()
+            run = await db.get(GarminSyncRun, run_id)
+            if run:
+                run.status = "paused" if interrupted.action == "pause" else "cancelled"
+                run.finished_at = datetime.now(timezone.utc)
+            await db.commit()
+            clear_history_import_control(str(user_id))
+            result = {"status": "paused" if interrupted.action == "pause" else "cancelled", "scope": "activities_only", "resume_safe": True}
+            _progress(callback, phase="stopped", state=result["status"], message=f"Activity catalogue {result['status']}", **result)
+            return result
+        except GarminConnectAuthenticationError:
+            await db.rollback()
+            run = await db.get(GarminSyncRun, run_id)
+            conn = await db.scalar(select(GarminConnection).where(GarminConnection.user_id == user_id))
+            if conn:
+                conn.status = "reauth_required"
+                conn.last_error_code = "GARMIN_REAUTH_REQUIRED"
+                conn.last_error_at = datetime.now(timezone.utc)
+            if run:
+                run.status = "failed"
+                run.error_code = "GARMIN_REAUTH_REQUIRED"
+                run.finished_at = datetime.now(timezone.utc)
+            await db.commit()
+            return {"status": "reauth_required", "scope": "activities_only"}
+        except GarminConnectTooManyRequestsError:
+            await db.rollback()
+            run = await db.get(GarminSyncRun, run_id)
+            if run:
+                run.status = "rate_limited"
+                run.error_code = "GARMIN_RATE_LIMITED"
+                run.finished_at = datetime.now(timezone.utc)
+            await db.commit()
+            return {"status": "rate_limited", "scope": "activities_only", "resume_safe": True}
+        except Exception as exc:
+            await db.rollback()
+            run = await db.get(GarminSyncRun, run_id)
+            if run:
+                run.status = "failed"
+                run.error_code = "GARMIN_ACTIVITY_CATALOG_FAILED"
+                run.error_message_safe = type(exc).__name__
+                run.finished_at = datetime.now(timezone.utc)
+            await db.commit()
+            raise
+
+
+@shared_task(bind=True, name="worker.tasks.garmin_sync.activity_catalog_import")
+def activity_catalog_import(self, user_id: str):
+    lock = _account_lock(user_id, timeout=24 * 60 * 60)
+    if not lock.acquire(blocking=False):
+        return {"status": "already_running"}
+    task_id = str(self.request.id)
+    _set_current_history_import_task(user_id, task_id)
+
+    def callback(meta: dict[str, Any]) -> None:
+        self.update_state(state="PROGRESS", meta=meta)
+
+    try:
+        return asyncio.run(_activity_catalog_only(user_id, callback=callback, task_id=task_id))
+    finally:
+        _clear_current_history_import_task(user_id, task_id)
+        try:
+            lock.release()
+        except Exception:
+            pass
+
+
 @shared_task(bind=True, name="worker.tasks.garmin_sync.historical_import")
 def historical_import(self, user_id: str, days: int = 365, mode: str = "optimized"):
     timeout = 7 * 24 * 60 * 60 if int(days) == 0 else 72 * 60 * 60

@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from pengucoach.common.config import settings
 from pengucoach.db.models import LlmModel, LlmProvider, LlmRoute
+from pengucoach.llm.usage import calculate_cost_eur, model_pricing, normalize_quality, quality_budget, quality_instruction
 from pengucoach.security.crypto import SecretBox
 
 
@@ -246,6 +247,8 @@ async def eligible_models(db: AsyncSession, local_only: bool = False) -> list[di
             "local": provider.is_local,
             "context_window": model.context_window,
             "provider_max_output_tokens": meta.get("provider_max_output_tokens"),
+            "input_cost_per_million_eur": model_pricing(meta)["input_eur_per_million"],
+            "output_cost_per_million_eur": model_pricing(meta)["output_eur_per_million"],
             "temperature": model.temperature,
         })
     return out
@@ -405,6 +408,7 @@ async def chat(
     progress_callback: ProgressCallback | None = None,
     cancel_check: CancelCheck | None = None,
     response_format_schema: dict[str, Any] | None = None,
+    quality_profile: str = "standard",
 ) -> dict[str, Any]:
     config = await task_settings(db, task, locale)
     selected = await resolve_model(db, task, local_only=local_only, model_id=model_id)
@@ -412,12 +416,14 @@ async def chat(
         raise RuntimeError("NO_ELIGIBLE_LLM_MODEL_CONFIGURED")
     provider, model = selected
 
+    quality_profile = normalize_quality(quality_profile)
     configured_max = int(config["max_output_tokens"])
     # Route budgets are task defaults, not a hidden ceiling. An explicit value from
     # the task UI may be higher; the selected model/provider and the context window
     # still enforce the real hard limits below.
-    max_tokens = configured_max if requested_max_tokens is None else _clamp_int(
-        requested_max_tokens, 128, 65536, configured_max
+    profile_default = quality_budget(task, configured_max, quality_profile)
+    max_tokens = profile_default if requested_max_tokens is None else _clamp_int(
+        requested_max_tokens, 128, 65536, profile_default
     )
 
     configured_ctx = int(config["context_window_tokens"])
@@ -455,6 +461,7 @@ async def chat(
     max_context_chars = min(int(config["max_context_chars"]), context_budget_tokens * 4)
 
     task_prompt = (instruction_prompt or config["default_prompt"]).strip()[:16000]
+    task_prompt = (task_prompt + quality_instruction(quality_profile, locale, task))[:18000]
     context_json, context_meta = _bounded_context(context, max_context_chars)
     output_target = max(128, int(max_tokens * 0.88))
     budget_notice = (
@@ -522,6 +529,7 @@ async def chat(
         timeout = httpx.Timeout(float(settings.ai_request_timeout_seconds))
     usage: dict[str, Any] = {}
     stop_reason: str | None = None
+    request_started = time.monotonic()
 
     async with httpx.AsyncClient(timeout=timeout) as client:
         if provider.provider_type in OPENAI_COMPATIBLE_PROVIDER_TYPES:
@@ -583,7 +591,7 @@ async def chat(
             last_progress = 0.0
             last_cancel_check = 0.0
             final_chunk: dict[str, Any] = {}
-            started = time.monotonic()
+            started = request_started
             ollama_payload: dict[str, Any] = {
                 "model": model.model_identifier,
                 "messages": prompt_messages,
@@ -698,6 +706,11 @@ async def chat(
     truncated = stop_reason in {"length", "max_tokens"} or (
         isinstance(output_tokens, int) and output_tokens >= max_tokens
     )
+    pricing = model_pricing(model.metadata_json if isinstance(model.metadata_json, dict) else {})
+    cost_eur = calculate_cost_eur(usage, pricing)
+    elapsed_seconds = round(max(0.0, time.monotonic() - request_started), 3)
+    output_count = usage.get("output_tokens")
+    tokens_per_second = round(float(output_count) / elapsed_seconds, 3) if isinstance(output_count, int) and output_count >= 0 and elapsed_seconds > 0 else None
     return {
         "content": text,
         "provider": provider.name,
@@ -711,6 +724,11 @@ async def chat(
         "context_window_tokens": context_window_tokens,
         "context_budget_tokens": context_budget_tokens,
         "usage": usage,
+        "pricing": pricing,
+        "cost_eur": cost_eur,
+        "quality_profile": quality_profile,
+        "elapsed_seconds": elapsed_seconds,
+        "tokens_per_second": tokens_per_second,
         "stop_reason": stop_reason,
         "truncated": truncated,
         "message_chars": used_message_chars,

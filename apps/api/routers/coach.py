@@ -11,6 +11,7 @@ from pengucoach.coach.context import SOURCE_NOTICE, build_activity_analysis_cont
 from pengucoach.db.models import AiRun, Conversation, GarminWorkoutExport, Message, User, UserPreference
 from pengucoach.db.session import get_db
 from pengucoach.llm.service import chat, eligible_models, resolve_model, task_settings
+from pengucoach.llm.usage import normalize_quality, quality_options
 from pengucoach.training_plan.generation import normalize_training_plan_answer, training_plan_instruction
 from worker.tasks.ai import activity_analysis as activity_analysis_task
 from worker.tasks.ai import coach_chat as coach_chat_task
@@ -40,6 +41,7 @@ class ChatRequest(BaseModel):
     context_window_tokens: int | None = Field(default=None, ge=2048, le=1048576)
     context_mode: Literal["auto", "none", "7", "28"] = "auto"
     locale: Literal["de", "en"] | None = None
+    quality_profile: Literal["very_low", "low", "standard", "high"] = "standard"
 
 
 class ActivityAnalysisRequest(BaseModel):
@@ -50,6 +52,7 @@ class ActivityAnalysisRequest(BaseModel):
     max_tokens: int | None = Field(default=None, ge=128, le=65536)
     context_window_tokens: int | None = Field(default=None, ge=2048, le=1048576)
     locale: Literal["de", "en"] | None = None
+    quality_profile: Literal["very_low", "low", "standard", "high"] = "standard"
 
 
 class TrainingContextSelection(BaseModel):
@@ -79,6 +82,7 @@ class TrainingPlanRequest(BaseModel):
     context_days: Literal[3, 7, 14, 21, 28] = 7
     context_data: TrainingContextSelection = Field(default_factory=TrainingContextSelection)
     locale: Literal["de", "en"] | None = None
+    quality_profile: Literal["very_low", "low", "standard", "high"] = "standard"
 
 
 async def _privacy(db: AsyncSession, user: User) -> tuple[UserPreference | None, bool]:
@@ -118,6 +122,11 @@ def _answer_metadata(answer: dict, *, locale: str, goal: dict | None = None) -> 
         "truncated": answer.get("truncated", False),
         "local": answer.get("local"),
         "locale": locale,
+        "quality_profile": answer.get("quality_profile", "standard"),
+        "pricing": answer.get("pricing"),
+        "cost_eur": answer.get("cost_eur"),
+        "elapsed_seconds": answer.get("elapsed_seconds"),
+        "tokens_per_second": answer.get("tokens_per_second"),
     }
     if goal is not None:
         value["goal"] = goal
@@ -141,8 +150,10 @@ async def capabilities(
     user: User = Depends(safety_confirmed_user),
     db: AsyncSession = Depends(get_db),
 ):
-    _, local_only = await _privacy(db, user)
+    pref, local_only = await _privacy(db, user)
     models = await eligible_models(db, local_only=local_only)
+    cfg = dict(pref.dashboard_config or {}) if pref else {}
+    saved_profiles = cfg.get("ai_quality_profiles") if isinstance(cfg.get("ai_quality_profiles"), dict) else {}
     tasks: dict[str, dict] = {}
     selected_locale = locale or user.locale
     for task in TASKS:
@@ -154,8 +165,10 @@ async def capabilities(
             "default_provider": selected[0].name if selected else None,
             "local": selected[0].is_local if selected else None,
             **config,
+            "quality_profile": normalize_quality(saved_profiles.get(task, "standard")),
+            "quality_profiles": quality_options(task, int(config["max_output_tokens"])),
         }
-    return {"local_only": local_only, "eligible_models": models, "tasks": tasks}
+    return {"local_only": local_only, "eligible_models": models, "tasks": tasks, "monthly_budget_eur": cfg.get("ai_monthly_budget_eur")}
 
 
 # Background endpoints are used by alpha.5 UI so long local-model generations survive reloads and proxy timeouts.
@@ -207,10 +220,17 @@ async def coach_chat(payload: ChatRequest, user: User = Depends(safety_confirmed
             db, messages, context, locale, local_only=local_only,
             model_id=payload.model_id, requested_max_tokens=payload.max_tokens,
             requested_context_window_tokens=payload.context_window_tokens,
+            quality_profile=payload.quality_profile,
         )
     except RuntimeError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     db.add(Message(conversation_id=conversation.id, role="assistant", content=answer["content"], model_id=uuid.UUID(answer["model_id"])))
+    db.add(AiRun(
+        user_id=user.id, task_type="coach_chat", model_id=uuid.UUID(answer["model_id"]),
+        provider_name=answer["provider"], model_name=answer["model"], prompt=payload.message,
+        lookback_days=context_days, max_output_tokens=answer["max_output_tokens"], content=answer["content"],
+        metadata_json=_answer_metadata(answer, locale=str(locale)),
+    ))
     await db.commit()
     return {
         "conversation_id": str(conversation.id), **answer,
@@ -241,6 +261,7 @@ async def activity_analysis(payload: ActivityAnalysisRequest, user: User = Depen
             task="activity_analysis", local_only=local_only, model_id=payload.model_id,
             instruction_prompt=prompt, requested_max_tokens=payload.max_tokens,
             requested_context_window_tokens=payload.context_window_tokens,
+            quality_profile=payload.quality_profile,
         )
     except RuntimeError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
@@ -331,6 +352,7 @@ async def training_plan(payload: TrainingPlanRequest, user: User = Depends(safet
             task="training_plan", local_only=local_only, model_id=payload.model_id,
             instruction_prompt=training_plan_instruction(prompt), requested_max_tokens=payload.max_tokens,
             requested_context_window_tokens=payload.context_window_tokens,
+            quality_profile=payload.quality_profile,
         )
     except RuntimeError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc

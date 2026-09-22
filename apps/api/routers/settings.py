@@ -6,6 +6,7 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
+from typing import Literal
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from pengucoach.auth.dependencies import safety_confirmed_user
@@ -31,6 +32,13 @@ class PrivacyIn(BaseModel):
 
 class AppearanceIn(BaseModel):
     theme: str = Field(pattern=r"^(light|dark|ocean|forest|lavender)$")
+
+
+class AiPreferencesIn(BaseModel):
+    coach_chat: Literal["very_low", "low", "standard", "high"] = "standard"
+    activity_analysis: Literal["very_low", "low", "standard", "high"] = "standard"
+    training_plan: Literal["very_low", "low", "standard", "high"] = "standard"
+    monthly_budget_eur: float | None = Field(default=None, ge=0, le=100000)
 
 
 def _asset_root(user_id) -> Path:
@@ -82,6 +90,37 @@ async def update_privacy(payload: PrivacyIn, user: User = Depends(safety_confirm
     pref.cloud_health_ai_allowed = payload.cloud_health_ai_allowed
     await db.commit()
     return {"saved": True}
+
+
+@router.get("/ai-preferences")
+async def ai_preferences(user: User = Depends(safety_confirmed_user), db: AsyncSession = Depends(get_db)):
+    pref = await _pref(db, user)
+    cfg = dict(pref.dashboard_config or {})
+    profiles = cfg.get("ai_quality_profiles") if isinstance(cfg.get("ai_quality_profiles"), dict) else {}
+    return {
+        "coach_chat": profiles.get("coach_chat", "standard"),
+        "activity_analysis": profiles.get("activity_analysis", "standard"),
+        "training_plan": profiles.get("training_plan", "standard"),
+        "monthly_budget_eur": cfg.get("ai_monthly_budget_eur"),
+    }
+
+
+@router.put("/ai-preferences")
+async def update_ai_preferences(payload: AiPreferencesIn, user: User = Depends(safety_confirmed_user), db: AsyncSession = Depends(get_db)):
+    pref = await _pref(db, user)
+    cfg = dict(pref.dashboard_config or {})
+    cfg["ai_quality_profiles"] = {
+        "coach_chat": payload.coach_chat,
+        "activity_analysis": payload.activity_analysis,
+        "training_plan": payload.training_plan,
+    }
+    if payload.monthly_budget_eur is None:
+        cfg.pop("ai_monthly_budget_eur", None)
+    else:
+        cfg["ai_monthly_budget_eur"] = payload.monthly_budget_eur
+    pref.dashboard_config = cfg
+    await db.commit()
+    return {"saved": True, **payload.model_dump()}
 
 
 @router.get("/appearance")

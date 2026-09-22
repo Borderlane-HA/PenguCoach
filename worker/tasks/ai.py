@@ -95,6 +95,29 @@ def _cancel_check(task_id: str) -> CancelCheck:
     return lambda: cancel_requested(task_id)
 
 
+def _answer_metadata(answer: dict[str, Any], locale: str, quality_profile: str, **extra: Any) -> dict[str, Any]:
+    return {
+        "usage": answer.get("usage", {}),
+        "context_chars": answer.get("context_chars"),
+        "context_estimated_tokens": answer.get("context_estimated_tokens"),
+        "context_window_tokens": answer.get("context_window_tokens"),
+        "context_budget_tokens": answer.get("context_budget_tokens"),
+        "requested_max_output_tokens": answer.get("requested_max_output_tokens"),
+        "output_budget_adjusted": answer.get("output_budget_adjusted", False),
+        "context_truncated": answer.get("context_truncated", False),
+        "stop_reason": answer.get("stop_reason"),
+        "truncated": answer.get("truncated", False),
+        "local": answer.get("local"),
+        "locale": locale,
+        "quality_profile": quality_profile,
+        "pricing": answer.get("pricing"),
+        "cost_eur": answer.get("cost_eur"),
+        "elapsed_seconds": answer.get("elapsed_seconds"),
+        "tokens_per_second": answer.get("tokens_per_second"),
+        **extra,
+    }
+
+
 async def _activity_analysis(
     user_id: str,
     payload: dict[str, Any],
@@ -127,6 +150,7 @@ async def _activity_analysis(
             requested_context_window_tokens=payload.get("context_window_tokens"),
             progress_callback=progress_callback,
             cancel_check=cancel_check,
+            quality_profile=str(payload.get("quality_profile") or "standard"),
         )
         if cancel_check and cancel_check():
             raise AiGenerationCancelled("AI_JOB_CANCELLED")
@@ -141,18 +165,8 @@ async def _activity_analysis(
             lookback_days=lookback_days,
             max_output_tokens=answer["max_output_tokens"],
             content=answer["content"],
-            metadata_json={
-                "usage": answer.get("usage", {}),
-                "context_chars": answer.get("context_chars"),
-                "context_estimated_tokens": answer.get("context_estimated_tokens"),
-                "context_window_tokens": answer.get("context_window_tokens"),
-                "context_budget_tokens": answer.get("context_budget_tokens"),
-                "context_truncated": answer.get("context_truncated", False),
-                "stop_reason": answer.get("stop_reason"),
-                "truncated": answer.get("truncated", False),
-                "local": answer.get("local"),
-                "locale": locale,
-            },
+            metadata_json=_answer_metadata(answer, locale, str(payload.get("quality_profile") or "standard")),
+
         )
         db.add(run)
         await db.commit()
@@ -211,10 +225,23 @@ async def _coach_chat(
             requested_context_window_tokens=payload.get("context_window_tokens"),
             progress_callback=progress_callback,
             cancel_check=cancel_check,
+            quality_profile=str(payload.get("quality_profile") or "standard"),
         )
         if cancel_check and cancel_check():
             raise AiGenerationCancelled("AI_JOB_CANCELLED")
         db.add(Message(conversation_id=conversation.id, role="assistant", content=answer["content"], model_id=uuid.UUID(answer["model_id"])))
+        db.add(AiRun(
+            user_id=user.id,
+            task_type="coach_chat",
+            model_id=uuid.UUID(answer["model_id"]),
+            provider_name=answer["provider"],
+            model_name=answer["model"],
+            prompt=message,
+            lookback_days=context_days,
+            max_output_tokens=answer["max_output_tokens"],
+            content=answer["content"],
+            metadata_json=_answer_metadata(answer, locale, str(payload.get("quality_profile") or "standard")),
+        ))
         await db.commit()
         data_used = {
             "context_days": context_days,
@@ -298,6 +325,7 @@ async def _training_plan(
                 progress_callback=progress_callback,
                 cancel_check=cancel_check,
                 response_format_schema=plan_schema,
+                quality_profile=str(payload.get("quality_profile") or "standard"),
             )
             if cancel_check and cancel_check():
                 raise AiGenerationCancelled("AI_JOB_CANCELLED")
@@ -308,6 +336,11 @@ async def _training_plan(
             chunk_count = math.ceil(total_weeks / chunk_weeks)
             segments = []
             usage_totals = {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}
+            generation_calls: list[dict[str, Any]] = []
+            total_cost_eur = 0.0
+            total_elapsed_seconds = 0.0
+            timed_output_tokens = 0
+            priced_calls = 0
             last_answer: dict[str, Any] | None = None
             previous_outline: list[dict[str, Any]] = []
             any_budget_adjusted = False
@@ -371,7 +404,40 @@ async def _training_plan(
                     progress_callback=segment_progress,
                     cancel_check=cancel_check,
                     response_format_schema=plan_schema,
+                    quality_profile=str(payload.get("quality_profile") or "standard"),
                 )
+                def account_call(candidate: dict[str, Any], attempt: int) -> None:
+                    nonlocal total_cost_eur, total_elapsed_seconds, timed_output_tokens, priced_calls
+                    call_usage = candidate.get("usage") if isinstance(candidate.get("usage"), dict) else {}
+                    for key in usage_totals:
+                        value = call_usage.get(key)
+                        if isinstance(value, int):
+                            usage_totals[key] += value
+                    call_cost = candidate.get("cost_eur")
+                    if call_cost is not None:
+                        total_cost_eur += float(call_cost)
+                        priced_calls += 1
+                    elapsed = candidate.get("elapsed_seconds")
+                    if isinstance(elapsed, (int, float)) and float(elapsed) >= 0:
+                        total_elapsed_seconds += float(elapsed)
+                        if isinstance(call_usage.get("output_tokens"), int):
+                            timed_output_tokens += int(call_usage["output_tokens"])
+                    generation_calls.append({
+                        "chunk_index": chunk_index + 1,
+                        "chunk_count": chunk_count,
+                        "week_start": start_week,
+                        "week_end": end_week,
+                        "attempt": attempt,
+                        "max_output_tokens": candidate.get("max_output_tokens"),
+                        "usage": call_usage,
+                        "cost_eur": call_cost,
+                        "elapsed_seconds": candidate.get("elapsed_seconds"),
+                        "tokens_per_second": candidate.get("tokens_per_second"),
+                        "stop_reason": candidate.get("stop_reason"),
+                        "truncated": bool(candidate.get("truncated")),
+                    })
+
+                account_call(answer_part, 1)
                 def parse_segment(candidate: dict[str, Any]):
                     parsed, parsed_error = extract_structured_plan(str(candidate.get("content") or ""))
                     if parsed is not None and parsed.weeks != local_weeks:
@@ -406,7 +472,9 @@ async def _training_plan(
                         progress_callback=segment_progress,
                         cancel_check=cancel_check,
                         response_format_schema=plan_schema,
+                        quality_profile=str(payload.get("quality_profile") or "standard"),
                     )
+                    account_call(answer_part, 2)
                     segment, segment_error = parse_segment(answer_part)
                 if segment is None:
                     if answer_part.get("truncated"):
@@ -422,11 +490,6 @@ async def _training_plan(
                     "name": session.name,
                     "duration_min": session.duration_min,
                 } for session in segment.sessions)
-                part_usage = answer_part.get("usage") or {}
-                for key in usage_totals:
-                    value = part_usage.get(key)
-                    if isinstance(value, int):
-                        usage_totals[key] += value
                 any_budget_adjusted = any_budget_adjusted or bool(answer_part.get("output_budget_adjusted"))
                 any_context_truncated = any_context_truncated or bool(answer_part.get("context_truncated"))
                 last_answer = answer_part
@@ -443,6 +506,10 @@ async def _training_plan(
                 **last_answer,
                 "content": content,
                 "usage": usage_totals,
+                "cost_eur": round(total_cost_eur, 8) if priced_calls else None,
+                "elapsed_seconds": round(total_elapsed_seconds, 3),
+                "tokens_per_second": round(timed_output_tokens / total_elapsed_seconds, 3) if total_elapsed_seconds > 0 else None,
+                "generation_calls": generation_calls,
                 "max_output_tokens": requested_max,
                 "requested_max_output_tokens": requested_max,
                 "output_budget_adjusted": any_budget_adjusted,
@@ -469,6 +536,12 @@ async def _training_plan(
             "generation_chunks": generation_chunks,
             "local": answer.get("local"),
             "locale": locale,
+            "quality_profile": str(payload.get("quality_profile") or "standard"),
+            "pricing": answer.get("pricing"),
+            "cost_eur": answer.get("cost_eur"),
+            "elapsed_seconds": answer.get("elapsed_seconds"),
+            "tokens_per_second": answer.get("tokens_per_second"),
+            "generation_calls": answer.get("generation_calls", []),
             **plan_meta,
         }
         run = AiRun(
