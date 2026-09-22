@@ -11,6 +11,7 @@ from pengucoach.coach.context import SOURCE_NOTICE, build_activity_analysis_cont
 from pengucoach.db.models import AiRun, Conversation, Message, User, UserPreference
 from pengucoach.db.session import SessionLocal
 from pengucoach.llm.service import chat, task_settings
+from pengucoach.training_plan.generation import normalize_training_plan_answer, training_plan_instruction
 from worker.celery_app import app
 
 
@@ -201,10 +202,25 @@ async def _training_plan(user_id: str, payload: dict[str, Any]) -> dict[str, Any
             task="training_plan",
             local_only=local_only,
             model_id=_u(payload.get("model_id")),
-            instruction_prompt=prompt,
+            instruction_prompt=training_plan_instruction(prompt),
             requested_max_tokens=payload.get("max_tokens"),
             requested_context_window_tokens=payload.get("context_window_tokens"),
         )
+        content, plan_meta = normalize_training_plan_answer(answer, locale)
+        metadata = {
+            "goal": context["goal"],
+            "usage": answer.get("usage", {}),
+            "context_chars": answer.get("context_chars"),
+            "context_estimated_tokens": answer.get("context_estimated_tokens"),
+            "context_window_tokens": answer.get("context_window_tokens"),
+            "context_budget_tokens": answer.get("context_budget_tokens"),
+            "context_truncated": answer.get("context_truncated", False),
+            "stop_reason": answer.get("stop_reason"),
+            "truncated": answer.get("truncated", False),
+            "local": answer.get("local"),
+            "locale": locale,
+            **plan_meta,
+        }
         run = AiRun(
             user_id=user.id,
             task_type="training_plan",
@@ -214,25 +230,20 @@ async def _training_plan(user_id: str, payload: dict[str, Any]) -> dict[str, Any
             prompt=prompt,
             lookback_days=28,
             max_output_tokens=answer["max_output_tokens"],
-            content=answer["content"],
-            metadata_json={
-                "goal": context["goal"],
-                "usage": answer.get("usage", {}),
-                "context_chars": answer.get("context_chars"),
-                "context_estimated_tokens": answer.get("context_estimated_tokens"),
-                "context_window_tokens": answer.get("context_window_tokens"),
-                "context_budget_tokens": answer.get("context_budget_tokens"),
-                "context_truncated": answer.get("context_truncated", False),
-                "stop_reason": answer.get("stop_reason"),
-                "truncated": answer.get("truncated", False),
-                "local": answer.get("local"),
-                "locale": locale,
-            },
+            content=content,
+            metadata_json=metadata,
         )
         db.add(run)
         await db.commit()
         await db.refresh(run)
-        return {"run_id": str(run.id), **answer, "goal": context["goal"], "created_at": run.created_at.isoformat()}
+        return {
+            "run_id": str(run.id),
+            **answer,
+            "content": content,
+            "metadata": metadata,
+            "goal": context["goal"],
+            "created_at": run.created_at.isoformat(),
+        }
 
 
 @app.task(bind=True, name="worker.tasks.ai.activity_analysis")

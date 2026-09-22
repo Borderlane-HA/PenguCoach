@@ -8,9 +8,9 @@ PenguCoach is designed as a local-first, multi-user platform that reads Garmin C
 
 ## Current alpha scope
 
-Alpha.13 adds Garmin-configured heart-rate and cycling/power zones as first-class coaching context. PenguCoach refreshes zone profiles during Garmin sync, stores them locally, shows their sync state in Coach and Training, and uses the exact Garmin boundaries in activity analysis and training-plan generation. For FIT-backed activities, time-in-zone is calculated locally against those Garmin boundaries. The AI token controls were also hardened for iOS/iPadOS browsers so recommended output limits such as 2,500 or 8,000 tokens remain valid inputs.
+Alpha.14 turns generated training plans into a structured calendar. New plans are stored both as readable coaching output and as validated session/step data, can be reviewed week by week, selectively enabled/disabled and explicitly exported as individual structured workouts to the Garmin Connect calendar. Garmin data synchronization remains read-only; the separate workout write gateway is disabled by default and can only create/schedule selected PenguCoach workouts after the user enables the feature. An export ledger prevents duplicate session/date exports.
 
-`v0.1.0-alpha.13` is the current end-to-end alpha baseline:
+`v0.1.0-alpha.14` is the current end-to-end alpha baseline:
 
 - German and English web UI
 - bright health-first responsive web design with desktop sidebar and mobile navigation dock
@@ -25,7 +25,7 @@ Alpha.13 adds Garmin-configured heart-rate and cycling/power zones as first-clas
 - mandatory safety/development gate after every login
 - Garmin Connect login with MFA
 - encrypted Garmin token persistence; Garmin password is never stored
-- allow-list based **strict read-only** Garmin gateway
+- allow-list based **strict read-only** Garmin data-sync gateway plus a separate opt-in, narrow workout/calendar write gateway
 - configurable automatic sync with jitter, lock, 429 cooldown and reconnect state
 - daily Garmin data ingestion for health, sleep, HRV, stress, Body Battery, hydration, respiration, SpO₂, intensity, training readiness/status, max metrics, body data and activities where the account/device exposes them
 - immutable original FIT download
@@ -41,6 +41,8 @@ Alpha.13 adds Garmin-configured heart-rate and cycling/power zones as first-clas
 - evidence-constrained Coach chat using local Garmin/FIT facts with selectable models and token budgets
 - per-activity AI deep analysis with Training-only / This day / 3-day / 7-day training-recovery context and an editable predefined prompt
 - AI training-plan generation for strength, muscle gain, cardio, hybrid, running, cycling, mobility and custom goals
+- validated structured training-plan sessions/steps with a weekly calendar review, optional-session selection and start-date mapping
+- explicit opt-in Garmin workout export for supported running/cycling/swimming/walking/hiking/strength sessions, with duplicate protection and reload-safe background job progress
 - task-specific default/fallback model routing, bilingual DE/EN prompts, freely configurable context windows and output-token caps with recommended presets
 - clearer AI Studio fixed-model assignment indicator and compact provider/model management actions
 - persisted AI analysis/plan runs plus reload-safe background AI jobs
@@ -50,7 +52,7 @@ Alpha.13 adds Garmin-configured heart-rate and cycling/power zones as first-clas
 - `pengucoach-update`, `pengucoach-backup`, `pengucoach-status`, `pengucoach-db-utf8`
 - Docker Compose for development/alternative deployments
 
-Advanced long-term baselines, a correlation explorer and the full LangGraph multi-agent workflow remain planned work. Training-plan generation in the current alpha remains an AI-assisted planning foundation: it uses the locally stored 7/28-day context but does not write anything back to Garmin.
+Advanced long-term baselines, a correlation explorer and the full LangGraph multi-agent workflow remain planned work. Training-plan generation remains AI-assisted and uses the locally stored 7/28-day context. Garmin write access is limited to the explicit workout/calendar export path; PenguCoach does not create or manage Garmin Coach adaptive plans.
 
 ## Proxmox installation
 
@@ -154,7 +156,8 @@ See [`docs/AI_ANALYSIS_AND_PLANNING.md`](docs/AI_ANALYSIS_AND_PLANNING.md).
 ## Data flow
 
 ```text
-Garmin Connect (read only)     Manual FIT / GPX / TCX import
+Garmin Connect                 Manual FIT / GPX / TCX import
+(read sync; optional workout export)          ↓
         ↓                              ↓
 Raw source records + normalized PostgreSQL activities
         ↓
@@ -169,11 +172,13 @@ PenguCoach interpretation
 
 AI is deliberately near the end of the pipeline. Numbers that can be calculated deterministically are calculated by PenguCoach before an LLM sees the context.
 
-## Garmin read-only policy
+## Garmin access policy
 
-PenguCoach does **not** expose generic access to the Garmin client. `GarminReadOnlyGateway` contains an explicit allow-list of getters/download operations. Methods that upload, edit, delete, schedule, add hydration, add weight, or otherwise mutate Garmin data are unavailable to the application and the AI layer.
+PenguCoach does **not** expose generic access to the Garmin client. Normal synchronization still goes exclusively through `GarminReadOnlyGateway`, an explicit allow-list of getters/download operations. Health, activity, FIT, body and training-data synchronization therefore remains read-only.
 
-The integration uses the unofficial `python-garminconnect` project. Garmin can change its private web services at any time, so the gateway is intentionally isolated and replaceable.
+Alpha.14 adds one deliberately separate exception: `GarminWorkoutGateway`. It is disabled by default, is never passed to the AI layer, and exposes only the operations PenguCoach needs to upload a concrete structured workout, schedule it on a chosen calendar date, and delete an orphaned workout template if scheduling fails. The user must first enable **Training & Kalender → Trainingsplan zu Garmin exportieren** and then explicitly select/confirm sessions in a generated plan. An export ledger blocks duplicate session/date exports. Hydration, weight and other Garmin mutation methods remain unavailable.
+
+The integration uses the unofficial `python-garminconnect` project. Garmin can change its private web services at any time, so both gateways are intentionally isolated and replaceable.
 
 ## Repository layout
 
@@ -181,7 +186,7 @@ The integration uses the unofficial `python-garminconnect` project. Garmin can c
 apps/web/                 Next.js UI
 apps/api/                 FastAPI API and routers
 pengucoach/               Domain/application code
-pengucoach/garmin/        Auth, read-only gateway and sync
+pengucoach/garmin/        Auth, read-only sync gateway and narrow workout export gateway
 pengucoach/fit/           FIT storage/parser/analytics
 pengucoach/imports/       Manual FIT/GPX/TCX activity import
 pengucoach/llm/           Provider adapters and routing

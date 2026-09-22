@@ -7,7 +7,7 @@ PenguCoach is an alpha development project. This release builds on the alpha.7 h
 - Multi-user local authentication and mandatory Development & Health Notice
 - German and English UI foundation
 - PostgreSQL + Alembic, Redis + Celery worker/scheduler
-- Garmin login/MFA, encrypted persisted session tokens and read-only gateway
+- Garmin login/MFA, encrypted persisted session tokens, read-only sync gateway and explicit opt-in workout/calendar export gateway
 - Historical/incremental Garmin health and activity synchronization
 - Original FIT archive, Parquet time series and deterministic activity analytics
 - Activity Detail v2 with overlay/stacked charts, splits, laps, elevation, power, cadence and sensor coverage

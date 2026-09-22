@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.1.0-alpha.14 - 2026-09-21
+
+Training calendar / Garmin workout export release:
+
+- stores newly generated AI training plans as a validated structured plan document in addition to deterministic human-readable Markdown
+- adds a week-by-week calendar view with expandable session details, start-date mapping, required/optional selection and supported/unsupported export states
+- adds explicit **Training & Calendar** Garmin settings; workout export is disabled by default while normal Garmin health/activity/FIT synchronization remains read-only
+- adds a separate narrow `GarminWorkoutGateway` instead of relaxing the existing read-only gateway
+- exports supported running, cycling, swimming, walking, hiking and strength sessions as individual typed Garmin workouts and schedules them on the selected dates
+- supports Garmin heart-rate and power-zone targets in structured endurance workout steps and repeat blocks
+- uses the Garmin exercise catalogue for structured strength sessions
+- adds a per-user export ledger that prevents duplicate exports of the same plan session on the same date and records safe per-session errors
+- cleans up an uploaded workout template if calendar scheduling fails, avoiding known orphan templates from partial exports
+- runs multi-session Garmin exports in the background with reload-safe job polling and progress
+- preserves older prose-only training plans; they remain readable but clearly show that calendar export requires a newly generated structured plan
+- adds a final browser confirmation before any selected workouts are written to Garmin
+- adds regression coverage for structured-plan validation/rendering/date mapping and for the default-off/narrow-write design
+
 ## 0.1.0-alpha.13 - 2026-09-21
 
 ### Added

@@ -8,6 +8,7 @@ app.conf.update(
     timezone="UTC", enable_utc=True,
     task_routes={
         "worker.tasks.garmin_sync.*": {"queue": "garmin"},
+        "worker.tasks.garmin_workouts.*": {"queue": "garmin"},
         "worker.tasks.fit.*": {"queue": "fit"},
         "worker.tasks.scheduler.*": {"queue": "maintenance"},
         "worker.tasks.ai.*": {"queue": "maintenance"},
@@ -18,6 +19,7 @@ app.conf.update(
 )
 app.conf.imports = (
     "worker.tasks.garmin_sync",
+    "worker.tasks.garmin_workouts",
     "worker.tasks.fit",
     "worker.tasks.scheduler",
     "worker.tasks.ai",

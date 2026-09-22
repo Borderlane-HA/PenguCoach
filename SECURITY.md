@@ -4,7 +4,7 @@ PenguCoach processes health, activity, location and authentication data. Securit
 
 ## Security design
 
-- Garmin integration is allow-list/read-only.
+- Garmin data synchronization is allow-list/read-only. The optional workout/calendar exporter is a separate, default-off narrow gateway limited to explicit workout upload/schedule/cleanup actions and is never exposed generically to AI code.
 - Garmin passwords are not stored.
 - Garmin tokens and LLM API keys are encrypted at rest.
 - Browser authentication uses HttpOnly cookies.

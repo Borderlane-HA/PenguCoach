@@ -80,6 +80,7 @@ class GarminSyncSetting(Base):
     sync_activities: Mapped[bool] = mapped_column(Boolean, default=True)
     sync_body: Mapped[bool] = mapped_column(Boolean, default=True)
     sync_training: Mapped[bool] = mapped_column(Boolean, default=True)
+    workout_export_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     historical_days: Mapped[int] = mapped_column(Integer, default=365)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
@@ -99,6 +100,22 @@ class GarminSyncRun(Base):
     domains: Mapped[dict] = mapped_column(JSONB, default=dict)
     error_code: Mapped[str | None] = mapped_column(String(128), nullable=True)
     error_message_safe: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class GarminWorkoutExport(Base):
+    __tablename__ = "garmin_workout_exports"
+    __table_args__ = (UniqueConstraint("user_id", "plan_run_id", "session_id", "scheduled_date"),)
+    id: Mapped[uuid.UUID] = uuid_pk()
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    plan_run_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("ai_runs.id", ondelete="CASCADE"), index=True)
+    session_id: Mapped[str] = mapped_column(String(80), index=True)
+    scheduled_date: Mapped[date] = mapped_column(Date, index=True)
+    workout_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    scheduled_workout_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    status: Mapped[str] = mapped_column(String(32), default="pending")
+    error_message_safe: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
 
 class SourceRecord(Base):

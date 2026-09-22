@@ -46,7 +46,7 @@ The Training page can generate a periodized plan for:
 - mobility,
 - custom goals.
 
-Inputs include experience, plan duration, days per week, typical session duration, available equipment, constraints and a free-text goal. The context uses the previous 7 and 28 days of Garmin/FIT training plus available recovery measurements. Plans are persisted in `ai_runs` and remain read-only with respect to Garmin.
+Inputs include experience, plan duration, days per week, typical session duration, available equipment, constraints and a free-text goal. The context uses the previous 7 and 28 days of Garmin/FIT training plus available recovery measurements. Plans are persisted in `ai_runs`. Since alpha.14, newly generated plans also carry a validated structured calendar representation; users can review/select sessions and, after explicitly enabling the separate Garmin workout exporter, schedule supported structured workouts in Garmin Connect. Normal Garmin data synchronization remains read-only.
 
 ## Model routing
 
