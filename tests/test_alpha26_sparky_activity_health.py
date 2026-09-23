@@ -68,7 +68,12 @@ def test_sparky_sync_supports_multi_year_and_all_data():
     assert "ge=0" in router
     assert '<option value={1826}>' in page
     assert '<option value={0}>' in page
-    assert 'all_data = configured_days <= 0' in sync
+    # Alpha.33 added a deliberately small automatic sync window. Manual sync
+    # still honors the configured range (including 0 = all data), while
+    # incremental sync forces two days. Keep this regression test focused on
+    # the supported behavior instead of the old local variable spelling.
+    assert 'effective_days = 2 if incremental else configured_days' in sync
+    assert 'all_data = effective_days <= 0' in sync
     assert '"/sleep/details"' in sync
     assert 'activities_created' in sync
     assert 'activities_merged' in sync

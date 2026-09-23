@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.0-alpha.34 - 2026-09-23
+
+- Fixes a stale Alpha.26 source-regression test that still expected the pre-Alpha.33 SparkyFitness full-history implementation detail. The backend behavior is unchanged: manual sync honors the configured history range (including All data), while automatic sync uses the Alpha.33 two-day incremental window.
+- Keeps the Alpha.33 SparkyFitness telemetry, timestamp and automatic-sync behavior unchanged; this release is a CI/test maintenance release only.
+
 ## 0.1.0-alpha.33 - 2026-09-23
 
 - SparkyFitness activity details now surface wearable telemetry already stored by Sparky: maximum speed, ascent/descent and minimum/maximum elevation are normalized from nested `telemetry` / provider-detail payloads. Garmin remains authoritative when the same activity is merged from both sources.
