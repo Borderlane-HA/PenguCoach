@@ -63,3 +63,10 @@ SparkyFitness v1.7.x can store wearable workout telemetry (heart rate, GPS, cade
 PenguCoach reads body/check-in values when SparkyFitness exposes them, including weight, height, BMI, body-fat percentage, body-water percentage, muscle mass and bone mass. These connected-source values remain read-only and keep per-metric provenance so Garmin values are not silently overwritten.
 
 Users without a smart scale can enter the same body/profile values manually on the Health page. Manual values are stored locally in PenguCoach and remain the current fallback for each metric until a newer Garmin or SparkyFitness measurement for that metric becomes available. They are included in Coach/training context with `manual` provenance.
+
+
+## Automatic incremental sync (alpha.33)
+
+The connection can run a Garmin-style small automatic sync every 15 minutes to 24 hours. Automatic runs deliberately request only today and yesterday so late Apple Health / HealthKit writes (for example heart-rate telemetry arriving after the workout row) are picked up without re-reading the configured history range. The manual **Sync now** action continues to honour `sync_days`, including multi-year/all-data backfills.
+
+Workout provider telemetry is normalized from SparkyFitness' relational/provider payloads. In addition to average/max heart rate and ascent, PenguCoach reads `avg_speed_mps`, `max_speed_mps`, `elevation_gain_meters`, `elevation_loss_meters`, `min_elevation_meters`, `max_elevation_meters`, cadence and power where SparkyFitness exposes them.

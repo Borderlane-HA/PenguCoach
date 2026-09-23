@@ -337,3 +337,61 @@ def selected_garmin_extras(raw: dict[str, Any] | None) -> dict[str, Any]:
                 result[output_name] = value
                 break
     return result
+
+
+SPARKY_EXTRA_FIELDS: dict[str, tuple[str, ...]] = {
+    "elapsed_duration_s": ("elapsed_time_seconds", "elapsedTimeSeconds", "elapsed_seconds", "elapsedSeconds"),
+    "min_hr_bpm": ("min_heart_rate", "minHeartRate", "min_hr", "heart_rate_min"),
+    "elevation_gain_m": ("elevation_gain_meters", "elevationGainMeters", "elevation_gain", "elevationGain", "totalAscent"),
+    "max_speed_mps": ("max_speed_mps", "maxSpeedMps", "max_speed", "maxSpeed", "maximumSpeed"),
+    "elevation_loss_m": ("elevation_loss_meters", "elevationLossMeters", "elevation_loss", "elevationLoss", "totalDescent"),
+    "min_elevation_m": ("min_elevation_meters", "minElevationMeters", "min_elevation", "minElevation", "minimumElevation"),
+    "max_elevation_m": ("max_elevation_meters", "maxElevationMeters", "max_elevation", "maxElevation", "maximumElevation"),
+    "max_power_w": ("max_power_watts", "maxPowerWatts", "max_power", "maxPower"),
+    "normalized_power_w": ("normalized_power_watts", "normalizedPowerWatts", "normalized_power", "normalizedPower", "normPower"),
+    "max_cadence": ("max_cadence", "maxCadence", "maximumCadence"),
+}
+
+
+def _nested_numeric(mapping: dict[str, Any], keys: tuple[str, ...]) -> float | int | None:
+    """Find a numeric metric in Sparky's relational/provider/telemetry payloads."""
+    queue: list[dict[str, Any]] = [mapping]
+    seen: set[int] = set()
+    while queue:
+        current = queue.pop(0)
+        marker = id(current)
+        if marker in seen:
+            continue
+        seen.add(marker)
+        for key in keys:
+            value = current.get(key)
+            if isinstance(value, (int, float)) and not isinstance(value, bool):
+                return value
+        for key in (
+            "telemetry", "raw_data", "rawData", "exercise_entry_details", "exerciseEntryDetails",
+            "provider_activity_details", "providerActivityDetails", "activity_details", "activityDetails",
+            "activity", "details", "entry", "data", "workout", "session",
+        ):
+            value = current.get(key)
+            if isinstance(value, dict):
+                queue.append(value)
+    return None
+
+
+def selected_activity_extras(raw: dict[str, Any] | None) -> dict[str, Any]:
+    """Return normalized extra metrics for Garmin and/or SparkyFitness.
+
+    Garmin remains authoritative on merged activities. SparkyFitness fills only
+    metrics Garmin did not provide.
+    """
+    raw = raw or {}
+    result = selected_garmin_extras(raw)
+    sparky = raw.get("sparkyfitness")
+    if isinstance(sparky, dict):
+        for output_name, keys in SPARKY_EXTRA_FIELDS.items():
+            if output_name in result:
+                continue
+            value = _nested_numeric(sparky, keys)
+            if value is not None:
+                result[output_name] = value
+    return result

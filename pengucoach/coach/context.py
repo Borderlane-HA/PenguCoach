@@ -10,7 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from pengucoach.db.models import Activity, ActivityMetric, BodyMeasurement, DailyHealth, FitFile, HrvDaily, SleepSession, SourceRecord, User
-from pengucoach.fit.activity_detail import selected_garmin_extras
+from pengucoach.fit.activity_detail import selected_activity_extras
 from pengucoach.fit.service import load_activity_detail
 from pengucoach.garmin.zones import activity_zone_time, training_zone_snapshot
 
@@ -37,7 +37,7 @@ def _activity_garmin(a: Activity) -> dict[str, Any]:
     source = raw.get("source", "garmin")
     if source == "garmin" and "sparkyfitness" in raw:
         source = "garmin+sparkyfitness"
-    extra = selected_garmin_extras(raw) if source in {"garmin", "garmin+sparkyfitness"} else {}
+    extra = selected_activity_extras(raw)
     return {
         "activity_id": str(a.id),
         "garmin_activity_id": a.garmin_activity_id if source in {"garmin", "garmin+sparkyfitness"} else None,

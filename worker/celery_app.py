@@ -16,6 +16,7 @@ app.conf.update(
     },
     beat_schedule={
         "schedule-due-garmin-syncs": {"task": "worker.tasks.scheduler.schedule_due_garmin_syncs", "schedule": 60.0},
+        "schedule-due-sparkyfitness-syncs": {"task": "worker.tasks.scheduler.schedule_due_sparkyfitness_syncs", "schedule": 60.0},
     },
 )
 app.conf.imports = (

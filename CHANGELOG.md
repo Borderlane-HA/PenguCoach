@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.0-alpha.33 - 2026-09-23
+
+- SparkyFitness activity details now surface wearable telemetry already stored by Sparky: maximum speed, ascent/descent and minimum/maximum elevation are normalized from nested `telemetry` / provider-detail payloads. Garmin remains authoritative when the same activity is merged from both sources.
+- Sparky-only activity detail now derives average pace from the available average speed when no FIT time series exists, so walking/running pace is no longer blank merely because the source is Apple Health/SparkyFitness.
+- Provider-detail enrichment considers descent, min/max elevation and max speed part of the required activity-quality set, so compact history rows are enriched when those values are still missing.
+- HealthKit `raw_data.startTime` now outranks Sparky relational midnight placeholders derived from `entry_date`, fixing the misleading `02:00` display when the original Apple workout timestamp is available.
+- Adds configurable SparkyFitness automatic sync (15 min to 24 h). Scheduled syncs are intentionally incremental and read only today + yesterday; manual “Sync now” continues to use the selected history range. The settings page shows the next automatic sync time.
+- Adds migration `0008_sparkyfitness_auto_sync` for the automatic-sync toggle, interval and next-run timestamp.
+
 ## 0.1.0-alpha.32 - 2026-09-23
 
 - SparkyFitness activity quality: HealthKit **Active Calories** / Move-ring rows are treated as daily health instead of workouts, can fill the day's `active_calories` value without overwriting Garmin, and no longer appear in the activity diary. A normal Sparky activity sync also removes legacy synthetic `Active Calories` activities created by earlier alphas.

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
@@ -22,6 +22,8 @@ class ConnectRequest(BaseModel):
     base_url: str = Field(min_length=8, max_length=2048)
     api_key: str = Field(min_length=8, max_length=4096)
     sync_days: int = Field(default=30, ge=0, le=36525)
+    auto_sync_enabled: bool = True
+    sync_interval_minutes: int = Field(default=30, ge=15, le=1440)
     sync_sleep: bool = True
     sync_daily_health: bool = True
     sync_activities: bool = True
@@ -29,6 +31,8 @@ class ConnectRequest(BaseModel):
 
 class SettingsRequest(BaseModel):
     sync_days: int = Field(default=30, ge=0, le=36525)
+    auto_sync_enabled: bool = True
+    sync_interval_minutes: int = Field(default=30, ge=15, le=1440)
     sync_sleep: bool = True
     sync_daily_health: bool = True
     sync_activities: bool = True
@@ -61,7 +65,7 @@ async def status(user: User = Depends(safety_confirmed_user), db: AsyncSession =
             "read_only": True,
             "counts": counts,
             "ranges": ranges,
-            "settings": {"sync_days": 30, "sync_sleep": True, "sync_daily_health": True, "sync_activities": True},
+            "settings": {"sync_days": 30, "auto_sync_enabled": True, "sync_interval_minutes": 30, "sync_sleep": True, "sync_daily_health": True, "sync_activities": True},
         }
     return {
         "connected": conn.status == "connected",
@@ -73,10 +77,13 @@ async def status(user: User = Depends(safety_confirmed_user), db: AsyncSession =
         "ranges": ranges,
         "last_validated_at": conn.last_validated_at,
         "last_successful_sync_at": conn.last_successful_sync_at,
+        "next_sync_at": conn.next_sync_at,
         "last_error_code": conn.last_error_code,
         "last_sync_summary": conn.last_sync_summary or {},
         "settings": {
             "sync_days": conn.sync_days,
+            "auto_sync_enabled": conn.auto_sync_enabled,
+            "sync_interval_minutes": conn.sync_interval_minutes,
             "sync_sleep": conn.sync_sleep,
             "sync_daily_health": conn.sync_daily_health,
             "sync_activities": conn.sync_activities,
@@ -109,6 +116,9 @@ async def connect(payload: ConnectRequest, user: User = Depends(safety_confirmed
         row.api_key_ciphertext = SecretBox().encrypt(payload.api_key)
     row.status = "connected"
     row.sync_days = payload.sync_days
+    row.auto_sync_enabled = payload.auto_sync_enabled
+    row.sync_interval_minutes = payload.sync_interval_minutes
+    row.next_sync_at = datetime.now(timezone.utc) + timedelta(minutes=payload.sync_interval_minutes) if payload.auto_sync_enabled else None
     row.sync_sleep = payload.sync_sleep
     row.sync_daily_health = payload.sync_daily_health
     row.sync_activities = payload.sync_activities
@@ -148,8 +158,14 @@ async def update_settings(payload: SettingsRequest, user: User = Depends(safety_
     row = await _connection(db, user)
     if not row:
         raise HTTPException(status_code=409, detail="SPARKYFITNESS_NOT_CONNECTED")
+    prior_enabled = row.auto_sync_enabled
+    prior_interval = row.sync_interval_minutes
     for field, value in payload.model_dump().items():
         setattr(row, field, value)
+    if not row.auto_sync_enabled:
+        row.next_sync_at = None
+    elif not prior_enabled or prior_interval != row.sync_interval_minutes or row.next_sync_at is None:
+        row.next_sync_at = datetime.now(timezone.utc) + timedelta(minutes=row.sync_interval_minutes)
     await db.commit()
     return payload.model_dump()
 

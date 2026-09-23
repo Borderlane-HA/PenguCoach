@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from pengucoach.auth.dependencies import safety_confirmed_user
 from pengucoach.db.models import Activity, ActivityMetric, FitFile, GarminConnection, User
 from pengucoach.db.session import get_db
-from pengucoach.fit.activity_detail import selected_garmin_extras
+from pengucoach.fit.activity_detail import selected_activity_extras, selected_garmin_extras
 from pengucoach.fit.service import load_activity_detail, load_activity_series
 from pengucoach.imports.manual_activity import MAX_UPLOAD_BYTES, import_manual_activity
 from worker.tasks.fit import analyze_fit
@@ -218,6 +218,7 @@ async def detail(
         } if fit else None,
         # Only expose a curated numeric subset instead of passing Garmin's entire raw payload to the UI.
         "garmin_extra": selected_garmin_extras(row.raw),
+        "activity_extra": selected_activity_extras(row.raw),
     }
 
 

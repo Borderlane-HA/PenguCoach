@@ -120,11 +120,48 @@ def _list_payload(payload: Any) -> list[dict[str, Any]]:
     return []
 
 
+def _source_recorded_dt(item: dict[str, Any]) -> datetime | None:
+    """Prefer the provider's original recorded timestamp over relational day fields.
+
+    HealthKit/Sparky rows can expose a convenience ``start_time`` at midnight
+    (derived from ``entry_date``) while ``raw_data.startTime`` contains the real
+    workout time. The source payload is therefore authoritative when present.
+    """
+    containers: list[dict[str, Any]] = []
+    for parent in (
+        item.get("exercise_entry_details"), item.get("exerciseEntryDetails"), item,
+        item.get("provider_activity_details"), item.get("providerActivityDetails"),
+        item.get("activity_details"), item.get("activityDetails"),
+    ):
+        if not isinstance(parent, dict):
+            continue
+        for raw_name in ("raw_data", "rawData"):
+            raw = _as_mapping(parent.get(raw_name))
+            if raw:
+                containers.append(raw)
+        telemetry = _as_mapping(parent.get("telemetry"))
+        if telemetry:
+            for raw_name in ("raw_data", "rawData"):
+                raw = _as_mapping(telemetry.get(raw_name))
+                if raw:
+                    containers.append(raw)
+    for raw in containers:
+        value = _first(
+            raw, "startTime", "started_at", "start_time", "startAt", "start_at",
+            "timestamp", "entry_timestamp", "entryTimestamp", "logged_at", "loggedAt",
+            "measured_at", "measuredAt",
+        )
+        dt = _as_dt(value)
+        if dt:
+            return dt
+    return None
+
+
 def _session_date(item: dict[str, Any]) -> date | None:
-    # The actual recording timestamp is authoritative. Some HealthKit rows
-    # carry an entry/import date from the day Sparky received them; that must
-    # not move historical workouts onto the sync day.
-    recorded = _as_dt(_nested_first(
+    # The original provider payload wins over relational convenience fields.
+    # This matters when Sparky represents entry_date as midnight while
+    # HealthKit raw_data still contains the exact workout start time.
+    recorded = _source_recorded_dt(item) or _as_dt(_nested_first(
         item, "started_at", "start_time", "startTime", "start_at", "startAt",
         "timestamp", "entry_timestamp", "entryTimestamp", "logged_at", "loggedAt",
         "measured_at", "measuredAt",
@@ -307,10 +344,10 @@ def _sport_family(value: str | None) -> str:
 
 
 def _session_started_at(item: dict[str, Any]) -> datetime | None:
-    # Recording timestamps first.  A relational detail row may have a fresh
-    # ``created_at`` from the Sparky import; treating that as workout time is
-    # what caused historical HealthKit sessions to appear on the import day.
-    recorded = _as_dt(_nested_first(
+    # Prefer provider raw_data first: Sparky can expose a relational midnight
+    # start_time derived from entry_date while HealthKit raw_data.startTime has
+    # the exact recorded time.
+    recorded = _source_recorded_dt(item) or _as_dt(_nested_first(
         item, "started_at", "start_time", "startTime", "start_at", "startAt",
         "timestamp", "entry_timestamp", "entryTimestamp", "logged_at", "loggedAt",
         "measured_at", "measuredAt",
@@ -380,6 +417,10 @@ def _activity_detail_missing(item: dict[str, Any]) -> bool:
         _num(_nested_first(item, "calories_burned", "caloriesBurned", "calories", "active_calories", "activeCalories", "totalEnergyBurned")),
         _num(_nested_first(item, "avg_heart_rate", "avgHeartRate", "averageHeartRate", "average_hr", "avg_hr")),
         _num(_nested_first(item, "elevation_gain_meters", "elevationGainMeters", "elevation_gain", "elevationGain", "totalAscent")),
+        _num(_nested_first(item, "elevation_loss_meters", "elevationLossMeters", "elevation_loss", "elevationLoss", "totalDescent")),
+        _num(_nested_first(item, "min_elevation_meters", "minElevationMeters", "min_elevation", "minElevation", "minimumElevation")),
+        _num(_nested_first(item, "max_elevation_meters", "maxElevationMeters", "max_elevation", "maxElevation", "maximumElevation")),
+        _num(_nested_first(item, "max_speed_mps", "maxSpeedMps", "max_speed", "maxSpeed", "maximumSpeed")),
     )
     # History rows are intentionally compact. Enrich when at least one useful
     # headline metric is absent; the relational entry endpoint is lightweight
@@ -1247,19 +1288,24 @@ async def _read_range_chunks(
     return list(unique.values())
 
 
-async def sync_sparkyfitness(db: AsyncSession, user_id: uuid.UUID, *, progress=None) -> dict[str, Any]:
+async def sync_sparkyfitness(db: AsyncSession, user_id: uuid.UUID, *, progress=None, incremental: bool = False) -> dict[str, Any]:
     conn = await db.scalar(select(SparkyFitnessConnection).where(SparkyFitnessConnection.user_id == user_id))
     if not conn or conn.status != "connected":
         raise ValueError("SPARKYFITNESS_NOT_CONNECTED")
     client = SparkyFitnessClient(conn.base_url, SecretBox().decrypt(conn.api_key_ciphertext), timeout_seconds=45)
     configured_days = int(conn.sync_days if conn.sync_days is not None else 30)
-    all_data = configured_days <= 0
+    # Automatic interval sync is deliberately small: today + yesterday. Manual
+    # sync continues to honour the user's selected history range. This mirrors
+    # Garmin's incremental behavior and avoids re-reading years every 30 min.
+    effective_days = 2 if incremental else configured_days
+    all_data = effective_days <= 0
     end = date.today()
-    start = date(1970, 1, 1) if all_data else end - timedelta(days=max(1, configured_days) - 1)
+    start = date(1970, 1, 1) if all_data else end - timedelta(days=max(1, effective_days) - 1)
     capabilities = dict(conn.capabilities or {})
     summary: dict[str, Any] = {
-        "days": None if all_data else configured_days,
+        "days": None if all_data else effective_days,
         "all": all_data,
+        "incremental": incremental,
         "from": start.isoformat(),
         "to": end.isoformat(),
     }
@@ -1316,9 +1362,15 @@ async def sync_sparkyfitness(db: AsyncSession, user_id: uuid.UUID, *, progress=N
             summary["sleep_fields_filled"] = await _merge_sleep(db, user_id, rows)
         if conn.sync_activities and capabilities.get("activities"):
             summary["activities"] = await _sync_activities(db, client, user_id, None if all_data else start, progress=progress)
-        conn.last_successful_sync_at = datetime.now(timezone.utc)
+        finished = datetime.now(timezone.utc)
+        conn.last_successful_sync_at = finished
         conn.last_sync_summary = summary
         conn.last_error_code = None
+        if getattr(conn, "auto_sync_enabled", True):
+            interval = max(15, int(getattr(conn, "sync_interval_minutes", 30) or 30))
+            conn.next_sync_at = finished + timedelta(minutes=interval)
+        else:
+            conn.next_sync_at = None
         await db.commit()
         return summary
     except Exception as exc:
