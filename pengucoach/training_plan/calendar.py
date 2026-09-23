@@ -21,15 +21,26 @@ def selected_sessions(plan: TrainingPlanDocument, session_ids: list[str] | None)
     return [session for session in plan.sessions if session.id in wanted]
 
 
+def select_session_rows(sessions: list[TrainingSession], session_ids: list[str] | None) -> list[TrainingSession]:
+    """Select sessions after calendar/export overrides have been applied."""
+    if session_ids is None:
+        return list(sessions)
+    wanted = set(session_ids)
+    return [session for session in sessions if session.id in wanted]
+
+
 def apply_session_overrides(
     sessions: list[TrainingSession],
     overrides: dict[str, TrainingSession | dict] | None,
+    *,
+    max_week: int | None = None,
 ) -> list[TrainingSession]:
-    """Apply user edits prepared in the calendar before Garmin export.
+    """Apply the user's Garmin-export calendar draft.
 
-    Identity/scheduling fields stay immutable: an edit may change the visible
-    name, duration, notes, structured steps and strength exercises, but it may
-    not silently move a workout to another week/day or change its sport/id.
+    Content fields and the calendar slot (week/day) may be changed before
+    export. Stable identity fields remain immutable: an edit may never change
+    the session id or sport. Duplicate calendar slots are rejected so drag &
+    drop cannot silently stack two workouts into one visual day.
     """
     if not overrides:
         return list(sessions)
@@ -44,12 +55,13 @@ def apply_session_overrides(
             result.append(original)
             continue
         edited = raw if isinstance(raw, TrainingSession) else TrainingSession.model_validate(raw)
-        if (
-            edited.id != original.id
-            or edited.week != original.week
-            or edited.day != original.day
-            or edited.sport != original.sport
-        ):
+        if edited.id != original.id or edited.sport != original.sport:
             raise ValueError("TRAINING_SESSION_OVERRIDE_IDENTITY_MISMATCH")
+        if max_week is not None and edited.week > max_week:
+            raise ValueError("TRAINING_SESSION_OVERRIDE_OUTSIDE_PLAN")
         result.append(edited)
+
+    slots = [(session.week, session.day) for session in result]
+    if len(slots) != len(set(slots)):
+        raise ValueError("TRAINING_SESSION_OVERRIDE_SLOT_CONFLICT")
     return result

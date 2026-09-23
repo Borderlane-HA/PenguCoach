@@ -19,7 +19,7 @@ from pengucoach.garmin.gateway.workouts import (
     strength_exercise_validation,
     supported_workout_sports,
 )
-from pengucoach.training_plan.calendar import apply_session_overrides, scheduled_date, selected_sessions
+from pengucoach.training_plan.calendar import apply_session_overrides, scheduled_date, select_session_rows
 from pengucoach.training_plan.structured import TrainingPlanDocument, TrainingSession
 from worker.tasks.garmin_workouts import delete_plan, export_plan
 
@@ -170,13 +170,13 @@ async def preview_workout_export(
 ):
     _validate_start(payload.start_date)
     run, plan = await _load_plan(db, user, payload.plan_run_id)
-    sessions = selected_sessions(plan, payload.session_ids)
-    if payload.session_ids is not None and len({x.id for x in sessions}) != len(set(payload.session_ids)):
-        raise HTTPException(status_code=422, detail="UNKNOWN_TRAINING_SESSION")
     try:
-        sessions = apply_session_overrides(sessions, payload.session_overrides)
+        calendar_sessions = apply_session_overrides(list(plan.sessions), payload.session_overrides, max_week=plan.weeks)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    sessions = select_session_rows(calendar_sessions, payload.session_ids)
+    if payload.session_ids is not None and len({x.id for x in sessions}) != len(set(payload.session_ids)):
+        raise HTTPException(status_code=422, detail="UNKNOWN_TRAINING_SESSION")
 
     exports = (await db.scalars(select(GarminWorkoutExport).where(
         GarminWorkoutExport.user_id == user.id,
@@ -233,13 +233,13 @@ async def queue_workout_export(
     if not conn or conn.status != "connected" or not conn.token_ciphertext:
         raise HTTPException(status_code=409, detail="GARMIN_NOT_CONNECTED")
     _, plan = await _load_plan(db, user, payload.plan_run_id)
-    sessions = selected_sessions(plan, payload.session_ids)
-    if payload.session_ids is not None and len({x.id for x in sessions}) != len(set(payload.session_ids)):
-        raise HTTPException(status_code=422, detail="UNKNOWN_TRAINING_SESSION")
     try:
-        sessions = apply_session_overrides(sessions, payload.session_overrides)
+        calendar_sessions = apply_session_overrides(list(plan.sessions), payload.session_overrides, max_week=plan.weeks)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    sessions = select_session_rows(calendar_sessions, payload.session_ids)
+    if payload.session_ids is not None and len({x.id for x in sessions}) != len(set(payload.session_ids)):
+        raise HTTPException(status_code=422, detail="UNKNOWN_TRAINING_SESSION")
     if not sessions:
         raise HTTPException(status_code=422, detail="NO_TRAINING_SESSIONS_SELECTED")
     task = export_plan.apply_async(args=[str(user.id), payload.model_dump(mode="json")], queue="garmin")

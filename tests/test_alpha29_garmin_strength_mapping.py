@@ -52,7 +52,7 @@ def test_future_strength_plan_uses_concrete_movements_not_block_titles():
 
 
 def test_version_surfaces_advance_together():
-    assert 'version = "0.1.0-alpha.29"' in Path("pyproject.toml").read_text()
-    assert '"version": "0.1.0-alpha.29"' in Path("apps/web/package.json").read_text()
-    assert '__version__ = "0.1.0-alpha.29"' in Path("pengucoach/__init__.py").read_text()
-    assert 'app_version: str = "0.1.0-alpha.29"' in Path("pengucoach/common/config.py").read_text()
+    assert 'version = "0.1.0-alpha.30"' in Path("pyproject.toml").read_text()
+    assert '"version": "0.1.0-alpha.30"' in Path("apps/web/package.json").read_text()
+    assert '__version__ = "0.1.0-alpha.30"' in Path("pengucoach/__init__.py").read_text()
+    assert 'app_version: str = "0.1.0-alpha.30"' in Path("pengucoach/common/config.py").read_text()

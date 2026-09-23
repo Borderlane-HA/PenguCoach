@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.0-alpha.30 - 2026-09-22
+
+- Training calendar: sessions that have not yet been exported can be moved by drag & drop before Garmin export.
+- Dropping onto an occupied day swaps both sessions; exported Garmin sessions stay locked.
+- Calendar position changes are stored as export-only drafts alongside the existing duration/step edits and do not modify the AI source plan.
+- Garmin preview/export now validates the complete edited calendar before selecting the requested sessions and rejects duplicate day slots.
+
+
 ## 0.1.0-alpha.29 - 2026-09-22
 
 - Reworks Garmin strength export around the bundled Garmin exercise catalogue instead of growing a fragile hard-coded alias list.

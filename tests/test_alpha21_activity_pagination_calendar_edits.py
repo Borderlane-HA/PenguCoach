@@ -50,12 +50,18 @@ def test_session_override_can_change_duration_and_remove_warmup_without_mutating
     assert len(original.steps) == 3
 
 
-def test_session_override_cannot_move_or_change_sport():
+def test_session_override_can_move_but_cannot_change_stable_identity():
     original = _session()
-    edited = original.model_copy(deep=True)
-    edited.day = 2
+    moved = original.model_copy(deep=True)
+    moved.day = 2
+    result = apply_session_overrides([original], {original.id: moved}, max_week=1)
+    assert result[0].day == 2
+    assert original.day == 1
+
+    wrong_sport = original.model_copy(deep=True)
+    wrong_sport.sport = "cycling"
     with pytest.raises(ValueError, match="TRAINING_SESSION_OVERRIDE_IDENTITY_MISMATCH"):
-        apply_session_overrides([original], {original.id: edited})
+        apply_session_overrides([original], {original.id: wrong_sport})
 
 
 def test_garmin_preview_and_worker_apply_user_calendar_edits():

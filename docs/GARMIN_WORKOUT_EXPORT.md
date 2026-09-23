@@ -1,6 +1,6 @@
 # Garmin workout calendar export
 
-PenguCoach `0.1.0-alpha.14` can turn a newly generated AI training plan into a reviewable weekly calendar and explicitly export selected supported sessions to Garmin Connect.
+PenguCoach can turn a newly generated AI training plan into a reviewable weekly calendar and explicitly export selected supported sessions to Garmin Connect.
 
 ## Flow
 
@@ -55,7 +55,7 @@ The project remains pinned to `garminconnect==0.3.16`. The exporter is built aga
 
 ## Edit before export
 
-The calendar is an export staging area. Open a session and choose **Edit before Garmin** to adjust the copy that will be sent to Garmin Connect without rewriting the stored AI plan. PenguCoach supports changing the workout name, total duration, notes, timed/distance steps, zone targets, repeat counts and strength exercise parameters; individual steps or exercises can also be removed. Draft edits are kept in the browser per plan until the user restores the original or clears browser storage. Session identity, sport, week and weekday remain fixed so an edit cannot silently move an already planned workout.
+The calendar is an export staging area. Open a session and choose **Edit before Garmin** to adjust the copy that will be sent to Garmin Connect without rewriting the stored AI plan. PenguCoach supports changing the workout name, total duration, notes, timed/distance steps, zone targets, repeat counts and strength exercise parameters; individual steps or exercises can also be removed. Draft edits are kept in the browser per plan until the user restores the original or clears browser storage. Session identity and sport stay fixed. Week/day are part of the export draft and may be changed by drag & drop before export; dropping onto an occupied non-exported day swaps the two sessions. Already exported Garmin sessions are locked against calendar moves.
 
 ## Strength exercise mapping
 
