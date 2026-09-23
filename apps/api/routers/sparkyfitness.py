@@ -12,6 +12,7 @@ from pengucoach.db.models import SourceRecord, SparkyFitnessConnection, User
 from pengucoach.db.session import get_db
 from pengucoach.security.crypto import SecretBox
 from pengucoach.sparkyfitness.client import SparkyFitnessClient, SparkyFitnessError, normalize_base_url
+from pengucoach.sparkyfitness.sync import delete_local_sparkyfitness_data
 from worker.tasks.sparkyfitness_sync import sync_user as sync_sparkyfitness_user
 
 router = APIRouter(prefix="/sparkyfitness", tags=["sparkyfitness"])
@@ -169,3 +170,14 @@ async def disconnect(user: User = Depends(safety_confirmed_user), db: AsyncSessi
         await db.delete(row)
         await db.commit()
     return {"disconnected": True, "local_data_preserved": True}
+
+
+@router.delete("/local-data")
+async def delete_local_data(user: User = Depends(safety_confirmed_user), db: AsyncSession = Depends(get_db)):
+    """Delete only PenguCoach's locally imported SparkyFitness data.
+
+    The remote SparkyFitness installation is never modified; the connection and
+    API key stay configured so the user can immediately run a clean re-sync.
+    """
+    result = await delete_local_sparkyfitness_data(db, user.id)
+    return {"deleted": True, "connection_preserved": True, "remote_untouched": True, **result}

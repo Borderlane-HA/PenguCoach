@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.0-alpha.32 - 2026-09-23
+
+- SparkyFitness activity quality: HealthKit **Active Calories** / Move-ring rows are treated as daily health instead of workouts, can fill the day's `active_calories` value without overwriting Garmin, and no longer appear in the activity diary. A normal Sparky activity sync also removes legacy synthetic `Active Calories` activities created by earlier alphas.
+- SparkyFitness timestamps now prefer the actual recording fields (`startTime`, `entry_timestamp`, `logged_at`, etc.) and HealthKit `raw_data` over Sparky `created_at`, fixing historical activities that appeared on their import date. `SourceRecord.observed_at` is populated where an exact measurement time is available.
+- HealthKit v3-style `raw_data`/`telemetry` is parsed, including duration objects, `totalEnergyBurned`, heart-rate, cadence, power and elevation summary fields.
+- Activity enrichment now requests provider details whenever useful workout metrics such as HR/elevation are still missing, not only when distance/duration/calories are missing.
+- Body/check-in imports retain exact measurement timestamps when Sparky supplies them and repair matching legacy midnight body rows instead of duplicating them.
+- SparkyFitness connection settings gain **Delete all SparkyFitness data**, which removes local Sparky imports/provenance while preserving Garmin/manual data, the remote SparkyFitness server and the configured connection for a clean re-sync.
+
 ## 0.1.0-alpha.31 - 2026-09-23
 
 - Health summary cards now show the arithmetic mean of the available measurements inside the selected period instead of repeating the latest non-null value. Missing days stay missing and are not counted as zero.

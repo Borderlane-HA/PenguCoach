@@ -21,6 +21,14 @@ class FakeSparkyClient:
                 'calories_burned': 86.3,
                 'avg_heart_rate': None,
             }
+        if path.startswith('/exercises/activity-details/'):
+            return {
+                'telemetry': {
+                    'avg_heart_rate': 118,
+                    'max_heart_rate': 142,
+                    'elevation_gain_meters': 36,
+                }
+            }
         raise AssertionError(f'unexpected detail request: {path}')
 
 
@@ -37,11 +45,12 @@ async def test_sparky_history_is_enriched_from_relational_exercise_entry():
     }
     client = FakeSparkyClient()
     enriched, requests = await _enrich_activity_item(client, history)
-    assert requests == 1
-    assert client.paths == ['/exercise-entries/hk-1']
+    assert requests == 2
+    assert client.paths == ['/exercise-entries/hk-1', '/exercises/activity-details/hk-1/healthkit']
     assert _duration_seconds(enriched) == 1312  # 21.86 min rounded to seconds
     assert _distance_m(enriched) == pytest.approx(1860.0)
     assert enriched['exercise_entry_details']['calories_burned'] == pytest.approx(86.3)
+    assert enriched['provider_activity_details']['telemetry']['avg_heart_rate'] == 118
 
 
 def test_manual_body_fallback_and_sparky_detail_surfaces_are_shipped():
