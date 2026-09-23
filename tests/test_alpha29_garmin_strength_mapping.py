@@ -1,4 +1,7 @@
 from pathlib import Path
+import json
+import re
+import tomllib
 
 
 def test_garmin_strength_mapping_is_persistent_and_catalog_backed():
@@ -52,7 +55,12 @@ def test_future_strength_plan_uses_concrete_movements_not_block_titles():
 
 
 def test_version_surfaces_advance_together():
-    assert 'version = "0.1.0-alpha.30"' in Path("pyproject.toml").read_text()
-    assert '"version": "0.1.0-alpha.30"' in Path("apps/web/package.json").read_text()
-    assert '__version__ = "0.1.0-alpha.30"' in Path("pengucoach/__init__.py").read_text()
-    assert 'app_version: str = "0.1.0-alpha.30"' in Path("pengucoach/common/config.py").read_text()
+    project_version = tomllib.loads(Path("pyproject.toml").read_text())["project"]["version"]
+    package_version = json.loads(Path("apps/web/package.json").read_text())["version"]
+    init_match = re.search(r'__version__\s*=\s*"([^"]+)"', Path("pengucoach/__init__.py").read_text())
+    config_match = re.search(r'app_version:\s*str\s*=\s*"([^"]+)"', Path("pengucoach/common/config.py").read_text())
+    assert init_match is not None
+    assert config_match is not None
+    assert package_version == project_version
+    assert init_match.group(1) == project_version
+    assert config_match.group(1) == project_version

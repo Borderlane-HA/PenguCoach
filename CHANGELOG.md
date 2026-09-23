@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.0-alpha.31 - 2026-09-23
+
+- Health summary cards now show the arithmetic mean of the available measurements inside the selected period instead of repeating the latest non-null value. Missing days stay missing and are not counted as zero.
+- Health period choices are now **Today**, **Last 7 days**, **This week**, **This month**, **This year** and **All**. Calendar periods run from their natural start date through today.
+- Summary notes show how many days/nights were included in each average and retain Garmin/SparkyFitness provenance. Hydration keeps the latest available target in the selected period.
+- Current body/profile cards remain latest-known values independent of the chart period and are now labelled **Current** to make that behavior explicit.
+- The older Garmin strength regression test now checks version alignment dynamically instead of pinning one exact alpha version, preventing false CI failures on the next release bump.
+
 ## 0.1.0-alpha.30 - 2026-09-22
 
 - Training calendar: sessions that have not yet been exported can be moved by drag & drop before Garmin export.

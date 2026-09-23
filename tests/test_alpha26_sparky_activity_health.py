@@ -53,11 +53,11 @@ def test_activity_diary_exposes_sparky_provenance_and_filtering():
     assert 'Activity.garmin_activity_id > 0' in sync
 
 
-def test_health_cards_use_latest_available_metric_not_last_row_only():
+def test_health_cards_keep_source_provenance_and_period_aggregation():
     page = Path("apps/web/app/health/page.tsx").read_text()
-    assert "function latestWith" in page
-    assert 'latestWith(data.sleep??[],"duration_seconds")' in page
-    assert 'latestWith(data.health??[],"resting_hr")' in page
+    assert "function metricAverage" in page
+    assert 'metricAverage(data.sleep??[],"duration_seconds")' in page
+    assert 'metricAverage(data.health??[],"resting_hr")' in page
     assert "Garmin + SparkyFitness" in page
 
 

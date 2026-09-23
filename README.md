@@ -10,7 +10,7 @@ PenguCoach is designed as a local-first, multi-user platform that reads Garmin C
 
 Alpha.23 adds AI usage and cost transparency across local and cloud models, configurable response-quality profiles, and a dedicated Garmin activity-catalogue repair path. Per-model input/output prices can be stored in AI Studio; completed AI runs snapshot the active prices and actual provider token usage so historical costs stay stable when prices change. Coach, activity analysis and training planning expose Very low / Low / Standard / High response profiles, with Standard retaining the previous behavior. Garmin data synchronization stays read-only; the new activities-only history action fills gaps in the local activity catalogue without repeating years of wellness requests.
 
-`v0.1.0-alpha.24` is the current end-to-end alpha baseline:
+`v0.1.0-alpha.31` is the current end-to-end alpha baseline:
 
 - **SparkyFitness read-only connection:** configurable self-hosted URL + encrypted API key, capability probing, multi-year/all-history sync for sleep, daily/check-in data, HRV/resting-HR custom metrics, body/scale values and paginated workout history. Compact history rows are enriched from SparkyFitness exercise-entry details so HealthKit/Apple Health distance, duration and calories can reach the activity diary. Conservative duplicate matching merges the same Garmin/Sparky workout instead of double-counting it.
 
@@ -37,7 +37,7 @@ Alpha.23 adds AI usage and cost transparency across local and cloud models, conf
 - deterministic FIT analytics: HR/pace/power/cadence drift, aerobic decoupling, pace consistency and data coverage
 - server-side paginated/searchable activity journal across the complete history plus detail view with FIT time series
 - manual activity import without Garmin: FIT, GPX, TCX and ZIP-contained FIT files are stored locally, normalized into the same activity history and analysed with the same deterministic pipeline
-- health overview and historical charts with one consistent 7/30/90 day, 1 year, 5 year or all-data filter across HRV, resting HR, sleep, stress and sport-specific VO₂ max
+- health overview and historical charts with Today / Last 7 days / This week / This month / This year / All filters; top health cards show averages of the available measurements in the selected period while missing days are not treated as zero
 - Ollama, OpenAI, Anthropic, IONOS AI Model Hub, Google Gemini, xAI/Grok and generic OpenAI-compatible provider management
 - optional per-model input/output token pricing plus system-wide AI usage/cost statistics for today, 7 days, 30 days, current year and all time; local models retain token statistics even without prices
 - per-function response profiles (**Very low / Low / Standard / High**) for Coach, activity analysis and training planning, with cost estimates before generation and actual token/cost snapshots after completion
