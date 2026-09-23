@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import re
 import unicodedata
+from collections.abc import Mapping
+from difflib import SequenceMatcher
 from datetime import date
 from typing import Any
 
@@ -172,7 +174,8 @@ def _build_endurance_steps(session: TrainingSession) -> list[ExecutableStep | Re
     return [build(step) for step in session.steps]
 
 
-def _normalise_exercise_name(value: str) -> str:
+def normalize_exercise_name(value: str) -> str:
+    """Normalize a human exercise label for stable per-user mappings."""
     value = value.strip().lower().replace("ß", "ss")
     value = "".join(
         ch for ch in unicodedata.normalize("NFKD", value)
@@ -206,65 +209,198 @@ def _exercise_candidates(name: str) -> list[str]:
     return result
 
 
-def _resolve_strength_exercise(name: str) -> dict[str, str] | None:
-    # 1) Prefer exact Garmin catalogue display names when the model obeyed the
-    # English-name instruction.
-    for candidate in _exercise_candidates(name):
-        resolved = exercises.resolve(candidate)
-        if resolved and resolved.get("category"):
-            return {
-                "category": str(resolved["category"]),
-                "exercise": str(resolved.get("exercise") or ""),
-                "display_name": candidate,
-            }
+def _catalog_rows() -> list[dict[str, str]]:
+    rows = getattr(exercises, "EXERCISES", None) or []
+    result: list[dict[str, str]] = []
+    for row in rows:
+        if isinstance(row, dict):
+            name = str(row.get("name") or row.get("display_name") or "").strip()
+            category = str(row.get("category") or "").strip()
+            exercise_name = str(row.get("exercise") or "").strip()
+        elif isinstance(row, (tuple, list)) and len(row) >= 3:
+            name, category, exercise_name = (str(row[0]).strip(), str(row[1]).strip(), str(row[2]).strip())
+        else:
+            continue
+        if name and category:
+            result.append({"name": name, "category": category, "exercise": exercise_name})
+    return result
 
-    # 2) Map common localized/general labels to known stable Garmin catalogue
-    # identifiers. This fixes existing stored plans too.
-    for candidate in _exercise_candidates(name):
-        alias = _GARMIN_EXERCISE_ALIASES.get(_normalise_exercise_name(candidate))
-        if alias:
-            return {"category": alias[0], "exercise": alias[1], "display_name": candidate}
 
-    # 3) Last safe fallback: case/diacritic-insensitive *exact* display-name
-    # comparison. Do not fuzzy-map a strength movement to a different exercise.
-    catalogue = getattr(exercises, "EXERCISES", None)
-    if catalogue:
-        wanted = {_normalise_exercise_name(x) for x in _exercise_candidates(name)}
-        for row in catalogue:
-            if isinstance(row, (tuple, list)) and len(row) >= 3:
-                display, category, exercise_name = row[0], row[1], row[2]
-                if _normalise_exercise_name(str(display)) in wanted:
-                    return {
-                        "category": str(category),
-                        "exercise": str(exercise_name),
-                        "display_name": str(display),
-                    }
-            elif isinstance(row, dict):
-                display = str(row.get("name") or row.get("display_name") or "")
-                if _normalise_exercise_name(display) in wanted and row.get("category"):
-                    return {
-                        "category": str(row["category"]),
-                        "exercise": str(row.get("exercise") or ""),
-                        "display_name": display,
-                    }
+def catalog_exercise_by_name(name: str) -> dict[str, str] | None:
+    """Resolve an exact Garmin display name, with a normalized exact fallback."""
+    resolved = exercises.resolve(name)
+    if resolved and resolved.get("category"):
+        return {
+            "name": str(resolved.get("name") or name),
+            "category": str(resolved["category"]),
+            "exercise": str(resolved.get("exercise") or ""),
+        }
+    wanted = normalize_exercise_name(name)
+    if not wanted:
+        return None
+    for row in _catalog_rows():
+        if normalize_exercise_name(row["name"]) == wanted:
+            return row
     return None
 
 
-def _build_strength_steps(session: TrainingSession) -> list[RepeatGroup]:
+def search_exercise_catalog(term: str, limit: int = 20) -> list[dict[str, str]]:
+    """Return ranked Garmin catalogue suggestions without auto-selecting fuzzy hits."""
+    limit = max(1, min(int(limit), 100))
+    needle = normalize_exercise_name(term)
+    rows = _catalog_rows()
+    if not needle:
+        return rows[:limit]
+    needle_tokens = set(needle.split())
+
+    def score(row: dict[str, str]) -> tuple[int, float, int, str]:
+        name = normalize_exercise_name(row["name"])
+        name_tokens = set(name.split())
+        if name == needle:
+            bucket = 0
+        elif name.startswith(needle) or needle.startswith(name):
+            bucket = 1
+        elif needle in name:
+            bucket = 2
+        elif needle_tokens and needle_tokens.issubset(name_tokens):
+            bucket = 3
+        elif needle_tokens & name_tokens:
+            bucket = 4
+        else:
+            bucket = 5
+        similarity = SequenceMatcher(None, needle, name).ratio()
+        return (bucket, -similarity, abs(len(name) - len(needle)), row["name"].casefold())
+
+    ranked = sorted(rows, key=score)
+    # Keep fuzzy-only suggestions conservative; they are displayed to the user
+    # and are never applied automatically.
+    useful = [row for row in ranked if score(row)[0] < 5 or -score(row)[1] >= 0.42]
+    return useful[:limit]
+
+
+def _mapping_value(
+    mappings: Mapping[str, Mapping[str, Any]] | None,
+    source_name: str,
+) -> Mapping[str, Any] | None:
+    if not mappings:
+        return None
+    return mappings.get(normalize_exercise_name(source_name))
+
+
+def resolve_strength_exercise(
+    name: str,
+    mappings: Mapping[str, Mapping[str, Any]] | None = None,
+    *,
+    allow_generic_fallback: bool = False,
+) -> dict[str, Any] | None:
+    """Resolve a strength exercise without unsafe fuzzy auto-mapping.
+
+    User mappings intentionally override built-in language aliases, so someone
+    can permanently choose e.g. ``Barbell Back Squat`` for a local label that
+    would otherwise map to Garmin's generic ``Squat``. Unknown movements can
+    optionally fall back to Garmin's real ``Total Body`` catalogue item.
+    """
+    candidates = _exercise_candidates(name)
+
+    # 1) Exact Garmin display names are unambiguous and need no stored mapping.
+    for candidate in candidates:
+        resolved = catalog_exercise_by_name(candidate)
+        if resolved:
+            return {**resolved, "display_name": resolved["name"], "resolution": "exact", "fallback": False}
+
+    # 2) Per-user persisted choice.
+    for candidate in candidates:
+        mapped = _mapping_value(mappings, candidate)
+        if mapped and mapped.get("category"):
+            return {
+                "name": str(mapped.get("display_name") or mapped.get("name") or candidate),
+                "display_name": str(mapped.get("display_name") or mapped.get("name") or candidate),
+                "category": str(mapped["category"]),
+                "exercise": str(mapped.get("exercise") or ""),
+                "resolution": "saved",
+                "fallback": False,
+            }
+
+    # 3) Curated language aliases for existing plans.
+    for candidate in candidates:
+        alias = _GARMIN_EXERCISE_ALIASES.get(normalize_exercise_name(candidate))
+        if alias:
+            display = next((row["name"] for row in _catalog_rows() if row["category"] == alias[0] and row["exercise"] == alias[1]), candidate)
+            return {
+                "name": display,
+                "display_name": display,
+                "category": alias[0],
+                "exercise": alias[1],
+                "resolution": "alias",
+                "fallback": False,
+            }
+
+    if allow_generic_fallback:
+        # ``Total Body`` is an actual Garmin catalogue exercise. This preserves
+        # the whole strength workout when a single AI label is unknown while the
+        # preview clearly tells the user which movement should be mapped.
+        generic = catalog_exercise_by_name("Total Body") or {"name": "Total Body", "category": "TOTAL_BODY", "exercise": "TOTAL_BODY"}
+        return {
+            **generic,
+            "display_name": generic["name"],
+            "resolution": "generic_fallback",
+            "fallback": True,
+        }
+    return None
+
+
+def strength_exercise_validation(
+    session: TrainingSession,
+    mappings: Mapping[str, Mapping[str, Any]] | None = None,
+) -> list[dict[str, Any]]:
+    result: list[dict[str, Any]] = []
+    for index, spec in enumerate(session.strength_exercises):
+        resolved = resolve_strength_exercise(spec.name, mappings, allow_generic_fallback=False)
+        if resolved:
+            result.append({
+                "index": index,
+                "source_name": spec.name,
+                "resolved": True,
+                "mapping_source": resolved["resolution"],
+                "garmin_name": resolved["display_name"],
+                "category": resolved["category"],
+                "exercise": resolved["exercise"],
+                "generic_fallback": False,
+                "suggestions": [],
+            })
+            continue
+        result.append({
+            "index": index,
+            "source_name": spec.name,
+            "resolved": False,
+            "mapping_source": "generic_fallback",
+            "garmin_name": "Total Body",
+            "category": "TOTAL_BODY",
+            "exercise": "TOTAL_BODY",
+            "generic_fallback": True,
+            "suggestions": search_exercise_catalog(spec.name, limit=5),
+        })
+    return result
+
+
+def _build_strength_steps(
+    session: TrainingSession,
+    mappings: Mapping[str, Mapping[str, Any]] | None = None,
+) -> list[RepeatGroup]:
     result: list[RepeatGroup] = []
     order = 1
     for exercise in session.strength_exercises:
-        resolved = _resolve_strength_exercise(exercise.name)
-        if not resolved:
+        resolved = resolve_strength_exercise(exercise.name, mappings, allow_generic_fallback=True)
+        if not resolved:  # defensive: generic fallback should make this unreachable
             raise ValueError(f"GARMIN_EXERCISE_NOT_FOUND:{exercise.name}")
         result.append(
             create_strength_set(
-                resolved["category"],
+                str(resolved["category"]),
                 step_order=order,
                 sets=exercise.sets,
                 reps=exercise.reps,
                 rest_seconds=float(exercise.rest_seconds),
-                exercise_name=resolved["exercise"],
+                exercise_name=str(resolved.get("exercise") or ""),
                 weight_kg=exercise.weight_kg,
             )
         )
@@ -292,14 +428,17 @@ def _build_simple_timed_steps(session: TrainingSession) -> list[ExecutableStep |
     ]
 
 
-def build_typed_workout(session: TrainingSession) -> Any:
+def build_typed_workout(
+    session: TrainingSession,
+    exercise_mappings: Mapping[str, Mapping[str, Any]] | None = None,
+) -> Any:
     exportable, reason = session_exportability(session)
     if not exportable:
         raise ValueError(reason or "SESSION_NOT_EXPORTABLE")
 
     sport_id, sport_key, workout_cls, _ = _SPORT_META[session.sport]
     if session.sport == "strength":
-        steps = _build_strength_steps(session)
+        steps = _build_strength_steps(session, exercise_mappings)
     elif session.sport in _SIMPLE_TIMED_SPORTS:
         steps = _build_simple_timed_steps(session)
     else:
@@ -311,6 +450,15 @@ def build_typed_workout(session: TrainingSession) -> Any:
         workoutSteps=steps,
     )
     description = session.notes.strip() or "Created by PenguCoach"
+    if session.sport == "strength":
+        unresolved = [
+            item["source_name"]
+            for item in strength_exercise_validation(session, exercise_mappings)
+            if item["generic_fallback"]
+        ]
+        if unresolved:
+            note = "Garmin generic fallback (Total Body): " + ", ".join(unresolved)
+            description = (description + " | " + note).strip(" |")
     kwargs = {
         "workoutName": ("PenguCoach · " + session.name)[:120],
         "estimatedDurationInSecs": session.duration_min * 60,
@@ -333,8 +481,12 @@ class GarminWorkoutGateway:
     def __init__(self, client: Garmin) -> None:
         self.__client = client
 
-    def upload_session(self, session: TrainingSession) -> dict[str, Any]:
-        workout = build_typed_workout(session)
+    def upload_session(
+        self,
+        session: TrainingSession,
+        exercise_mappings: Mapping[str, Mapping[str, Any]] | None = None,
+    ) -> dict[str, Any]:
+        workout = build_typed_workout(session, exercise_mappings)
         upload_method = _SPORT_META[session.sport][3]
         if upload_method == "upload_workout":
             return self.__client.upload_workout(workout.to_dict())

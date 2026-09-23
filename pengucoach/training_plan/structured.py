@@ -120,7 +120,8 @@ JSON schema/semantics:
 - a repeat step has repeat>=2 and nested steps. Example: 6 x (3 min interval + 2 min recovery).
 - strength sessions should populate strength_exercises with canonical plain English Garmin exercise names plus sets/reps/rest_seconds;
   prefer simple catalogue names such as Squat, Push-up, Lunge, Plank, Side Plank, Deadlift, Row, Leg Press, Bench Press,
-  and Calf Raise instead of localized names or phrases like "or similar"; steps may be empty for strength.
+  and Calf Raise instead of localized names or phrases like "or similar"; steps may be empty for strength. Each strength_exercises
+  item must be one concrete movement, never a circuit/block title, muscle-group label, superset name or descriptive session heading.
 - for every timed non-strength session, the durations of all steps (including repeat multiplicity) should add up to
   duration_min * 60 within about 60 seconds. Do not duplicate a main/work step merely to fill text.
 - keep intensity conservative when source data is incomplete. Do not invent measured values.

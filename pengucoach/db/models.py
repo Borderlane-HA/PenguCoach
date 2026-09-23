@@ -124,6 +124,20 @@ class GarminSyncRun(Base):
     error_message_safe: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
+class GarminExerciseMapping(Base):
+    __tablename__ = "garmin_exercise_mappings"
+    __table_args__ = (UniqueConstraint("user_id", "source_name_normalized"),)
+    id: Mapped[uuid.UUID] = uuid_pk()
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    source_name: Mapped[str] = mapped_column(String(160))
+    source_name_normalized: Mapped[str] = mapped_column(String(160), index=True)
+    garmin_display_name: Mapped[str] = mapped_column(String(180))
+    garmin_category: Mapped[str] = mapped_column(String(64))
+    garmin_exercise: Mapped[str] = mapped_column(String(160), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
 class GarminWorkoutExport(Base):
     __tablename__ = "garmin_workout_exports"
     __table_args__ = (UniqueConstraint("user_id", "plan_run_id", "session_id", "scheduled_date"),)

@@ -3,15 +3,22 @@ from __future__ import annotations
 import uuid
 from datetime import date
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from pengucoach.auth.dependencies import safety_confirmed_user
-from pengucoach.db.models import AiRun, GarminConnection, GarminSyncSetting, GarminWorkoutExport, User
+from pengucoach.db.models import AiRun, GarminConnection, GarminExerciseMapping, GarminSyncSetting, GarminWorkoutExport, User
 from pengucoach.db.session import get_db
-from pengucoach.garmin.gateway.workouts import session_exportability, supported_workout_sports
+from pengucoach.garmin.gateway.workouts import (
+    catalog_exercise_by_name,
+    normalize_exercise_name,
+    search_exercise_catalog,
+    session_exportability,
+    strength_exercise_validation,
+    supported_workout_sports,
+)
 from pengucoach.training_plan.calendar import apply_session_overrides, scheduled_date, selected_sessions
 from pengucoach.training_plan.structured import TrainingPlanDocument, TrainingSession
 from worker.tasks.garmin_workouts import delete_plan, export_plan
@@ -24,6 +31,102 @@ class WorkoutExportRequest(BaseModel):
     start_date: date
     session_ids: list[str] | None = Field(default=None, max_length=168)
     session_overrides: dict[str, TrainingSession] = Field(default_factory=dict, max_length=168)
+
+
+
+
+class ExerciseMappingRequest(BaseModel):
+    source_name: str = Field(min_length=1, max_length=160)
+    garmin_name: str = Field(min_length=1, max_length=180)
+
+
+def _mapping_payload(row: GarminExerciseMapping) -> dict[str, str]:
+    return {
+        "source_name": row.source_name,
+        "source_name_normalized": row.source_name_normalized,
+        "display_name": row.garmin_display_name,
+        "category": row.garmin_category,
+        "exercise": row.garmin_exercise,
+    }
+
+
+async def _load_exercise_mappings(db: AsyncSession, user_id: uuid.UUID) -> dict[str, dict[str, str]]:
+    rows = (await db.scalars(select(GarminExerciseMapping).where(GarminExerciseMapping.user_id == user_id))).all()
+    return {row.source_name_normalized: _mapping_payload(row) for row in rows}
+
+
+@router.get("/exercise-catalog")
+async def exercise_catalog(
+    query: str = Query(default="", max_length=120),
+    limit: int = Query(default=20, ge=1, le=100),
+    user: User = Depends(safety_confirmed_user),
+):
+    del user  # authentication is intentional even though the catalogue is local/static
+    return {"query": query, "items": search_exercise_catalog(query, limit=limit)}
+
+
+@router.get("/exercise-mappings")
+async def exercise_mappings(
+    user: User = Depends(safety_confirmed_user),
+    db: AsyncSession = Depends(get_db),
+):
+    rows = (await db.scalars(select(GarminExerciseMapping).where(
+        GarminExerciseMapping.user_id == user.id
+    ).order_by(GarminExerciseMapping.source_name))).all()
+    return {"items": [_mapping_payload(row) for row in rows]}
+
+
+@router.put("/exercise-mappings")
+async def save_exercise_mapping(
+    payload: ExerciseMappingRequest,
+    user: User = Depends(safety_confirmed_user),
+    db: AsyncSession = Depends(get_db),
+):
+    source_key = normalize_exercise_name(payload.source_name)
+    if not source_key:
+        raise HTTPException(status_code=422, detail="GARMIN_EXERCISE_SOURCE_NAME_INVALID")
+    garmin = catalog_exercise_by_name(payload.garmin_name)
+    if not garmin:
+        raise HTTPException(status_code=422, detail="GARMIN_EXERCISE_CATALOG_ENTRY_INVALID")
+    row = await db.scalar(select(GarminExerciseMapping).where(
+        GarminExerciseMapping.user_id == user.id,
+        GarminExerciseMapping.source_name_normalized == source_key,
+    ))
+    if not row:
+        row = GarminExerciseMapping(
+            user_id=user.id,
+            source_name=payload.source_name.strip(),
+            source_name_normalized=source_key,
+            garmin_display_name=garmin["name"],
+            garmin_category=garmin["category"],
+            garmin_exercise=garmin["exercise"],
+        )
+        db.add(row)
+    else:
+        row.source_name = payload.source_name.strip()
+        row.garmin_display_name = garmin["name"]
+        row.garmin_category = garmin["category"]
+        row.garmin_exercise = garmin["exercise"]
+    await db.commit()
+    await db.refresh(row)
+    return _mapping_payload(row)
+
+
+@router.delete("/exercise-mappings")
+async def delete_exercise_mapping(
+    source_name: str = Query(min_length=1, max_length=160),
+    user: User = Depends(safety_confirmed_user),
+    db: AsyncSession = Depends(get_db),
+):
+    source_key = normalize_exercise_name(source_name)
+    row = await db.scalar(select(GarminExerciseMapping).where(
+        GarminExerciseMapping.user_id == user.id,
+        GarminExerciseMapping.source_name_normalized == source_key,
+    ))
+    if row:
+        await db.delete(row)
+        await db.commit()
+    return {"deleted": bool(row), "source_name": source_name}
 
 
 def _validate_start(start_date: date) -> None:
@@ -80,11 +183,13 @@ async def preview_workout_export(
         GarminWorkoutExport.plan_run_id == run.id,
     ))).all()
     existing = {(item.session_id, item.scheduled_date): item for item in exports}
+    exercise_map = await _load_exercise_mappings(db, user.id)
     items = []
     for session in sessions:
         target_date = scheduled_date(payload.start_date, session)
         exportable, reason = session_exportability(session)
         prior = existing.get((session.id, target_date))
+        strength_validation = strength_exercise_validation(session, exercise_map) if session.sport == "strength" else []
         items.append({
             "session_id": session.id,
             "week": session.week,
@@ -100,6 +205,8 @@ async def preview_workout_export(
             "workout_id": prior.workout_id if prior else None,
             "error": prior.error_message_safe if prior and prior.status == "error" else None,
             "edited": session.id in payload.session_overrides,
+            "strength_validation": strength_validation,
+            "generic_fallback_count": sum(1 for item in strength_validation if item["generic_fallback"]),
         })
     return {
         "plan_run_id": str(run.id),

@@ -7,7 +7,7 @@ from typing import Any, Callable
 
 from sqlalchemy import select
 
-from pengucoach.db.models import AiRun, GarminConnection, GarminSyncSetting, GarminWorkoutExport, User
+from pengucoach.db.models import AiRun, GarminConnection, GarminExerciseMapping, GarminSyncSetting, GarminWorkoutExport, User
 from pengucoach.db.session import SessionLocal
 from pengucoach.garmin.gateway.factory import serialize_refreshed_token, workout_gateway_from_connection
 from pengucoach.garmin.gateway.workouts import session_exportability
@@ -71,6 +71,17 @@ async def _export_plan(
             raise RuntimeError("NO_TRAINING_SESSIONS_SELECTED")
 
         gateway, raw_client = await workout_gateway_from_connection(connection)
+        mapping_rows = (await db.scalars(select(GarminExerciseMapping).where(
+            GarminExerciseMapping.user_id == uid
+        ))).all()
+        exercise_mappings = {
+            row.source_name_normalized: {
+                "display_name": row.garmin_display_name,
+                "category": row.garmin_category,
+                "exercise": row.garmin_exercise,
+            }
+            for row in mapping_rows
+        }
         results: list[dict[str, Any]] = []
         exported = skipped = failed = unsupported = 0
         total = len(sessions)
@@ -124,7 +135,7 @@ async def _export_plan(
 
             workout_id: str | None = None
             try:
-                upload = await asyncio.to_thread(gateway.upload_session, session)
+                upload = await asyncio.to_thread(gateway.upload_session, session, exercise_mappings)
                 workout_id = _id_from(upload, "workoutId", "id")
                 if not workout_id:
                     raise RuntimeError("GARMIN_WORKOUT_ID_MISSING")

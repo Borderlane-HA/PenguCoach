@@ -56,3 +56,9 @@ The project remains pinned to `garminconnect==0.3.16`. The exporter is built aga
 ## Edit before export
 
 The calendar is an export staging area. Open a session and choose **Edit before Garmin** to adjust the copy that will be sent to Garmin Connect without rewriting the stored AI plan. PenguCoach supports changing the workout name, total duration, notes, timed/distance steps, zone targets, repeat counts and strength exercise parameters; individual steps or exercises can also be removed. Draft edits are kept in the browser per plan until the user restores the original or clears browser storage. Session identity, sport, week and weekday remain fixed so an edit cannot silently move an already planned workout.
+
+## Strength exercise mapping
+
+PenguCoach validates every structured strength movement against the exercise catalogue bundled with the pinned `garminconnect` version before export. Exact Garmin display names resolve automatically. Existing localized aliases remain supported, but user-selected mappings take precedence so recurring AI/local labels can be mapped once and reused.
+
+The calendar exposes unresolved movements before export and provides a searchable Garmin catalogue picker. Mapping choices are stored per user in `garmin_exercise_mappings`. An unresolved movement does not abort the entire strength session: until mapped, PenguCoach uses Garmin's real `Total Body` catalogue entry for that one movement and adds the original unresolved label to the workout description. This fallback is intentionally visible in the preview and is not presented as an exact match.

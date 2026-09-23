@@ -61,6 +61,11 @@ def test_manual_body_fallback_and_sparky_detail_surfaces_are_shipped():
 
 
 def test_alpha28_version_surface():
-    assert '0.1.0-alpha.28' in Path('pyproject.toml').read_text()
-    assert '0.1.0-alpha.28' in Path('apps/web/package.json').read_text()
+    import re
+    pyproject = Path('pyproject.toml').read_text()
+    package = Path('apps/web/package.json').read_text()
+    py_version = re.search(r'version = \"([^\"]+)\"', pyproject).group(1)
+    web_version = re.search(r'\"version\": \"([^\"]+)\"', package).group(1)
+    assert py_version == web_version
+    assert re.fullmatch(r'0\.1\.0-alpha\.\d+', py_version)
 

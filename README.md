@@ -51,7 +51,7 @@ Alpha.23 adds AI usage and cost transparency across local and cloud models, conf
 - selectable training-plan briefing window (3/7/14/21/28 days, default 7) plus opt-in context categories for training/FIT, Garmin zones, sleep/HRV, recovery/stress and steps/hydration
 - live approximate Ollama output-token progress and user cancellation for Coach, activity analysis and training-plan background jobs
 - validated structured training-plan sessions/steps with weekly calendar review, optional-session selection, start-date mapping, legacy-plan management and deletion; pre-export Garmin drafts can adjust duration, steps, targets and strength exercises without mutating the AI plan
-- explicit opt-in Garmin workout export for running/cycling/swimming/walking/hiking/strength plus timed cardio/mobility/yoga/Pilates/HIIT sessions, with localized strength-exercise resolution, duplicate protection, reload-safe progress and optional Garmin cleanup when a plan is deleted
+- explicit opt-in Garmin workout export for running/cycling/swimming/walking/hiking/strength plus timed cardio/mobility/yoga/Pilates/HIIT sessions, with pre-export Garmin exercise validation, searchable per-user strength mappings, a visible `Total Body` safety fallback for unknown movements, duplicate protection, reload-safe progress and optional Garmin cleanup when a plan is deleted
 - task-specific default/fallback model routing, bilingual DE/EN prompts, freely configurable context windows and output-token caps with recommended presets
 - clearer AI Studio fixed-model assignment indicator and compact provider/model management actions
 - persisted AI analysis/plan runs plus reload-safe background AI jobs
@@ -186,6 +186,8 @@ AI is deliberately near the end of the pipeline. Numbers that can be calculated 
 PenguCoach does **not** expose generic access to the Garmin client. Normal synchronization still goes exclusively through `GarminReadOnlyGateway`, an explicit allow-list of getters/download operations. Health, activity, FIT, body and training-data synchronization therefore remains read-only.
 
 Alpha.14 adds one deliberately separate exception: `GarminWorkoutGateway`. It is disabled by default, is never passed to the AI layer, and exposes only the operations PenguCoach needs to upload a concrete structured workout, schedule it on a chosen calendar date, and delete an orphaned workout template if scheduling fails. The user must first enable **Training & Kalender → Trainingsplan zu Garmin exportieren** and then explicitly select/confirm sessions in a generated plan. An export ledger blocks duplicate session/date exports. Hydration, weight and other Garmin mutation methods remain unavailable.
+
+Strength export is validated against the Garmin exercise catalogue before upload. Exact catalogue names and safe built-in aliases resolve automatically; otherwise the calendar shows the missing mapping and lets the user search Garmin's catalogue. A selected mapping is stored per user and reused for the same local/AI exercise label in later plans. If the user exports before mapping an unknown movement, only that movement falls back visibly to Garmin's real `Total Body` exercise instead of failing the complete strength workout.
 
 The integration uses the unofficial `python-garminconnect` project. Garmin can change its private web services at any time, so both gateways are intentionally isolated and replaceable.
 

@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.0-alpha.29 - 2026-09-22
+
+- Reworks Garmin strength export around the bundled Garmin exercise catalogue instead of growing a fragile hard-coded alias list.
+- Validates every strength exercise before export and shows its concrete Garmin mapping in the plan calendar.
+- Adds a searchable Garmin exercise picker for unresolved strength movements; user choices are persisted and reused for equal future exercise names.
+- Unknown strength movements no longer fail the complete workout: until mapped, PenguCoach uses Garmin's real `Total Body` catalogue entry as a visible generic fallback and records the original names in the workout description.
+- Adds migration `0007_garmin_exercise_mappings` for per-user strength mapping persistence.
+- Keeps manual Garmin workout edits and prior failed strength sessions retry-safe.
+- Makes the older version regression test future-proof so later alpha releases do not fail merely because the version advanced.
+
 ## 0.1.0-alpha.28 - 2026-09-22
 
 - SparkyFitness activity sync now enriches compact history rows from `/exercise-entries/{id}` before materializing them, matching SparkyFitness' own preference for relational activity stats. HealthKit/Apple Health sessions can therefore carry their stored distance, duration, calories, heart rate, cadence, speed and elevation into PenguCoach instead of showing zero/empty summary cards.
