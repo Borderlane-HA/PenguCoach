@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.0-alpha.35 - 2026-09-23
+
+- README refresh: adds a new wide PenguCoach hero banner at the top of the repository front page, combining Health, AI Coach and Training Planning/Calendar views in the same visual style as the PenguLab marketing header.
+- No backend or frontend runtime behavior changes; this is a repository presentation/documentation update only.
+
 ## 0.1.0-alpha.34 - 2026-09-23
 
 - Fixes a stale Alpha.26 source-regression test that still expected the pre-Alpha.33 SparkyFitness full-history implementation detail. The backend behavior is unchanged: manual sync honors the configured history range (including All data), while automatic sync uses the Alpha.33 two-day incremental window.

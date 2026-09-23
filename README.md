@@ -1,5 +1,9 @@
 # PenguCoach
 
+<p align="center">
+  <img src="docs/images/pengucoach-readme-hero.png" alt="PenguCoach hero banner with health insights, AI coaching and training planning" width="100%" />
+</p>
+
 **Self-hosted AI Training & Health Coach** · **Selbst gehosteter KI-Trainings- und Gesundheitscoach**
 
 > **Development project / Entwicklungsprojekt.** PenguCoach analyses fitness, training and wellness data. It is not a medical device and does not replace qualified medical, sports, physiotherapy or nutrition advice. Every new login requires confirmation of the Development & Health Notice.
@@ -10,7 +14,7 @@ PenguCoach is designed as a local-first, multi-user platform that reads Garmin C
 
 Alpha.23 adds AI usage and cost transparency across local and cloud models, configurable response-quality profiles, and a dedicated Garmin activity-catalogue repair path. Per-model input/output prices can be stored in AI Studio; completed AI runs snapshot the active prices and actual provider token usage so historical costs stay stable when prices change. Coach, activity analysis and training planning expose Very low / Low / Standard / High response profiles, with Standard retaining the previous behavior. Garmin data synchronization stays read-only; the new activities-only history action fills gaps in the local activity catalogue without repeating years of wellness requests.
 
-`v0.1.0-alpha.34` is the current end-to-end alpha baseline:
+`v0.1.0-alpha.35` is the current end-to-end alpha baseline:
 
 - **SparkyFitness read-only connection:** configurable self-hosted URL + encrypted API key, capability probing, multi-year/all-history manual sync plus a small configurable interval sync for today + yesterday. Sleep, daily/check-in data, HRV/resting-HR custom metrics, body/scale values and paginated workout history are imported. Compact history rows are enriched from SparkyFitness exercise-entry/provider details so HealthKit/Apple Health heart rate, speed, elevation, distance, duration and calories can reach the activity diary. Conservative duplicate matching merges the same Garmin/Sparky workout instead of double-counting it.
 
