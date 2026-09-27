@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.0-alpha.37 - 2026-09-27
+
+- Fixes a Coach context-compaction regression that could discard the top-level `recent_activities`, health, sleep and HRV arrays whenever a 7/28-day context exceeded the Coach input budget. The model could then incorrectly claim there were no activities or recovery data even though PenguCoach had them.
+- Coach compaction now preserves 7/28-day training summaries, a compact data inventory, recent activities, the newest health/sleep/HRV rows, body profile and training zones. Chronological recovery arrays keep the newest values instead of the oldest values when shortened.
+- Adds an explicit Coach data inventory so the prompt can verify activity/health/sleep/HRV availability before reporting data as missing.
+- Fixes hidden conversation reuse: reloading the Coach no longer silently restores an old conversation ID while showing an empty “New conversation” screen. A visible **New** action now starts a genuinely fresh conversation.
+- Coach answer metadata now shows the number of activity, health, sleep and HRV records that were actually supplied, making context problems immediately visible.
+- Updates the source notice for direct Withings health/body data.
+
 ## 0.1.0-alpha.36 - 2026-09-23
 
 - Adds **Withings** as a first-class read-only connection using the official OAuth2/Public API flow. Client secret plus access/refresh tokens are encrypted at rest, OAuth state is validated and expiring, and rotated refresh tokens replace the previous token after refresh.

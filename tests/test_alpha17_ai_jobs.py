@@ -50,3 +50,10 @@ def test_docs_keep_current_reference_material_not_per_release_change_lists():
     assert "AI_STUDIO.md" in names
     assert "GARMIN_WORKOUT_EXPORT.md" in names
     assert "GARMIN_HISTORY_AND_VO2.md" in names
+
+
+def test_coach_ui_does_not_silently_restore_hidden_old_conversation():
+    coach = Path("apps/web/app/coach/page.tsx").read_text()
+    assert 'else{localStorage.removeItem("pengucoach_conversation");setCid(undefined)}' in coach
+    assert 'function newConversation()' in coach
+    assert 'dataBits=[' in coach

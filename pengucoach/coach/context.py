@@ -17,10 +17,10 @@ from pengucoach.garmin.zones import activity_zone_time, training_zone_snapshot
 
 SOURCE_NOTICE = (
     "Each summary contains a source field. Direct Garmin summaries are authoritative Garmin totals when present; "
-    "SparkyFitness is a secondary read-only source that can include Apple Health and other providers and may overlap "
-    "with direct Garmin data. Do not double-count apparently identical sessions. manual_upload summaries come from "
-    "imported FIT/GPX/TCX files. PenguCoach analytics are locally calculated supplements. Missing values are null and "
-    "must not be invented."
+    "Withings is a direct read-only health/body source; SparkyFitness is a secondary read-only source that can include "
+    "Apple Health and other providers and may overlap with direct Garmin data. Do not double-count apparently identical "
+    "sessions. manual_upload summaries come from imported FIT/GPX/TCX files. PenguCoach analytics are locally calculated "
+    "supplements. Missing values are null and must not be invented."
 )
 
 
@@ -329,6 +329,17 @@ async def build_coach_context(db: AsyncSession, user: User, days: int = 30) -> d
         "source_notice": SOURCE_NOTICE,
         "training_zones": zones,
         "period_days": days,
+        "data_inventory": {
+            "activity_count": len(activities),
+            "health_days": len(health),
+            "sleep_days": len(sleep),
+            "hrv_days": len(hrv),
+            "sparkyfitness_unmaterialized_sessions": len(sparky_sessions),
+            "latest_activity_at": activities[0].started_at if activities else None,
+            "latest_health_date": health[-1].date if health else None,
+            "latest_sleep_date": sleep[-1].date if sleep else None,
+            "latest_hrv_date": hrv[-1].date if hrv else None,
+        },
         "summary_7d": _window_summary(list(activities), end, min(7, days)),
         "summary_28d": _window_summary(list(activities), end, min(28, days)),
         "health_30d": _health_payload(health),

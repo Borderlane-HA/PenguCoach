@@ -153,15 +153,18 @@ Do not invent health data. Reply exclusively in English."""
 
 COACH_CHAT_PROMPT_DE = """Beantworte die Frage des Nutzers anhand des bereitgestellten Garmin- und PenguCoach-Kontexts.
 Nutze konkrete Werte, wenn sie relevant sind, unterscheide Messwerte von Interpretation und sage klar, wenn die Datenlage
-für eine Aussage nicht ausreicht. Nutze Garmin-Trainingszonen aus training_zones, wenn die Frage Intensität, Puls oder Leistung betrifft.
-Wenn die Frage keinen Trainings-/Gesundheitskontext benötigt, antworte direkt und ignoriere
+für eine Aussage nicht ausreicht. Bevor du behauptest, dass Aktivitäten, Gesundheits-, Schlaf- oder HRV-Daten fehlen,
+prüfe data_inventory sowie die zugehörigen Kontextlisten und Zusammenfassungen; melde niemals "keine Daten", wenn
+Inventar oder Summaries Datensätze ausweisen. Nutze Garmin-Trainingszonen aus training_zones, wenn die Frage Intensität,
+Puls oder Leistung betrifft. Wenn die Frage keinen Trainings-/Gesundheitskontext benötigt, antworte direkt und ignoriere
 irrelevante Trainingsdaten. Antworte ausschließlich auf Deutsch."""
 
 COACH_CHAT_PROMPT_EN = """Answer the user's question from the supplied Garmin and PenguCoach context.
 Use concrete values when relevant, distinguish measured facts from interpretation, and state when the available data is
-insufficient. Use Garmin training zones from training_zones when the question concerns intensity, heart rate or power.
-If the question does not require training/wellness context, answer directly and ignore irrelevant training data.
-Reply exclusively in English."""
+insufficient. Before claiming that activities, health, sleep or HRV data are absent, inspect data_inventory and the relevant
+context arrays/summaries; never report "no data" when the inventory or summaries show records. Use Garmin training zones
+from training_zones when the question concerns intensity, heart rate or power. If the question does not require
+training/wellness context, answer directly and ignore irrelevant training data. Reply exclusively in English."""
 
 # Compatibility exports used by older tests/integrations.
 DEEP_ACTIVITY_PROMPT = DEEP_ACTIVITY_PROMPT_EN
@@ -298,89 +301,141 @@ def _json_size(value: Any) -> tuple[str, int]:
 
 
 def _bounded_context(context: dict[str, Any], max_chars: int) -> tuple[str, dict[str, Any]]:
-    """Keep the context valid JSON while enforcing a deterministic input budget."""
+    """Keep the context valid JSON while enforcing a deterministic input budget.
+
+    Coach context uses top-level recent_activities/health_30d/sleep_30d/hrv_30d keys,
+    while activity analysis and training planning primarily use lookback. Compaction
+    must preserve the shape that belongs to the active task; otherwise a large Coach
+    context can accidentally be reduced to an empty lookback object.
+    """
     working = copy.deepcopy(context)
     payload, size = _json_size(working)
     original_size = size
     if size <= max_chars:
         return payload, {"context_chars": size, "context_estimated_tokens": max(1, size // 4), "context_truncated": False}
 
-    list_paths = [
-        ("activity", "splits"),
-        ("lookback", "activities"),
-        ("lookback", "health"),
-        ("lookback", "sleep"),
-        ("lookback", "hrv"),
-        ("recent_activities",),
-        ("health_30d",),
-        ("sleep_30d",),
-        ("hrv_30d",),
+    # Keep the newest observations for chronological wellness/lookback arrays.
+    # recent_activities and Sparky sessions are already newest-first. FIT splits keep
+    # their natural beginning because they describe the current activity sequentially.
+    list_rules = [
+        (("activity", "splits"), 8, "head"),
+        (("lookback", "activities"), 8, "tail"),
+        (("lookback", "daily_health"), 8, "tail"),
+        (("lookback", "health"), 8, "tail"),
+        (("lookback", "sleep"), 8, "tail"),
+        (("lookback", "hrv"), 8, "tail"),
+        (("recent_activities",), 8, "head"),
+        (("sparkyfitness_sessions",), 6, "head"),
+        (("health_30d",), 8, "tail"),
+        (("sleep_30d",), 8, "tail"),
+        (("hrv_30d",), 8, "tail"),
     ]
-    for path in list_paths:
+    for path, keep, side in list_rules:
         node: Any = working
         for key in path[:-1]:
             node = node.get(key, {}) if isinstance(node, dict) else {}
         key = path[-1]
         values = node.get(key) if isinstance(node, dict) else None
-        if isinstance(values, list) and len(values) > 8:
-            node[key] = values[:8]
+        if isinstance(values, list) and len(values) > keep:
+            node[key] = values[:keep] if side == "head" else values[-keep:]
             node[f"{key}_truncated"] = True
         payload, size = _json_size(working)
         if size <= max_chars:
             break
 
     if size > max_chars:
-        compact: dict[str, Any] = {
-            "source_notice": working.get("source_notice"),
-            "activity": working.get("activity"),
-            "lookback": {
-                "days": working.get("lookback", {}).get("days"),
-                "from": working.get("lookback", {}).get("from"),
-                "to": working.get("lookback", {}).get("to"),
-                "selected_data": working.get("lookback", {}).get("selected_data"),
-                "summary_period": working.get("lookback", {}).get("summary_period"),
-                "summary_recent_7d": working.get("lookback", {}).get("summary_recent_7d"),
-                # Activity analysis still uses these legacy summary keys.
-                "summary_3d": working.get("lookback", {}).get("summary_3d"),
-                "summary_7d": working.get("lookback", {}).get("summary_7d"),
-                "summary_28d": working.get("lookback", {}).get("summary_28d"),
-                "activities": (working.get("lookback", {}).get("activities") or [])[:6],
-                "daily_health": (working.get("lookback", {}).get("daily_health") or [])[-7:],
-                "sleep": (working.get("lookback", {}).get("sleep") or [])[-7:],
-                "hrv": (working.get("lookback", {}).get("hrv") or [])[-7:],
-            },
-            "goal": working.get("goal"),
-            "training_zones": working.get("training_zones"),
-            "context_truncated": True,
-        }
-        payload, size = _json_size(compact)
-        if size > max_chars and isinstance(compact.get("activity"), dict):
-            # An activity-analysis request must never lose the activity itself.
-            # Reduce the current-session payload before discarding lookback data.
-            activity = compact["activity"]
-            compact["activity"] = {
-                "garmin": activity.get("garmin"),
-                "pengucoach": activity.get("pengucoach"),
-                "fit_analytics_source": activity.get("fit_analytics_source"),
-                "fit_analytics": activity.get("fit_analytics"),
-                "training_zones": activity.get("training_zones"),
-                "time_in_zones": activity.get("time_in_zones"),
-                "splits_source": activity.get("splits_source"),
-                "splits": (activity.get("splits") or [])[:2],
-                "context_compacted": True,
+        is_coach_context = any(key in working for key in (
+            "recent_activities", "health_30d", "sleep_30d", "hrv_30d", "summary_28d"
+        ))
+        if is_coach_context:
+            compact = {
+                "source_notice": working.get("source_notice"),
+                "period_days": working.get("period_days"),
+                "data_inventory": working.get("data_inventory"),
+                "summary_7d": working.get("summary_7d"),
+                "summary_28d": working.get("summary_28d"),
+                "recent_activities": (working.get("recent_activities") or [])[:6],
+                "sparkyfitness_sessions": (working.get("sparkyfitness_sessions") or [])[:3],
+                "health_30d": (working.get("health_30d") or [])[-7:],
+                "sleep_30d": (working.get("sleep_30d") or [])[-7:],
+                "hrv_30d": (working.get("hrv_30d") or [])[-7:],
+                "body_profile": working.get("body_profile"),
+                "training_zones": working.get("training_zones"),
+                "context_truncated": True,
             }
             payload, size = _json_size(compact)
-        if size > max_chars and isinstance(compact.get("activity"), dict):
-            activity = compact["activity"]
-            compact["activity"] = {
-                "garmin": activity.get("garmin"),
-                "pengucoach": activity.get("pengucoach"),
-                "training_zones": activity.get("training_zones"),
-                "time_in_zones": activity.get("time_in_zones"),
-                "context_compacted": True,
+
+            # Reduce detail progressively, but never discard all evidence that data
+            # exists. The inventory and 7/28-day summaries stay in every fallback.
+            if size > max_chars:
+                compact["recent_activities"] = (compact.get("recent_activities") or [])[:4]
+                compact["sparkyfitness_sessions"] = (compact.get("sparkyfitness_sessions") or [])[:2]
+                compact["health_30d"] = (compact.get("health_30d") or [])[-4:]
+                compact["sleep_30d"] = (compact.get("sleep_30d") or [])[-4:]
+                compact["hrv_30d"] = (compact.get("hrv_30d") or [])[-4:]
+                payload, size = _json_size(compact)
+            if size > max_chars:
+                compact["recent_activities"] = [
+                    {"garmin": item.get("garmin")} if isinstance(item, dict) else item
+                    for item in (compact.get("recent_activities") or [])[:3]
+                ]
+                compact["sparkyfitness_sessions"] = (compact.get("sparkyfitness_sessions") or [])[:1]
+                compact["health_30d"] = (compact.get("health_30d") or [])[-2:]
+                compact["sleep_30d"] = (compact.get("sleep_30d") or [])[-2:]
+                compact["hrv_30d"] = (compact.get("hrv_30d") or [])[-2:]
+                payload, size = _json_size(compact)
+        else:
+            compact = {
+                "source_notice": working.get("source_notice"),
+                "activity": working.get("activity"),
+                "lookback": {
+                    "days": working.get("lookback", {}).get("days"),
+                    "from": working.get("lookback", {}).get("from"),
+                    "to": working.get("lookback", {}).get("to"),
+                    "selected_data": working.get("lookback", {}).get("selected_data"),
+                    "summary_period": working.get("lookback", {}).get("summary_period"),
+                    "summary_recent_7d": working.get("lookback", {}).get("summary_recent_7d"),
+                    # Activity analysis still uses these legacy summary keys.
+                    "summary_3d": working.get("lookback", {}).get("summary_3d"),
+                    "summary_7d": working.get("lookback", {}).get("summary_7d"),
+                    "summary_28d": working.get("lookback", {}).get("summary_28d"),
+                    "activities": (working.get("lookback", {}).get("activities") or [])[-6:],
+                    "daily_health": (working.get("lookback", {}).get("daily_health") or [])[-7:],
+                    "sleep": (working.get("lookback", {}).get("sleep") or [])[-7:],
+                    "hrv": (working.get("lookback", {}).get("hrv") or [])[-7:],
+                },
+                "goal": working.get("goal"),
+                "training_zones": working.get("training_zones"),
+                "context_truncated": True,
             }
-            compact["context_note"] = "Lookback and detailed FIT context were reduced to preserve the current activity."
             payload, size = _json_size(compact)
+            if size > max_chars and isinstance(compact.get("activity"), dict):
+                # An activity-analysis request must never lose the activity itself.
+                # Reduce the current-session payload before discarding lookback data.
+                activity = compact["activity"]
+                compact["activity"] = {
+                    "garmin": activity.get("garmin"),
+                    "pengucoach": activity.get("pengucoach"),
+                    "fit_analytics_source": activity.get("fit_analytics_source"),
+                    "fit_analytics": activity.get("fit_analytics"),
+                    "training_zones": activity.get("training_zones"),
+                    "time_in_zones": activity.get("time_in_zones"),
+                    "splits_source": activity.get("splits_source"),
+                    "splits": (activity.get("splits") or [])[:2],
+                    "context_compacted": True,
+                }
+                payload, size = _json_size(compact)
+            if size > max_chars and isinstance(compact.get("activity"), dict):
+                activity = compact["activity"]
+                compact["activity"] = {
+                    "garmin": activity.get("garmin"),
+                    "pengucoach": activity.get("pengucoach"),
+                    "training_zones": activity.get("training_zones"),
+                    "time_in_zones": activity.get("time_in_zones"),
+                    "context_compacted": True,
+                }
+                compact["context_note"] = "Lookback and detailed FIT context were reduced to preserve the current activity."
+                payload, size = _json_size(compact)
     return payload, {
         "context_chars": size,
         "context_estimated_tokens": max(1, size // 4),
