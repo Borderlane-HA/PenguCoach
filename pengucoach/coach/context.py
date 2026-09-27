@@ -124,11 +124,19 @@ def _window_summary(rows: list[Activity], end_date: date, days: int) -> dict[str
 
 def _row_source(raw: dict[str, Any] | None) -> str:
     data = raw or {}
-    if "sparkyfitness" not in data:
-        return "garmin"
-    # New rows created only from SparkyFitness contain just the namespaced raw payload.
-    # Existing Garmin rows retain their original raw keys and are therefore mixed-source.
-    return "sparkyfitness" if set(data.keys()) <= {"sparkyfitness"} else "garmin+sparkyfitness"
+    metric_sources = data.get("_metric_sources") if isinstance(data, dict) else None
+    if isinstance(metric_sources, dict) and metric_sources:
+        values = {str(value) for value in metric_sources.values() if value}
+        order = ("withings", "garmin", "sparkyfitness", "manual")
+        ordered = [name for name in order if name in values]
+        ordered.extend(sorted(values - set(ordered)))
+        if ordered:
+            return "+".join(ordered)
+    has_withings = any(key in data for key in ("withings", "withings_activity", "withings_measurements"))
+    has_sparky = "sparkyfitness" in data
+    non_meta = {key for key in data if not str(key).startswith("_") and key not in {"withings", "withings_activity", "withings_measurements", "sparkyfitness"}}
+    sources = (["withings"] if has_withings else []) + (["garmin"] if non_meta else []) + (["sparkyfitness"] if has_sparky else [])
+    return "+".join(sources) if sources else "garmin"
 
 
 def _compact_sparky_session(record: SourceRecord) -> dict[str, Any]:
@@ -201,15 +209,19 @@ BODY_CONTEXT_FIELDS = (
 def _body_snapshot(rows: list[BodyMeasurement]) -> dict[str, Any] | None:
     result: dict[str, Any] = {"sources": {}, "measured_at": None}
     latest_dt = None
-    for row in sorted(rows, key=lambda x: x.measured_at, reverse=True):
-        for field in BODY_CONTEXT_FIELDS:
-            if result.get(field) is None:
-                value = getattr(row, field, None)
-                if value is not None:
-                    result[field] = value
-                    result["sources"][field] = _metric_source(row.raw, field)
-                    if latest_dt is None or row.measured_at > latest_dt:
-                        latest_dt = row.measured_at
+    source_priority = {"withings": 40, "garmin": 30, "sparkyfitness": 20, "manual": 10}
+    for field in BODY_CONTEXT_FIELDS:
+        candidates = [row for row in rows if getattr(row, field, None) is not None]
+        if not candidates:
+            continue
+        newest_day = max(row.measured_at.date() for row in candidates)
+        same_day = [row for row in candidates if row.measured_at.date() == newest_day]
+        same_day.sort(key=lambda row: (source_priority.get(_metric_source(row.raw, field), 0), row.measured_at), reverse=True)
+        row = same_day[0]
+        result[field] = getattr(row, field)
+        result["sources"][field] = _metric_source(row.raw, field)
+        if latest_dt is None or row.measured_at > latest_dt:
+            latest_dt = row.measured_at
     if all(result.get(field) is None for field in BODY_CONTEXT_FIELDS):
         return None
     result["measured_at"] = latest_dt

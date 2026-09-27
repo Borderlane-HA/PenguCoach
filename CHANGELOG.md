@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.0-alpha.36 - 2026-09-23
+
+- Adds **Withings** as a first-class read-only connection using the official OAuth2/Public API flow. Client secret plus access/refresh tokens are encrypted at rest, OAuth state is validated and expiring, and rotated refresh tokens replace the previous token after refresh.
+- Imports Withings body/scale measurements (weight, height, body fat, muscle, bone and hydration/body-water where available), daily activity (steps/distance/calories) and sleep summaries. Blood pressure, pulse, SpO2 and other returned measure groups are retained in raw source records for future dedicated health cards without inventing unsupported dashboard values.
+- Adds manual Withings history sync plus configurable automatic sync from 15 minutes to 24 hours. Incremental body sync uses Withings `lastupdate`; recurring daily-activity/sleep refresh is intentionally limited to today + yesterday.
+- Adds deterministic source precedence for overlapping body metrics: the newest measurement date wins; on the same date the order is **Withings > Garmin > SparkyFitness > Manual**. Garmin daily/body sync also preserves direct Withings-owned fields.
+- Adds the Withings settings page, sidebar connection entry, test/sync controls, sync-domain toggles, local-data deletion and disconnect. Local deletion leaves the remote Withings account untouched.
+- Withings workout/activity import is deliberately deferred in this first version so Garmin/SparkyFitness remain the workout sources and duplicate sessions are not introduced.
+- Adds migration `0009_withings_connection` and scheduler/Celery support for automatic Withings synchronization.
+
 ## 0.1.0-alpha.35 - 2026-09-23
 
 - README refresh: adds a new wide PenguCoach hero banner at the top of the repository front page, combining Health, AI Coach and Training Planning/Calendar views in the same visual style as the PenguLab marketing header.

@@ -13,10 +13,12 @@ app.conf.update(
         "worker.tasks.scheduler.*": {"queue": "maintenance"},
         "worker.tasks.ai.*": {"queue": "maintenance"},
         "worker.tasks.sparkyfitness_sync.*": {"queue": "maintenance"},
+        "worker.tasks.withings_sync.*": {"queue": "maintenance"},
     },
     beat_schedule={
         "schedule-due-garmin-syncs": {"task": "worker.tasks.scheduler.schedule_due_garmin_syncs", "schedule": 60.0},
         "schedule-due-sparkyfitness-syncs": {"task": "worker.tasks.scheduler.schedule_due_sparkyfitness_syncs", "schedule": 60.0},
+        "schedule-due-withings-syncs": {"task": "worker.tasks.scheduler.schedule_due_withings_syncs", "schedule": 60.0},
     },
 )
 app.conf.imports = (
@@ -26,4 +28,5 @@ app.conf.imports = (
     "worker.tasks.scheduler",
     "worker.tasks.ai",
     "worker.tasks.sparkyfitness_sync",
+    "worker.tasks.withings_sync",
 )

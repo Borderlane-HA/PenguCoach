@@ -11,7 +11,7 @@ type H={available:boolean;steps?:number;resting_hr?:number;stress_avg?:number;bo
 type A={id:string;name?:string;sport_type?:string;distance_m?:number;duration_seconds?:number;avg_hr?:number;started_at?:string};
 const dur=(s?:number)=>s?`${Math.floor(s/3600)}h ${Math.round((s%3600)/60)}m`:"—";
 const sportGlyph=(s?:string)=>{const v=(s||"").toLowerCase();if(v.includes("run"))return "RUN";if(v.includes("bike")||v.includes("cycling"))return "BIKE";if(v.includes("swim"))return "SWIM";if(v.includes("strength")||v.includes("weight"))return "GYM";return "MOVE"};
-const sourceLabel=(source?:string)=>source==="sparkyfitness"?"SparkyFitness":source==="garmin+sparkyfitness"?"Garmin + SparkyFitness":source==="manual"?"Manuell":source||"Garmin";
+const sourceLabel=(source?:string)=>{if(!source)return "Garmin";const map:Record<string,string>={withings:"Withings",garmin:"Garmin",sparkyfitness:"SparkyFitness",manual:"Manuell"};return source.split("+").map(x=>map[x]??x).join(" + ")};
 
 export default function Today(){
   const{lang}=useI18n();

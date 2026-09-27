@@ -6,7 +6,8 @@ PenguCoach processes health, activity, location and authentication data. Securit
 
 - Garmin data synchronization is allow-list/read-only. The optional workout/calendar exporter is a separate, default-off narrow gateway limited to explicit workout upload/schedule/cleanup actions and is never exposed generically to AI code.
 - Garmin passwords are not stored.
-- Garmin tokens and LLM API keys are encrypted at rest.
+- Withings access is read-only and limited to the OAuth scopes needed for profile/metrics/activity retrieval; PenguCoach does not write measurements back to Withings.
+- Garmin tokens, Withings OAuth/client secrets and LLM API keys are encrypted at rest.
 - Browser authentication uses HttpOnly cookies.
 - The safety notice is required after every new application login.
 - Cloud AI processing of user health/training context is disabled until the user opts in.

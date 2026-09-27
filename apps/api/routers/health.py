@@ -43,12 +43,24 @@ def _source(raw: dict | None) -> str:
     if data.get("source") == "manual_body":
         return "manual"
     metric_sources = data.get("_metric_sources") if isinstance(data, dict) else None
-    if isinstance(metric_sources, dict) and metric_sources and set(metric_sources.values()) == {"manual"}:
-        return "manual"
-    if "sparkyfitness" not in data:
-        return "garmin"
-    non_meta = {key for key in data.keys() if not str(key).startswith("_")}
-    return "sparkyfitness" if non_meta <= {"sparkyfitness"} else "garmin+sparkyfitness"
+    if isinstance(metric_sources, dict) and metric_sources:
+        values = {str(value) for value in metric_sources.values() if value}
+        order = ("withings", "garmin", "sparkyfitness", "manual")
+        ordered = [name for name in order if name in values]
+        ordered.extend(sorted(values - set(ordered)))
+        if ordered:
+            return "+".join(ordered)
+    has_withings = any(key in data for key in ("withings", "withings_activity", "withings_measurements"))
+    has_sparky = "sparkyfitness" in data
+    non_meta = {key for key in data.keys() if not str(key).startswith("_") and key not in {"withings", "withings_activity", "withings_measurements", "sparkyfitness"}}
+    sources = []
+    if has_withings:
+        sources.append("withings")
+    if non_meta:
+        sources.append("garmin")
+    if has_sparky:
+        sources.append("sparkyfitness")
+    return "+".join(sources) if sources else "garmin"
 
 
 def _metric_source(raw: dict | None, field: str, default: str | None = None) -> str | None:
@@ -102,15 +114,22 @@ def _body_latest(rows: list[BodyMeasurement]) -> dict[str, Any] | None:
         return None
     result: dict[str, Any] = {"measured_at": None, "sources": {}}
     latest_dt: datetime | None = None
-    for row in sorted(rows, key=lambda item: item.measured_at, reverse=True):
-        for field in BODY_FIELDS:
-            if result.get(field) is None:
-                value = getattr(row, field)
-                if value is not None:
-                    result[field] = value
-                    result["sources"][field] = _metric_source(row.raw, field)
-                    if latest_dt is None or row.measured_at > latest_dt:
-                        latest_dt = row.measured_at
+    source_priority = {"withings": 40, "garmin": 30, "sparkyfitness": 20, "manual": 10}
+    for field in BODY_FIELDS:
+        candidates = [row for row in rows if getattr(row, field) is not None]
+        if not candidates:
+            continue
+        newest_day = max(row.measured_at.date() for row in candidates)
+        same_day = [row for row in candidates if row.measured_at.date() == newest_day]
+        same_day.sort(
+            key=lambda row: (source_priority.get(_metric_source(row.raw, field) or "", 0), row.measured_at),
+            reverse=True,
+        )
+        row = same_day[0]
+        result[field] = getattr(row, field)
+        result["sources"][field] = _metric_source(row.raw, field)
+        if latest_dt is None or row.measured_at > latest_dt:
+            latest_dt = row.measured_at
     result["measured_at"] = latest_dt
     if all(result.get(field) is None for field in BODY_FIELDS):
         return None
@@ -268,7 +287,7 @@ async def save_manual_body_measurement(
     row = next((item for item in rows if (item.raw or {}).get("source") == "manual_body"), None)
     if row is None:
         # Keep the manual snapshot at the end of its calendar day. A measurement
-        # from Garmin/SparkyFitness on a later day naturally supersedes it, while
+        # from Garmin/Withings/SparkyFitness on a later day naturally supersedes it, while
         # the manual fallback remains available indefinitely if no newer value
         # exists for a specific metric.
         row = BodyMeasurement(

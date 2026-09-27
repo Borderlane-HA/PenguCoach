@@ -58,8 +58,12 @@ def _metric_sources(raw: dict[str, Any] | None) -> dict[str, str]:
 def _merge_raw_payload(existing: dict[str, Any] | None, payload: dict[str, Any], sources: dict[str, str]) -> dict[str, Any]:
     merged = dict(payload)
     old = existing or {}
-    if isinstance(old.get("sparkyfitness"), dict):
-        merged["sparkyfitness"] = old["sparkyfitness"]
+    # Preserve namespaced secondary/direct-source payloads when Garmin refreshes
+    # the flattened daily snapshot. Metric provenance decides which source is
+    # currently effective for a field.
+    for key in ("sparkyfitness", "withings", "withings_activity", "withings_measurements"):
+        if key in old:
+            merged[key] = old[key]
     merged["_metric_sources"] = sources
     return merged
 def _first_text(payload: Any, *keys: str) -> str | None:
@@ -146,6 +150,11 @@ async def _upsert_health(db: AsyncSession, user: User, day: date, data: dict[str
     intensity = data.get("intensity") or {}
 
     def apply(field: str, value: Any, *, clear_missing: bool = True) -> None:
+        # A direct Withings value is the preferred source for an overlapping
+        # same-day metric. Garmin still refreshes its raw payload, but it must
+        # not silently replace the direct-source value.
+        if sources.get(field) == "withings":
+            return
         if value is not None:
             setattr(row, field, value)
             sources[field] = "garmin"
@@ -213,6 +222,8 @@ async def _upsert_sleep(db: AsyncSession, user: User, day: date, payload: Any) -
         "min_spo2": _first_number(payload, "lowestSpO2Value", "minSpO2"),
     }
     for field, value in values.items():
+        if sources.get(field) == "withings":
+            continue
         setattr(row, field, value)
         if value is not None:
             sources[field] = "garmin"
@@ -236,6 +247,8 @@ async def _upsert_hrv(db: AsyncSession, user: User, day: date, payload: Any) -> 
         "garmin_status": _first_text(payload, "status", "hrvStatus"),
     }
     for field, value in values.items():
+        if sources.get(field) == "withings":
+            continue
         setattr(row, field, value)
         if value is not None:
             sources[field] = "garmin"
@@ -272,6 +285,8 @@ async def _upsert_body(db: AsyncSession, user: User, day: date, payload: Any) ->
         "bone_mass_kg": kg("boneMass", "boneMassKg", "boneMassInGrams"),
     }
     for field, value in values.items():
+        if sources.get(field) == "withings":
+            continue
         setattr(row, field, value)
         if value is not None:
             sources[field] = "garmin"
@@ -301,8 +316,9 @@ async def upsert_garmin_profile(db: AsyncSession, user: User, payload: Any, *, d
         row = BodyMeasurement(user_id=user.id, measured_at=measured_at, raw={})
         db.add(row)
     sources = _metric_sources(row.raw)
-    row.height_cm = height
-    sources["height_cm"] = "garmin"
+    if sources.get("height_cm") != "withings":
+        row.height_cm = height
+        sources["height_cm"] = "garmin"
     row.raw = _merge_raw_payload(row.raw, payload, sources)
 
 

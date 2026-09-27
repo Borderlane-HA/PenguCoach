@@ -4,10 +4,11 @@ from datetime import datetime, timedelta, timezone
 from celery import shared_task
 from sqlalchemy import select
 
-from pengucoach.db.models import GarminConnection, GarminSyncSetting, SparkyFitnessConnection
+from pengucoach.db.models import GarminConnection, GarminSyncSetting, SparkyFitnessConnection, WithingsConnection
 from pengucoach.db.session import SessionLocal
 from worker.tasks.garmin_sync import sync_user as sync_garmin_user
 from worker.tasks.sparkyfitness_sync import sync_user as sync_sparkyfitness_user
+from worker.tasks.withings_sync import sync_user as sync_withings_user
 
 
 async def _schedule():
@@ -51,3 +52,26 @@ async def _schedule_sparkyfitness():
 
 @shared_task(name="worker.tasks.scheduler.schedule_due_sparkyfitness_syncs")
 def schedule_due_sparkyfitness_syncs(): return asyncio.run(_schedule_sparkyfitness())
+
+
+async def _schedule_withings():
+    now = datetime.now(timezone.utc); queued = 0
+    async with SessionLocal() as db:
+        rows = (await db.scalars(select(WithingsConnection).where(
+            WithingsConnection.status == "connected",
+            WithingsConnection.auto_sync_enabled.is_(True),
+        ))).all()
+        for conn in rows:
+            if conn.next_sync_at and conn.next_sync_at > now:
+                continue
+            interval = max(15, int(conn.sync_interval_minutes or 60))
+            conn.next_sync_at = now + timedelta(minutes=interval)
+            await db.flush()
+            sync_withings_user.apply_async(args=[str(conn.user_id), True], queue="maintenance")
+            queued += 1
+        await db.commit()
+    return {"queued": queued}
+
+
+@shared_task(name="worker.tasks.scheduler.schedule_due_withings_syncs")
+def schedule_due_withings_syncs(): return asyncio.run(_schedule_withings())
