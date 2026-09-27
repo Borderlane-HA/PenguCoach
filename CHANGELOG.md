@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.1.0-alpha.39 — Personal fitness companion
+
+- Adds a user-owned profile, explicit editable memories, restored chat history and bounded extractive recaps.
+- Adds daily check-ins, transparent daily briefing, weekly comparisons, goals/milestones and per-activity feedback.
+- Persists calendars across devices; compares planned sessions to actual activities conservatively; previews and applies adjustments with revision checks and Garmin export guards.
+- Lets users review and save individual sessions from coach answers. Adds context presets and duplicate-activity review.
+- Gives Today and Coach a softer fitness-focused layout; fixes stretched first-message bubbles, mobile illustration clipping and narrow response-profile controls.
+- Sends `think: false` for Ollama chats, rejects blank/incomplete streams, prioritizes explicit completion reasons over token counts, and budgets instruction text and personal context.
+- Adds migration `0011_coach_companion`; retains existing imported data and keeps Withings retired.
+
+
 ## 0.1.0-alpha.38 - 2026-09-27
 
 - Unifies body snapshots and per-metric source handling across Today, Health and all AI contexts. Actual measurement time wins, including within one day; older imports and missing values cannot erase newer readings. BMI uses the effective weight and height. Undated profile values are explicit fallbacks.

@@ -2,6 +2,7 @@
 
 import {useEffect,useMemo,useState} from "react";
 import {sourceLabel,measuredLabel,localDate} from "../../lib/sources";
+import DailyCompanion from "../../components/DailyCompanion";
 import SourceOverview from "../../components/SourceOverview";
 import AppShell from "../../components/AppShell";
 import SparkLine from "../../components/SparkLine";
@@ -40,7 +41,7 @@ export default function Today(){
     <section className="dashboard-hero">
       <div className="dashboard-hero-copy">
         <span className="eyebrow">{date}</span>
-        <h1>{bi(lang,"Dein Gesundheits- und Trainingsüberblick","Your health & training overview")}</h1>
+        <h1>{bi(lang,"Dein Tag. Deine Balance.","Your day. Your balance.")}</h1>
         <p>{bi(lang,"Dein Tag, deine Bewegung, deine Erholung. Alle verfügbaren Daten an einem Ort.","Your day, your movement, your recovery. All available data in one place.")}</p>
         <div className="hero-actions"><a className="primary-link" href="/coach">✦ {bi(lang,"Coach fragen","Ask Coach")}</a><a className="soft-link" href="/activities">{bi(lang,"Aktivitäten öffnen","Open activities")} →</a></div>
       </div>
@@ -53,6 +54,7 @@ export default function Today(){
       </div>
     </section>
 
+    <DailyCompanion/>
     <section className="health-metric-grid">{cards.filter(c=>!["battery","ready"].includes(c.tone)||c.value!=="—").map(c=><div className={`health-metric-card tone-${c.tone}`} key={c.label}><div className="health-metric-top"><span className="health-metric-dot"/><span className="metric-label">{c.label}</span></div><div className="metric-value">{String(c.value)}</div><div className="kpi-note">{c.note}</div></div>)}<div className="health-metric-card tone-vo2 vo2-dual-card"><div className="health-metric-top"><span className="health-metric-dot"/><span className="metric-label">VO₂max</span></div><div className="vo2-dual-values"><div><small>{bi(lang,"Laufen","Running")}</small><strong>{h?.vo2max_running??"—"}</strong></div><div><small>{bi(lang,"Rad","Cycling")}</small><strong>{h?.vo2max_cycling??"—"}</strong></div></div><div className="kpi-note">ml/kg/min · {Array.from(new Set([h?.sources?.vo2max_running,h?.sources?.vo2max_cycling].filter(Boolean))).map(s=>sourceLabel(s,lang)).join(" + ")||"—"}</div></div></section>
 
     <section className="dashboard-main-grid">

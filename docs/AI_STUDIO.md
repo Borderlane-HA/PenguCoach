@@ -46,3 +46,8 @@ Large structured plans are not forced through one huge JSON completion. Plans wi
 ## Privacy
 
 Cloud-health AI remains disabled per user by default. External providers are not eligible for health/training context until the user explicitly permits cloud AI in Privacy settings. Local Ollama remains available without that cloud permission.
+
+
+## Coach companion and output-limit troubleshooting
+
+See [COACH_COMPANION.md](COACH_COMPANION.md) for memory, history, daily briefings and plan integration. All Ollama task requests now explicitly disable thinking. A blank response is an error, never a successful empty chat message. Explicit provider completion reasons override token-count heuristics. Context compaction preserves valid JSON and reserves space for task instructions and personal context. Custom model templates still need to support Ollama's thinking control; see the official [Ollama chat API](https://docs.ollama.com/api/chat) and [thinking documentation](https://ollama.com/blog/thinking).

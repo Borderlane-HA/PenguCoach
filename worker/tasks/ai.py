@@ -4,12 +4,14 @@ import asyncio
 import copy
 import math
 import uuid
+from datetime import datetime, timezone
 from collections.abc import Callable
 from typing import Any
 
 import httpx
 from sqlalchemy import select
 
+from pengucoach.coach.companion import add_personal_context, conversation_excerpt
 from pengucoach.coach.context import SOURCE_NOTICE, build_activity_analysis_context, build_coach_context, build_training_plan_context
 from pengucoach.db.models import AiRun, Conversation, Message, User, UserPreference
 from pengucoach.db.session import SessionLocal
@@ -176,15 +178,15 @@ async def _coach_chat(
         message = str(payload["message"]).strip()
         conversation_id = _u(payload.get("conversation_id"))
         conversation = await db.get(Conversation, conversation_id) if conversation_id else None
-        if conversation and conversation.user_id != user.id:
+        if conversation_id and (not conversation or conversation.user_id != user.id):
             raise RuntimeError("CONVERSATION_NOT_FOUND")
         if not conversation:
             conversation = Conversation(user_id=user.id, title=message[:80])
             db.add(conversation)
             await db.flush()
-        db.add(Message(conversation_id=conversation.id, role="user", content=message))
+        db.add(Message(conversation_id=conversation.id, role="user", content=message, created_at=datetime.now(timezone.utc)))
         await db.flush()
-        rows = (await db.scalars(select(Message).where(Message.conversation_id == conversation.id).order_by(Message.created_at))).all()
+        rows = await conversation_excerpt(db, conversation)
         messages = [{"role": x.role, "content": x.content} for x in rows]
 
         context_mode = str(payload.get("context_mode") or "auto")
@@ -199,6 +201,7 @@ async def _coach_chat(
         else:
             context = {"source_notice": SOURCE_NOTICE, "period_days": 0, "note": "No training context required for this question."}
 
+        await add_personal_context(db, user, context, payload, conversation)
         local_only = await _privacy(db, user)
         answer = await chat(
             db,
@@ -216,7 +219,8 @@ async def _coach_chat(
         )
         if cancel_check and cancel_check():
             raise AiGenerationCancelled("AI_JOB_CANCELLED")
-        db.add(Message(conversation_id=conversation.id, role="assistant", content=answer["content"], model_id=uuid.UUID(answer["model_id"])))
+        conversation.updated_at = datetime.now(timezone.utc)
+        db.add(Message(conversation_id=conversation.id, role="assistant", content=answer["content"], created_at=datetime.now(timezone.utc), model_id=uuid.UUID(answer["model_id"]), metadata_json={**_answer_metadata(answer, locale, str(payload.get("quality_profile") or "standard")), "model": answer["model"], "evidence": answer.get("evidence", {})}))
         db.add(AiRun(
             user_id=user.id,
             task_type="coach_chat",
@@ -227,7 +231,7 @@ async def _coach_chat(
             lookback_days=context_days,
             max_output_tokens=answer["max_output_tokens"],
             content=answer["content"],
-            metadata_json=_answer_metadata(answer, locale, str(payload.get("quality_profile") or "standard")),
+            metadata_json=_answer_metadata(answer, locale, str(payload.get("quality_profile") or "standard"), conversation_id=str(conversation.id)),
         ))
         await db.commit()
         data_used = {
@@ -255,6 +259,7 @@ async def _training_plan(
         context_days = int(payload.get("context_days") or 7)
         context_data = payload.get("context_data") if isinstance(payload.get("context_data"), dict) else {}
         context = await build_training_plan_context(db, user, days=context_days, **_context_selection(payload))
+        await add_personal_context(db, user, context, payload)
         context["goal"] = {
             "goal_type": payload.get("goal_type", "hybrid"),
             "goal_text": payload.get("goal_text", ""),

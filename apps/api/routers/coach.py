@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime, timezone
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -7,8 +8,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from pengucoach.auth.dependencies import safety_confirmed_user
+from pengucoach.coach.companion import add_personal_context, conversation_excerpt
 from pengucoach.coach.context import SOURCE_NOTICE, build_activity_analysis_context, build_coach_context, build_training_plan_context
-from pengucoach.db.models import AiRun, Conversation, GarminWorkoutExport, Message, User, UserPreference
+from pengucoach.db.models import AiRun, BackgroundJob, Conversation, GarminWorkoutExport, Message, User, UserPreference
 from pengucoach.db.session import get_db
 from pengucoach.llm.service import chat, eligible_models, resolve_model, task_settings
 from pengucoach.llm.usage import normalize_quality, quality_options
@@ -38,6 +40,7 @@ def _analysis_scope_message(activity_id: uuid.UUID, days: int, locale: str) -> s
 class ChatRequest(BaseModel):
     message: str = Field(min_length=1, max_length=8000)
     conversation_id: uuid.UUID | None = None
+    use_personal_context: bool = True
     model_id: uuid.UUID | None = None
     max_tokens: int | None = Field(default=None, ge=128, le=65536)
     context_window_tokens: int | None = Field(default=None, ge=2048, le=1048576)
@@ -61,6 +64,7 @@ class ActivityAnalysisRequest(BaseModel):
 TrainingContextSelection = ContextSelection
 
 class TrainingPlanRequest(BaseModel):
+    use_personal_context: bool = True
     goal_type: Literal[
         "muscle_gain", "cardio_endurance", "hybrid", "cycling_endurance", "running_5k",
         "running_10k", "half_marathon", "marathon", "strength", "general_fitness", "mobility", "custom"
@@ -162,9 +166,21 @@ async def capabilities(
 
 # Background endpoints are used by alpha.5 UI so long local-model generations survive reloads and proxy timeouts.
 @router.post("/chat/jobs")
-async def queue_coach_chat(payload: ChatRequest, user: User = Depends(safety_confirmed_user)):
+async def queue_coach_chat(payload: ChatRequest, user: User = Depends(safety_confirmed_user), db: AsyncSession = Depends(get_db)):
+    if payload.conversation_id:
+        conversation = await db.get(Conversation, payload.conversation_id)
+        if not conversation or conversation.user_id != user.id:
+            raise HTTPException(404, "CONVERSATION_NOT_FOUND")
+    else:
+        conversation = Conversation(user_id=user.id, title=payload.message[:80])
+        db.add(conversation)
+        await db.commit()
+        await db.refresh(conversation)
+        payload.conversation_id = conversation.id
     task = coach_chat_task.delay(str(user.id), payload.model_dump(mode="json"))
-    return {"task_id": task.id, "status": "queued"}
+    db.add(BackgroundJob(id=uuid.UUID(task.id), user_id=user.id, job_type="coach_chat", payload={"conversation_id": str(conversation.id)}))
+    await db.commit()
+    return {"task_id": task.id, "status": "queued", "conversation_id": str(conversation.id)}
 
 
 @router.post("/activity-analysis/jobs")
@@ -184,15 +200,15 @@ async def queue_training_plan(payload: TrainingPlanRequest, user: User = Depends
 async def coach_chat(payload: ChatRequest, user: User = Depends(safety_confirmed_user), db: AsyncSession = Depends(get_db)):
     locale = payload.locale or user.locale
     conversation = await db.get(Conversation, payload.conversation_id) if payload.conversation_id else None
-    if conversation and conversation.user_id != user.id:
+    if payload.conversation_id and (not conversation or conversation.user_id != user.id):
         raise HTTPException(status_code=404, detail="CONVERSATION_NOT_FOUND")
     if not conversation:
         conversation = Conversation(user_id=user.id, title=payload.message[:80])
         db.add(conversation)
         await db.flush()
-    db.add(Message(conversation_id=conversation.id, role="user", content=payload.message))
+    db.add(Message(conversation_id=conversation.id, role="user", content=payload.message, created_at=datetime.now(timezone.utc)))
     await db.flush()
-    rows = (await db.scalars(select(Message).where(Message.conversation_id == conversation.id).order_by(Message.created_at))).all()
+    rows = await conversation_excerpt(db, conversation)
     messages = [{"role": x.role, "content": x.content} for x in rows]
     if payload.context_mode == "none":
         context_days = 0
@@ -203,6 +219,7 @@ async def coach_chat(payload: ChatRequest, user: User = Depends(safety_confirmed
     context = await build_coach_context(db, user, context_days, **context_selection(payload.model_dump())) if context_days else {
         "source_notice": SOURCE_NOTICE, "period_days": 0, "note": "No training context required for this question."
     }
+    await add_personal_context(db, user, context, payload.model_dump(), conversation)
     _, local_only = await _privacy(db, user)
     try:
         answer = await chat(
@@ -213,12 +230,13 @@ async def coach_chat(payload: ChatRequest, user: User = Depends(safety_confirmed
         )
     except RuntimeError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
-    db.add(Message(conversation_id=conversation.id, role="assistant", content=answer["content"], model_id=uuid.UUID(answer["model_id"])))
+    conversation.updated_at = datetime.now(timezone.utc)
+    db.add(Message(conversation_id=conversation.id, role="assistant", content=answer["content"], created_at=datetime.now(timezone.utc), model_id=uuid.UUID(answer["model_id"]), metadata_json={**_answer_metadata(answer, locale=str(locale)), "model": answer["model"], "evidence": answer.get("evidence", {})}))
     db.add(AiRun(
         user_id=user.id, task_type="coach_chat", model_id=uuid.UUID(answer["model_id"]),
         provider_name=answer["provider"], model_name=answer["model"], prompt=payload.message,
         lookback_days=context_days, max_output_tokens=answer["max_output_tokens"], content=answer["content"],
-        metadata_json=_answer_metadata(answer, locale=str(locale)),
+        metadata_json={**_answer_metadata(answer, locale=str(locale)), "conversation_id": str(conversation.id)},
     ))
     await db.commit()
     return {
@@ -315,6 +333,7 @@ async def training_plan(payload: TrainingPlanRequest, user: User = Depends(safet
         include_hydration=payload.context_data.hydration,
         include_body=payload.context_data.body,
     )
+    await add_personal_context(db, user, context, payload.model_dump())
     context["goal"] = {
         "goal_type": payload.goal_type, "goal_text": payload.goal_text, "experience": payload.experience,
         "weeks": payload.weeks, "days_per_week": payload.days_per_week, "session_minutes": payload.session_minutes,

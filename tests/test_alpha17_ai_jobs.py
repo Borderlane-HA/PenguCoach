@@ -53,8 +53,9 @@ def test_docs_keep_current_reference_material_not_per_release_change_lists():
     assert "GARMIN_HISTORY_AND_VO2.md" in names
 
 
-def test_coach_ui_does_not_silently_restore_hidden_old_conversation():
+def test_coach_ui_restores_visible_history_and_offers_a_new_conversation():
     coach = Path("apps/web/app/coach/page.tsx").read_text()
-    assert 'else{localStorage.removeItem("pengucoach_conversation");setCid(undefined)}' in coach
+    assert 'if(id)await openConversation(id)' in coach
+    assert 'className="conversation-history"' in coach
     assert 'function newConversation()' in coach
     assert 'dataBits=[' in coach
