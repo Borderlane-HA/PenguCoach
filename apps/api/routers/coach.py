@@ -1,9 +1,9 @@
 import uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -15,6 +15,7 @@ from pengucoach.db.session import get_db
 from pengucoach.llm.service import chat, eligible_models, resolve_model, task_settings
 from pengucoach.llm.usage import normalize_quality, quality_options
 from pengucoach.training_plan.generation import normalize_training_plan_answer, training_plan_instruction
+from pengucoach.weather.service import build_training_weather_context
 from worker.tasks.ai import activity_analysis as activity_analysis_task
 from worker.tasks.ai import coach_chat as coach_chat_task
 from worker.tasks.ai import training_plan as training_plan_task
@@ -84,6 +85,15 @@ class TrainingPlanRequest(BaseModel):
     context_data: TrainingContextSelection = Field(default_factory=TrainingContextSelection)
     locale: Literal["de", "en"] | None = None
     quality_profile: Literal["very_low", "low", "standard", "high"] = "standard"
+    start_date: date | None = None
+    include_weather: bool | None = None
+
+    @field_validator("start_date")
+    @classmethod
+    def validate_start_date(cls, value: date | None) -> date | None:
+        if value is not None and value.weekday() != 0:
+            raise ValueError("PLAN_START_MUST_BE_MONDAY")
+        return value
 
 
 async def _privacy(db: AsyncSession, user: User) -> tuple[UserPreference | None, bool]:
@@ -337,8 +347,14 @@ async def training_plan(payload: TrainingPlanRequest, user: User = Depends(safet
     context["goal"] = {
         "goal_type": payload.goal_type, "goal_text": payload.goal_text, "experience": payload.experience,
         "weeks": payload.weeks, "days_per_week": payload.days_per_week, "session_minutes": payload.session_minutes,
-        "equipment": payload.equipment, "constraints": payload.constraints, "source": "user",
+        "equipment": payload.equipment, "constraints": payload.constraints,
+        "start_date": payload.start_date.isoformat() if payload.start_date else None, "source": "user",
     }
+    weather_context = await build_training_weather_context(
+        db, user, include=payload.include_weather, plan_start_date=payload.start_date
+    )
+    if weather_context is not None:
+        context["weather_forecast"] = weather_context
     _, local_only = await _privacy(db, user)
     config = await task_settings(db, "training_plan", locale)
     prompt = (payload.prompt or config["default_prompt"]).strip()
@@ -347,14 +363,16 @@ async def training_plan(payload: TrainingPlanRequest, user: User = Depends(safet
             f"Erstelle einen {payload.weeks}-Wochen-Trainingsplan für '{payload.goal_type}', "
             f"{payload.days_per_week} Trainingstage pro Woche, etwa {payload.session_minutes} Minuten pro Einheit. "
             f"Ziel: {payload.goal_text or 'keine Zusatzangabe'}. Equipment: {payload.equipment or 'nicht angegeben'}. "
-            f"Einschränkungen: {payload.constraints or 'keine'}. Erfahrung: {payload.experience}."
+            f"Einschränkungen: {payload.constraints or 'keine'}. Erfahrung: {payload.experience}. "
+            f"Planstart: {payload.start_date.isoformat() if payload.start_date else 'nicht festgelegt'}."
         )
     else:
         user_message = (
             f"Create a {payload.weeks}-week training plan for '{payload.goal_type}', "
             f"{payload.days_per_week} training days per week and about {payload.session_minutes} minutes per session. "
             f"Goal details: {payload.goal_text or 'none supplied'}. Equipment: {payload.equipment or 'not specified'}. "
-            f"Constraints: {payload.constraints or 'none supplied'}. Experience: {payload.experience}."
+            f"Constraints: {payload.constraints or 'none supplied'}. Experience: {payload.experience}. "
+            f"Plan start: {payload.start_date.isoformat() if payload.start_date else 'not set'}."
         )
     try:
         answer = await chat(
@@ -371,6 +389,8 @@ async def training_plan(payload: TrainingPlanRequest, user: User = Depends(safet
     metadata["training_context"] = {
         "days": payload.context_days,
         "data": payload.context_data.model_dump(),
+        "weather": weather_context is not None and bool(weather_context.get("available")),
+        "weather_location": weather_context.get("location") if weather_context else None,
     }
     metadata.update(plan_meta)
     run = AiRun(

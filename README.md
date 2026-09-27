@@ -12,7 +12,7 @@ PenguCoach is designed as a local-first, multi-user platform that reads Garmin C
 
 ## Current alpha scope
 
-`v0.1.0-alpha.39` is the current end-to-end alpha baseline:
+`v0.1.0-alpha.40` is the current end-to-end alpha baseline:
 
 - **Personal companion:** editable coach profile and explicit memories, resumable conversations, daily check-ins and source-backed briefing, weekly comparison, activity feedback, persisted calendars and reviewed plan adjustments. See [`docs/COACH_COMPANION.md`](docs/COACH_COMPANION.md).
 - **Chat reliability:** content-sized bubbles, visible local streaming, reasoning disabled for Ollama requests, accurate finish-reason checks and explicit empty-response errors.
@@ -22,7 +22,7 @@ PenguCoach is designed as a local-first, multi-user platform that reads Garmin C
 
 - German and English web UI
 - bright health-first responsive web design with desktop sidebar and mobile navigation dock
-- per-user appearance themes (Mint Light, Midnight Health, Ocean, Forest, Lavender, Warm Sand, Rose, Nordic Night and Aurora)
+- per-user appearance themes with pre-paint persistence to avoid navigation flashes (Mint Light, Midnight Health, Ocean, Forest, Lavender, Warm Sand, Rose, Nordic Night, Aurora, Alpine, Arctic, Espresso, Ember and Mono); dashboard metric colors are derived from the active theme for consistent contrast
 - profile-picture and custom app-icon upload stored locally and included in normal backups
 - built-in PenguCoach app icon used by default in the UI plus a browser favicon; a custom app icon can still override the sidebar branding
 - simplified Garmin synchronization with one everyday Sync action and a separate history/backfill section
@@ -55,6 +55,7 @@ PenguCoach is designed as a local-first, multi-user platform that reads Garmin C
 - per-activity AI deep analysis with Training-only / This day / 3-day / 7-day training-recovery context and an editable predefined prompt
 - AI training-plan generation for strength, muscle gain, cardio, hybrid, running, cycling, mobility and custom goals
 - selectable training-plan briefing window (3/7/14/21/28 days, default 7) plus opt-in context categories for training/FIT, Garmin zones, sleep/HRV, recovery/stress and steps/hydration
+- optional Open-Meteo weather context: per-user location search, current/16-day forecast preview and an opt-in training-plan factor for temperature, precipitation, wind and UV; only explicit forecast dates are shared with the planner and later weeks remain weather-neutral
 - live approximate Ollama output-token progress and user cancellation for Coach, activity analysis and training-plan background jobs
 - validated structured training-plan sessions/steps with weekly calendar review, optional-session selection, start-date mapping, legacy-plan management and deletion; pre-export Garmin drafts can adjust duration, steps, targets and strength exercises without mutating the AI plan
 - explicit opt-in Garmin workout export for running/cycling/swimming/walking/hiking/strength plus timed cardio/mobility/yoga/Pilates/HIIT sessions, with pre-export Garmin exercise validation, searchable per-user strength mappings, a visible `Total Body` safety fallback for unknown movements, duplicate protection, reload-safe progress and optional Garmin cleanup when a plan is deleted

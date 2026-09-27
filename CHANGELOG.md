@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.1.0-alpha.40 — Theme polish & weather-aware planning
+
+- Applies the cached per-user theme in the document head before first paint, removing the brief standard-theme flash when navigating between pages; theme changes are cached immediately and still persisted server-side.
+- Reworks dashboard/health metric colors to derive soft surfaces from the active theme, fixes the low-contrast Steps card in Nordic Night and harmonizes remaining light surfaces in dark themes.
+- Adds Alpine, Arctic, Espresso, Ember and Mono themes alongside the existing appearance presets.
+- Adds an optional Open-Meteo connection with location search, forecast preview and no required API key for the intended private/non-commercial setup. Only coordinates are sent to the weather provider; health and training data stay in PenguCoach.
+- Adds an explicit Monday plan-start date and optional weather context to AI training planning. Available forecast dates can influence outdoor session placement/intensity; PenguCoach never invents weather for dates outside the supplied forecast and continues without weather when the service is unavailable.
+- Carries the plan start into the generated plan/calendar metadata so weather dates, plan weeks and Garmin calendar mapping stay aligned.
+
+
 ## v0.1.0-alpha.39 — Personal fitness companion
 
 - Adds a user-owned profile, explicit editable memories, restored chat history and bounded extractive recaps.

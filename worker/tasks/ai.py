@@ -4,7 +4,7 @@ import asyncio
 import copy
 import math
 import uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from collections.abc import Callable
 from typing import Any
 
@@ -19,6 +19,7 @@ from pengucoach.llm.job_control import cancel_requested, clear_cancel
 from pengucoach.llm.service import AiGenerationCancelled, chat, task_settings
 from pengucoach.training_plan.generation import merge_plan_segments, normalize_training_plan_answer, training_plan_instruction
 from pengucoach.training_plan.structured import TrainingPlanDocument, extract_structured_plan, render_plan_markdown
+from pengucoach.weather.service import build_training_weather_context
 from worker.celery_app import app
 
 ProgressCallback = Callable[[dict[str, Any]], None]
@@ -260,6 +261,7 @@ async def _training_plan(
         context_data = payload.get("context_data") if isinstance(payload.get("context_data"), dict) else {}
         context = await build_training_plan_context(db, user, days=context_days, **_context_selection(payload))
         await add_personal_context(db, user, context, payload)
+        start_date = date.fromisoformat(str(payload["start_date"])) if payload.get("start_date") else None
         context["goal"] = {
             "goal_type": payload.get("goal_type", "hybrid"),
             "goal_text": payload.get("goal_text", ""),
@@ -269,8 +271,14 @@ async def _training_plan(
             "session_minutes": int(payload.get("session_minutes", 60)),
             "equipment": payload.get("equipment", ""),
             "constraints": payload.get("constraints", ""),
+            "start_date": start_date.isoformat() if start_date else None,
             "source": "user",
         }
+        weather_context = await build_training_weather_context(
+            db, user, include=payload.get("include_weather"), plan_start_date=start_date
+        )
+        if weather_context is not None:
+            context["weather_forecast"] = weather_context
         local_only = await _privacy(db, user)
         config = await task_settings(db, "training_plan", locale)
         prompt = str(payload.get("prompt") or config["default_prompt"]).strip()
@@ -288,14 +296,16 @@ async def _training_plan(
                     f"{days_per_week} Trainingstage pro Woche, etwa {g['session_minutes']} Minuten pro Einheit. "
                     f"Ziel: {g['goal_text'] or 'keine Zusatzangabe'}. Equipment: {g['equipment'] or 'nicht angegeben'}. "
                     f"Einschränkungen: {g['constraints'] or 'keine'}. Erfahrung: {g['experience']}. "
-                    f"Nutze ausschließlich den ausgewählten Trainingskontext der letzten {context_days} Tage."
+                    f"Nutze ausschließlich den ausgewählten Trainingskontext der letzten {context_days} Tage. "
+                    f"Planstart: {g.get('start_date') or 'nicht festgelegt'}."
                 )
             return (
                 f"Create a {weeks}-week training plan for goal '{g['goal_type']}', "
                 f"{days_per_week} training days per week and about {g['session_minutes']} minutes per session. "
                 f"Goal details: {g['goal_text'] or 'none supplied'}. Equipment: {g['equipment'] or 'not specified'}. "
                 f"Constraints: {g['constraints'] or 'none supplied'}. Experience: {g['experience']}. "
-                f"Use only the selected training context from the last {context_days} days."
+                f"Use only the selected training context from the last {context_days} days. "
+                f"Plan start: {g.get('start_date') or 'not set'}."
             )
 
         # Large structured plans are generated in small week segments. This keeps
@@ -514,7 +524,12 @@ async def _training_plan(
 
         metadata = {
             "goal": context["goal"],
-            "training_context": {"days": context_days, "data": context_data},
+            "training_context": {
+                "days": context_days,
+                "data": context_data,
+                "weather": weather_context is not None and bool(weather_context.get("available")),
+                "weather_location": weather_context.get("location") if weather_context else None,
+            },
             "usage": answer.get("usage", {}),
             "context_chars": answer.get("context_chars"),
             "context_estimated_tokens": answer.get("context_estimated_tokens"),

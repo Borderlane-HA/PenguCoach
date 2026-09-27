@@ -138,7 +138,12 @@ Sätze/Wiederholungen und RPE/RIR-Leitplanken, ohne unbekannte Gewichte zu erfin
 Einheiten, Qualität/Intervalle und längere Einheiten passend zum Ziel. Für Hybridziele: Kraft und Ausdauer sinnvoll verteilen.
 Kennzeichne optionale Einheiten und Ruhetage. Struktur: Ziel & Annahmen, Wochenstruktur, Plan Woche für Woche,
 Sessiondetails, Progressionsregeln, Belastungs-/Erholungsleitplanken und Anpassung bei verpassten Einheiten oder schwachen
-Erholungssignalen. Erfinde keine Gesundheitsdaten. Antworte ausschließlich auf Deutsch."""
+Erholungssignalen. Falls weather_forecast im Kontext vorhanden ist, ordne die Sessions anhand von goal.start_date und
+ISO-Wochentag den dort explizit aufgeführten Kalendertagen zu. Nutze das Wetter nur als weichen Planungsfaktor: z. B.
+Hitze, starke Niederschlagswahrscheinlichkeit, starker Wind oder hohe UV-Belastung können für Outdoor-Einheiten eine
+zeitliche Verschiebung, eine Indoor-Alternative oder angepasste Intensität begründen. Nutze ausschließlich die gelieferten
+Forecast-Tage, behandle die Vorhersage als unsicher und erfinde niemals Wetter für spätere Planwochen.
+Erfinde keine Gesundheitsdaten. Antworte ausschließlich auf Deutsch."""
 
 TRAINING_PLAN_PROMPT_EN = """Create a practical, periodized training plan using the user's stated goal and the supplied recent training context.
 Respect the requested number of weeks, training days and typical session duration. Balance training stimulus and recovery.
@@ -150,7 +155,10 @@ RPE/RIR guardrails without pretending exact loads are known. For endurance goals
 and longer sessions as appropriate. For hybrid goals balance strength and endurance interference. Clearly mark optional
 sessions and rest days. Structure the result as: Goal & assumptions, Weekly structure, Week-by-week plan, Session details,
 Progression rules, Recovery/load guardrails, and How to adjust when sessions are missed or recovery data is poor.
-Do not invent health data. Reply exclusively in English."""
+If weather_forecast is present in context, map sessions to its explicit calendar dates using goal.start_date and ISO weekday.
+Use weather only as a soft planning factor: heat, high precipitation probability, strong wind or high UV may justify moving an
+outdoor session, suggesting an indoor alternative or moderating intensity. Use only supplied forecast dates, treat forecasts
+as uncertain, and never invent weather for later plan weeks. Do not invent health data. Reply exclusively in English."""
 
 COACH_CHAT_PROMPT_DE = """Beantworte die Frage des Nutzers anhand des bereitgestellten Kontexts und der angegebenen Datenquellen.
 Nutze konkrete Werte, wenn sie relevant sind, unterscheide Messwerte von Interpretation und sage klar, wenn die Datenlage

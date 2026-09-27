@@ -16,7 +16,10 @@ from pengucoach.db.session import get_db
 
 router = APIRouter(prefix="/settings", tags=["settings"])
 
-THEMES = {"light", "dark", "ocean", "forest", "lavender", "sand", "rose", "slate", "aurora"}
+THEMES = {
+    "light", "dark", "ocean", "forest", "lavender", "sand", "rose", "slate", "aurora",
+    "alpine", "arctic", "espresso", "ember", "mono",
+}
 MAX_IMAGE_BYTES = 3 * 1024 * 1024
 ALLOWED_IMAGE_TYPES = {
     "image/png": ".png",
@@ -31,7 +34,7 @@ class PrivacyIn(BaseModel):
 
 
 class AppearanceIn(BaseModel):
-    theme: str = Field(pattern=r"^(light|dark|ocean|forest|lavender|sand|rose|slate|aurora)$")
+    theme: str = Field(pattern=r"^(light|dark|ocean|forest|lavender|sand|rose|slate|aurora|alpine|arctic|espresso|ember|mono)$")
 
 
 class AiPreferencesIn(BaseModel):

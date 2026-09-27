@@ -10,6 +10,8 @@ export const metadata:Metadata={
 
 export const viewport:Viewport={width:"device-width",initialScale:1,viewportFit:"cover"};
 
+const themeBoot = `(()=>{try{const t=localStorage.getItem("pengucoach_theme");if(t)document.documentElement.dataset.theme=t}catch{}})();`;
+
 export default function RootLayout({children}:{children:React.ReactNode}){
-  return <html lang="de"><body><I18nProvider>{children}</I18nProvider></body></html>;
+  return <html lang="de" suppressHydrationWarning><head><script dangerouslySetInnerHTML={{__html:themeBoot}}/></head><body><I18nProvider>{children}</I18nProvider></body></html>;
 }

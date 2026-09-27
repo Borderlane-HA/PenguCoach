@@ -49,8 +49,8 @@ function GarminExerciseMapper({sourceName,current,lang,onSaved}:{sourceName:stri
 }
 
 export default function TrainingPlanCalendar({result,lang}:{result:AnyObj,lang:Lang}){
-  const de=lang!=="en";const meta=result?.metadata??{};const plan=meta.structured_plan as AnyObj|undefined;const runId=result?.id??result?.run_id;
-  const[startDate,setStartDate]=useState(defaultMonday()),[garmin,setGarmin]=useState<AnyObj|null>(null),[preview,setPreview]=useState<AnyObj|null>(null),[selected,setSelected]=useState<Set<string>>(new Set());
+  const de=lang!=="en";const meta=result?.metadata??{};const plan=meta.structured_plan as AnyObj|undefined;const runId=result?.id??result?.run_id;const generatedStart=meta?.goal?.start_date;
+  const[startDate,setStartDate]=useState(()=>generatedStart&&isMonday(generatedStart)?generatedStart:defaultMonday()),[garmin,setGarmin]=useState<AnyObj|null>(null),[preview,setPreview]=useState<AnyObj|null>(null),[selected,setSelected]=useState<Set<string>>(new Set());
   const[busy,setBusy]=useState(false),[message,setMessage]=useState(""),[error,setError]=useState(""),[expanded,setExpanded]=useState<Set<string>>(new Set());
   const[edits,setEdits]=useState<Record<string,AnyObj>>({}),[editing,setEditing]=useState<AnyObj|null>(null),[editError,setEditError]=useState("");
   const[revision,setRevision]=useState(0),[scheduleBusy,setScheduleBusy]=useState(false),[scheduleReady,setScheduleReady]=useState(false),[calendarDirty,setCalendarDirty]=useState(false);

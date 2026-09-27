@@ -11,6 +11,11 @@ const themes=[
   {id:"rose",nameDe:"Rose",nameEn:"Rose",descDe:"Helles Rosé mit kräftigen Beeren-Akzenten.",descEn:"Light rose with rich berry accents.",swatches:["#fcf4f6","#ffffff","#a64365"]},
   {id:"slate",nameDe:"Nordic Night",nameEn:"Nordic Night",descDe:"Dunkles Schieferblau, klar und fokussiert.",descEn:"Dark slate blue, clear and focused.",swatches:["#101722","#1b2636","#85b9ed"]},
   {id:"aurora",nameDe:"Aurora",nameEn:"Aurora",descDe:"Dunkles Violett mit frischem Türkis.",descEn:"Dark violet with fresh turquoise.",swatches:["#181526","#242035","#68d3c1"]},
+  {id:"alpine",nameDe:"Alpine",nameEn:"Alpine",descDe:"Helles Gletschergrün mit kühler Bergluft.",descEn:"Bright glacier green with a cool alpine feel.",swatches:["#f1f7f5","#ffffff","#287b6e"]},
+  {id:"arctic",nameDe:"Arctic",nameEn:"Arctic",descDe:"Sehr helles Eisblau mit klaren Cyan-Akzenten.",descEn:"Very light ice blue with crisp cyan accents.",swatches:["#f1f7fb","#ffffff","#347d9e"]},
+  {id:"espresso",nameDe:"Espresso",nameEn:"Espresso",descDe:"Dunkles warmes Braun für ruhige Abendansichten.",descEn:"Dark warm brown for calm evening sessions.",swatches:["#17120f","#241c18","#d5a66d"]},
+  {id:"ember",nameDe:"Ember",nameEn:"Ember",descDe:"Dunkles Anthrazit mit warmem Orange-Rot.",descEn:"Dark charcoal with a warm orange-red accent.",swatches:["#171516","#242022","#e58a67"]},
+  {id:"mono",nameDe:"Mono",nameEn:"Mono",descDe:"Kontrastreiches Schwarz-Grau mit neutralen Akzenten.",descEn:"High-contrast black and grey with neutral accents.",swatches:["#101112","#1b1d1f","#d6d9dc"]},
   {id:"light",nameDe:"Mint Light",nameEn:"Mint Light",descDe:"Das helle PenguCoach Gesundheitsdesign.",descEn:"The bright PenguCoach health theme.",swatches:["#f5faf7","#ffffff","#16866d"]},
   {id:"dark",nameDe:"Midnight Health",nameEn:"Midnight Health",descDe:"Dunkel, kontrastreich und angenehm am Abend.",descEn:"Dark, high-contrast and comfortable at night.",swatches:["#0d1512","#15211d","#5fd0ad"]},
   {id:"ocean",nameDe:"Ocean",nameEn:"Ocean",descDe:"Kühles Blau mit klaren Aqua-Akzenten.",descEn:"Cool blues with clean aqua accents.",swatches:["#f4f8fb","#ffffff","#287fa3"]},
@@ -20,9 +25,9 @@ const themes=[
 
 export default function Appearance(){
   const{lang}=useI18n();const[a,setA]=useState<Appearance|null>(null),[msg,setMsg]=useState("");
-  const refresh=()=>api<Appearance>("/settings/appearance").then(v=>{setA(v);document.documentElement.dataset.theme=v.theme||"light"});
+  const refresh=()=>api<Appearance>("/settings/appearance").then(v=>{const theme=v.theme||"light";setA(v);document.documentElement.dataset.theme=theme;try{localStorage.setItem("pengucoach_theme",theme)}catch{}});
   useEffect(()=>{void refresh()},[]);
-  async function choose(theme:string){const v=await api<Appearance>("/settings/appearance",{method:"PUT",body:JSON.stringify({theme})});setA(v);document.documentElement.dataset.theme=theme;setMsg(bi(lang,"Theme gespeichert","Theme saved"))}
+  async function choose(theme:string){document.documentElement.dataset.theme=theme;try{localStorage.setItem("pengucoach_theme",theme)}catch{}const v=await api<Appearance>("/settings/appearance",{method:"PUT",body:JSON.stringify({theme})});setA(v);setMsg(bi(lang,"Theme gespeichert","Theme saved"))}
   async function upload(kind:"avatar"|"app-icon",e:ChangeEvent<HTMLInputElement>){const file=e.target.files?.[0];if(!file)return;const body=new FormData();body.append("file",file);const res=await fetch(`/api/v1/settings/${kind}`,{method:"POST",body,credentials:"include"});if(!res.ok){setMsg(`${bi(lang,"Upload fehlgeschlagen","Upload failed")}: ${res.status}`);return}const v=await res.json();setA(v);setMsg(bi(lang,"Bild gespeichert","Image saved"));e.target.value="";window.dispatchEvent(new Event("pengucoach-appearance-changed"))}
   async function remove(kind:"avatar"|"app-icon"){const v=await api<Appearance>(`/settings/${kind}`,{method:"DELETE"});setA(v);setMsg(bi(lang,"Bild entfernt","Image removed"));window.dispatchEvent(new Event("pengucoach-appearance-changed"))}
   return <AppShell title={bi(lang,"Darstellung","Appearance")}>
