@@ -17,6 +17,9 @@ from pengucoach.db.models import (
 from pengucoach.garmin.gateway.factory import gateway_from_connection, serialize_refreshed_token
 
 
+from pengucoach.health.provenance import merge_metric
+
+
 class GarminRequestTimeout(RuntimeError):
     def __init__(self, domain: str, seconds: int) -> None:
         self.domain = domain
@@ -64,6 +67,7 @@ def _merge_raw_payload(existing: dict[str, Any] | None, payload: dict[str, Any],
     for key in ("sparkyfitness", "withings", "withings_activity", "withings_measurements"):
         if key in old:
             merged[key] = old[key]
+    merged["_metric_times"] = old.get("_metric_times", {})
     merged["_metric_sources"] = sources
     return merged
 def _first_text(payload: Any, *keys: str) -> str | None:
@@ -150,18 +154,12 @@ async def _upsert_health(db: AsyncSession, user: User, day: date, data: dict[str
     intensity = data.get("intensity") or {}
 
     def apply(field: str, value: Any, *, clear_missing: bool = True) -> None:
-        # A direct Withings value is the preferred source for an overlapping
-        # same-day metric. Garmin still refreshes its raw payload, but it must
-        # not silently replace the direct-source value.
-        if sources.get(field) == "withings":
-            return
-        if value is not None:
-            setattr(row, field, value)
+        # Missing endpoints never erase another source's observed values.
+        if merge_metric(row, field, value, "garmin"):
             sources[field] = "garmin"
-        elif clear_missing and not preserve_missing:
-            setattr(row, field, None)
 
-    steps = int(_first_number(summary, "totalSteps", "steps") or 0) or None
+    steps_value = _first_number(summary, "totalSteps", "steps")
+    steps = int(steps_value) if steps_value is not None else None
     apply("steps", steps)
     apply("distance_m", _first_number(summary, "totalDistanceMeters", "distance", "totalDistance"))
     apply("active_calories", _first_number(summary, "activeKilocalories", "activeCalories"))
@@ -172,18 +170,26 @@ async def _upsert_health(db: AsyncSession, user: User, day: date, data: dict[str
         apply("min_hr", int(_first_number(heart, "minHeartRate", "minHeartRateInBeatsPerMinute") or 0) or None)
         apply("max_hr", int(_first_number(heart, "maxHeartRate", "maxHeartRateInBeatsPerMinute") or 0) or None)
     apply("stress_avg", _first_number(stress, "avgStressLevel", "averageStressLevel", "overallStressLevel"), clear_missing=False)
-    if isinstance(body_battery, list) and body_battery:
-        values = []
-        for item in body_battery:
-            if isinstance(item, dict):
-                for key in ("charged", "drained", "bodyBatteryLevel", "bodyBattery"):
-                    if isinstance(item.get(key), (int, float)):
-                        values.append(float(item[key]))
-        if values:
-            apply("body_battery_high", int(max(values)), clear_missing=False)
-            apply("body_battery_low", int(min(values)), clear_missing=False)
+    # Garmin charged/drained are daily deltas, not battery levels.
+    values = []
+    for item in body_battery if isinstance(body_battery, list) else [body_battery]:
+        if not isinstance(item, dict):
+            continue
+        for point in item.get("bodyBatteryValuesArray") or []:
+            if isinstance(point, (list, tuple)) and len(point) > 1:
+                value = point[-1]
+                if isinstance(value, (int, float)) and 0 <= value <= 100:
+                    values.append(float(value))
+        for key in ("bodyBatteryLevel", "bodyBattery"):
+            value = item.get(key)
+            if isinstance(value, (int, float)) and 0 <= value <= 100:
+                values.append(float(value))
+    high = _first_number(summary, "bodyBatteryHighestValue")
+    low = _first_number(summary, "bodyBatteryLowestValue")
+    apply("body_battery_high", int(max(values)) if values else high, clear_missing=False)
+    apply("body_battery_low", int(min(values)) if values else low, clear_missing=False)
     if hydration or not preserve_missing:
-        apply("hydration_ml", int(_first_number(hydration, "valueInML", "waterConsumedInML", "hydrationAmount", "totalHydration") or 0) or None)
+        apply("hydration_ml", _first_number(hydration, "valueInML", "waterConsumedInML", "hydrationAmount", "totalHydration"))
         apply("hydration_goal_ml", int(_first_number(hydration, "goalInML", "hydrationGoal", "goal") or 0) or None)
     if intensity or not preserve_missing:
         apply("intensity_moderate", int(_first_number(intensity, "moderateIntensityMinutes", "moderateMinutes") or 0) or None)
@@ -195,7 +201,7 @@ async def _upsert_health(db: AsyncSession, user: User, day: date, data: dict[str
     if readiness or not preserve_missing:
         apply("training_readiness", _first_number(readiness, "score", "trainingReadinessScore"))
     apply("vo2max_running", _first_number(max_metrics, "vo2MaxPreciseValue", "vo2MaxValue", "vo2Max"), clear_missing=False)
-    row.raw = _merge_raw_payload(existing_raw, data, sources)
+    row.raw = _merge_raw_payload(row.raw or existing_raw, data, sources)
 
 
 async def _upsert_sleep(db: AsyncSession, user: User, day: date, payload: Any) -> None:
@@ -212,22 +218,19 @@ async def _upsert_sleep(db: AsyncSession, user: User, day: date, payload: Any) -
         "start_at": _parse_dt(dto.get("sleepStartTimestampGMT") or dto.get("sleepStartTimestampLocal") or dto.get("sleepStartTimestamp")),
         "end_at": _parse_dt(dto.get("sleepEndTimestampGMT") or dto.get("sleepEndTimestampLocal") or dto.get("sleepEndTimestamp")),
         "duration_seconds": int(_first_number(dto, "sleepTimeSeconds", "durationInSeconds") or 0) or None,
-        "deep_seconds": int(_first_number(dto, "deepSleepSeconds") or 0) or None,
-        "light_seconds": int(_first_number(dto, "lightSleepSeconds") or 0) or None,
-        "rem_seconds": int(_first_number(dto, "remSleepSeconds") or 0) or None,
-        "awake_seconds": int(_first_number(dto, "awakeSleepSeconds", "awakeSeconds") or 0) or None,
+        "deep_seconds": _first_number(dto, "deepSleepSeconds"),
+        "light_seconds": _first_number(dto, "lightSleepSeconds"),
+        "rem_seconds": _first_number(dto, "remSleepSeconds"),
+        "awake_seconds": _first_number(dto, "awakeSleepSeconds", "awakeSeconds"),
         "sleep_score": _first_number(payload, "overallScore", "sleepScore", "value"),
         "avg_respiration": _first_number(payload, "averageRespirationValue", "avgRespiration"),
         "avg_spo2": _first_number(payload, "averageSpO2Value", "averageSpO2"),
         "min_spo2": _first_number(payload, "lowestSpO2Value", "minSpO2"),
     }
     for field, value in values.items():
-        if sources.get(field) == "withings":
-            continue
-        setattr(row, field, value)
-        if value is not None:
+        if merge_metric(row, field, value, "garmin"):
             sources[field] = "garmin"
-    row.raw = _merge_raw_payload(existing_raw, payload, sources)
+    row.raw = _merge_raw_payload(row.raw or existing_raw, payload, sources)
 
 
 async def _upsert_hrv(db: AsyncSession, user: User, day: date, payload: Any) -> None:
@@ -240,29 +243,32 @@ async def _upsert_hrv(db: AsyncSession, user: User, day: date, payload: Any) -> 
     existing_raw = dict(row.raw or {})
     sources = _metric_sources(existing_raw)
     values = {
-        "overnight_average": _first_number(payload, "lastNightAvg", "weeklyAvg", "overnightAvg"),
+        "overnight_average": _first_number(payload, "lastNightAvg", "overnightAvg"),
         "highest_5min": _first_number(payload, "lastNight5MinHigh", "highest5Min"),
         "garmin_baseline_low": _first_number(payload, "balancedLow", "baselineLowUpper"),
         "garmin_baseline_high": _first_number(payload, "balancedUpper", "baselineBalancedUpper"),
         "garmin_status": _first_text(payload, "status", "hrvStatus"),
     }
     for field, value in values.items():
-        if sources.get(field) == "withings":
-            continue
-        setattr(row, field, value)
-        if value is not None:
+        if merge_metric(row, field, value, "garmin"):
             sources[field] = "garmin"
-    row.raw = _merge_raw_payload(existing_raw, payload, sources)
+    row.raw = _merge_raw_payload(row.raw or existing_raw, payload, sources)
 
 
 async def _upsert_body(db: AsyncSession, user: User, day: date, payload: Any) -> None:
     if not isinstance(payload, (dict, list)) or not payload:
         return
-    # Normalize a best-effort daily body snapshot while retaining the complete raw Garmin payload.
+    records = payload.get("dateWeightList") if isinstance(payload, dict) else payload
+    if isinstance(records, list):
+        for record in records:
+            if isinstance(record, dict):
+                await _upsert_body(db, user, day, record)
+        return
     weight = _first_number(payload, "weight", "weightKg", "weightInGrams")
     if weight is not None and weight > 500:
         weight = weight / 1000.0
-    measured_at = datetime(day.year, day.month, day.day, 12, tzinfo=timezone.utc)
+    measured_at = _parse_dt(payload.get("timestampGMT") or payload.get("timestamp") or payload.get("measurementTimestamp"))
+    measured_at = measured_at or datetime.combine(day, datetime.min.time(), tzinfo=timezone.utc)
     row = await db.scalar(select(BodyMeasurement).where(BodyMeasurement.user_id == user.id, BodyMeasurement.measured_at == measured_at))
     if not row:
         row = BodyMeasurement(user_id=user.id, measured_at=measured_at, raw={})
@@ -285,13 +291,10 @@ async def _upsert_body(db: AsyncSession, user: User, day: date, payload: Any) ->
         "bone_mass_kg": kg("boneMass", "boneMassKg", "boneMassInGrams"),
     }
     for field, value in values.items():
-        if sources.get(field) == "withings":
-            continue
-        setattr(row, field, value)
-        if value is not None:
+        if merge_metric(row, field, value, "garmin"):
             sources[field] = "garmin"
     raw_payload = payload if isinstance(payload, dict) else {"records": payload}
-    row.raw = _merge_raw_payload(existing_raw, raw_payload, sources)
+    row.raw = _merge_raw_payload(row.raw or existing_raw, raw_payload, sources)
 
 
 async def upsert_garmin_profile(db: AsyncSession, user: User, payload: Any, *, day: date | None = None) -> None:
@@ -310,16 +313,20 @@ async def upsert_garmin_profile(db: AsyncSession, user: User, payload: Any, *, d
     await _store_raw(db, user, "user_profile", snapshot_day, payload, external_id="profile")
     if height is None:
         return
-    measured_at = datetime(snapshot_day.year, snapshot_day.month, snapshot_day.day, 12, tzinfo=timezone.utc)
+    measured_at = _parse_dt(payload.get("updatedAt") or payload.get("updated_at"))
+    if measured_at is None:
+        previous = (await db.scalars(select(BodyMeasurement).where(BodyMeasurement.user_id == user.id, BodyMeasurement.height_cm.is_not(None)).order_by(BodyMeasurement.measured_at.desc()))).all()
+        if any((r.raw or {}).get("_profile_source") == "garmin" and r.height_cm == height for r in previous):
+            return
+        measured_at = datetime(1970, 1, 1, tzinfo=timezone.utc)
     row = await db.scalar(select(BodyMeasurement).where(BodyMeasurement.user_id == user.id, BodyMeasurement.measured_at == measured_at))
     if not row:
         row = BodyMeasurement(user_id=user.id, measured_at=measured_at, raw={})
         db.add(row)
     sources = _metric_sources(row.raw)
-    if sources.get("height_cm") != "withings":
-        row.height_cm = height
+    if merge_metric(row, "height_cm", height, "garmin"):
         sources["height_cm"] = "garmin"
-    row.raw = _merge_raw_payload(row.raw, payload, sources)
+    row.raw = {**_merge_raw_payload(row.raw, payload, sources), "_profile_source": "garmin"}
 
 
 async def _upsert_activities(db: AsyncSession, user: User, activities: list[dict[str, Any]] | None) -> tuple[int, list[Activity]]:
@@ -353,15 +360,45 @@ async def _upsert_activities(db: AsyncSession, user: User, activities: list[dict
     ))).all()
     by_id = {int(row.garmin_activity_id): row for row in existing}
 
+    timestamps = [_parse_dt(item.get("startTimeGMT") or item.get("startTimeLocal") or item.get("beginTimestamp")) for _, item in payloads]
+    timestamps = [t for t in timestamps if t]
+    secondary = []
+    if timestamps:
+        secondary = list((await db.scalars(select(Activity).where(
+            Activity.user_id == user.id, Activity.garmin_activity_id < 0,
+            Activity.started_at >= min(timestamps) - timedelta(minutes=3),
+            Activity.started_at <= max(timestamps) + timedelta(minutes=3),
+        ))).all())
+
     inserted = 0
     rows: list[Activity] = []
     for activity_id, item in payloads:
         row = by_id.get(activity_id)
         if row is None:
+            from pengucoach.sparkyfitness.sync import _sport_family, _close_number
+            start = _parse_dt(item.get("startTimeGMT") or item.get("startTimeLocal") or item.get("beginTimestamp"))
+            kind = item.get("activityType") or {}
+            kind = kind.get("typeKey") if isinstance(kind, dict) else str(kind)
+            matches = [candidate for candidate in secondary
+                       if start and candidate.started_at and (candidate.raw or {}).get("source") == "sparkyfitness"
+                       and candidate.duration_seconds is not None and item.get("duration") is not None
+                       and abs(((candidate.started_at if candidate.started_at.tzinfo else candidate.started_at.replace(tzinfo=timezone.utc)) - start).total_seconds()) <= 180
+                       and _sport_family(candidate.sport_type) == _sport_family(kind)
+                       and _close_number(candidate.duration_seconds, item.get("duration"), absolute=60, relative=.05)
+                       and _close_number(candidate.distance_m, item.get("distance"), absolute=100, relative=.03)]
+            if len(matches) == 1:
+                row = matches[0]
+                row.garmin_activity_id = activity_id
+                secondary.remove(row)
+                by_id[activity_id] = row
+        if row is None:
             row = Activity(user_id=user.id, garmin_activity_id=activity_id)
             db.add(row)
             by_id[activity_id] = row
             inserted += 1
+        metric_fields = ("duration_seconds", "moving_seconds", "distance_m", "calories", "avg_hr", "max_hr", "avg_speed", "avg_power", "avg_cadence", "vo2max", "elevation_gain", "training_load", "aerobic_training_effect", "anaerobic_training_effect")
+        old_values = {field: getattr(row, field) for field in metric_fields}
+        old_raw = dict(row.raw or {})
         row.name = item.get("activityName")
         atype = item.get("activityType") or {}
         row.sport_type = atype.get("typeKey") if isinstance(atype, dict) else str(atype)
@@ -381,7 +418,15 @@ async def _upsert_activities(db: AsyncSession, user: User, activities: list[dict
         row.training_load = float(item.get("activityTrainingLoad") or 0) or None
         row.aerobic_training_effect = float(item.get("aerobicTrainingEffect") or 0) or None
         row.anaerobic_training_effect = float(item.get("anaerobicTrainingEffect") or 0) or None
-        row.raw = item
+        metric_sources = dict(old_raw.get("_metric_sources") or {})
+        for field in metric_fields:
+            if getattr(row, field) is None and old_values[field] is not None:
+                setattr(row, field, old_values[field])
+                metric_sources.setdefault(field, old_raw.get("source", "garmin"))
+            elif getattr(row, field) is not None:
+                metric_sources[field] = "garmin"
+        previous = row.raw or {}
+        row.raw = {**item, **{k: v for k, v in previous.items() if k.startswith("sparkyfitness")}, "_metric_sources": metric_sources}
         rows.append(row)
     await db.flush()
     return inserted, rows

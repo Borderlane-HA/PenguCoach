@@ -1,1 +1,1 @@
-"""Withings Public API integration for PenguCoach."""
+"""Retired connector compatibility package; no active integration."""

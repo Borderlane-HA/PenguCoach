@@ -10,6 +10,9 @@ from pengucoach.auth.dependencies import safety_confirmed_user
 from pengucoach.db.models import Activity, BodyMeasurement, DailyHealth, HrvDaily, SleepSession, User
 from pengucoach.db.session import get_db
 
+from pengucoach.common.dates import user_today, day_start as local_day_start
+from pengucoach.health.provenance import body_snapshot, source, metric_source
+
 router = APIRouter(prefix="/health", tags=["health"])
 
 
@@ -20,7 +23,7 @@ BODY_FIELDS = (
 
 
 class ManualBodyMeasurementIn(BaseModel):
-    measured_on: date = Field(default_factory=date.today)
+    measured_on: date | None = None
     weight_kg: float | None = Field(default=None, ge=20, le=500)
     height_cm: float | None = Field(default=None, ge=50, le=260)
     body_fat_percent: float | None = Field(default=None, ge=1, le=75)
@@ -39,37 +42,10 @@ class ManualBodyMeasurementIn(BaseModel):
 
 
 def _source(raw: dict | None) -> str:
-    data = raw or {}
-    if data.get("source") == "manual_body":
-        return "manual"
-    metric_sources = data.get("_metric_sources") if isinstance(data, dict) else None
-    if isinstance(metric_sources, dict) and metric_sources:
-        values = {str(value) for value in metric_sources.values() if value}
-        order = ("withings", "garmin", "sparkyfitness", "manual")
-        ordered = [name for name in order if name in values]
-        ordered.extend(sorted(values - set(ordered)))
-        if ordered:
-            return "+".join(ordered)
-    has_withings = any(key in data for key in ("withings", "withings_activity", "withings_measurements"))
-    has_sparky = "sparkyfitness" in data
-    non_meta = {key for key in data.keys() if not str(key).startswith("_") and key not in {"withings", "withings_activity", "withings_measurements", "sparkyfitness"}}
-    sources = []
-    if has_withings:
-        sources.append("withings")
-    if non_meta:
-        sources.append("garmin")
-    if has_sparky:
-        sources.append("sparkyfitness")
-    return "+".join(sources) if sources else "garmin"
+    return source(raw)
 
-
-def _metric_source(raw: dict | None, field: str, default: str | None = None) -> str | None:
-    data = raw or {}
-    sources = data.get("_metric_sources") if isinstance(data, dict) else None
-    if isinstance(sources, dict) and isinstance(sources.get(field), str):
-        return sources[field]
-    return default or _source(raw)
-
+def _metric_source(raw: dict | None, field: str, default: str | None = None) -> str:
+    return metric_source(raw, field, default)
 
 def _health(x: DailyHealth) -> dict:
     fields = {
@@ -96,6 +72,7 @@ def _health(x: DailyHealth) -> dict:
         "updated_at": x.updated_at,
         "source": _source(x.raw),
         "sources": sources,
+        "measured_at_by_metric": (x.raw or {}).get("_metric_times", {}),
     }
 
 
@@ -110,31 +87,7 @@ def _body_row(x: BodyMeasurement) -> dict[str, Any]:
 
 
 def _body_latest(rows: list[BodyMeasurement]) -> dict[str, Any] | None:
-    if not rows:
-        return None
-    result: dict[str, Any] = {"measured_at": None, "sources": {}}
-    latest_dt: datetime | None = None
-    source_priority = {"withings": 40, "garmin": 30, "sparkyfitness": 20, "manual": 10}
-    for field in BODY_FIELDS:
-        candidates = [row for row in rows if getattr(row, field) is not None]
-        if not candidates:
-            continue
-        newest_day = max(row.measured_at.date() for row in candidates)
-        same_day = [row for row in candidates if row.measured_at.date() == newest_day]
-        same_day.sort(
-            key=lambda row: (source_priority.get(_metric_source(row.raw, field) or "", 0), row.measured_at),
-            reverse=True,
-        )
-        row = same_day[0]
-        result[field] = getattr(row, field)
-        result["sources"][field] = _metric_source(row.raw, field)
-        if latest_dt is None or row.measured_at > latest_dt:
-            latest_dt = row.measured_at
-    result["measured_at"] = latest_dt
-    if all(result.get(field) is None for field in BODY_FIELDS):
-        return None
-    return result
-
+    return body_snapshot(rows)
 
 async def _body_rows(db: AsyncSession, user_id, start_date: date | None = None) -> list[BodyMeasurement]:
     stmt = select(BodyMeasurement).where(BodyMeasurement.user_id == user_id)
@@ -154,7 +107,7 @@ def _vo2_sport(sport_type: str | None) -> str | None:
 
 
 async def _vo2_rows(db: AsyncSession, user_id, start_date: date | None = None) -> list:
-    stmt = select(Activity.id, Activity.sport_type, Activity.started_at, Activity.vo2max).where(
+    stmt = select(Activity.id, Activity.sport_type, Activity.started_at, Activity.vo2max, Activity.raw).where(
         Activity.user_id == user_id,
         Activity.vo2max.is_not(None),
         Activity.started_at.is_not(None),
@@ -175,44 +128,48 @@ def _vo2_history(rows: list) -> dict:
                 "date": row.started_at.date().isoformat(),
                 "value": round(float(row.vo2max), 2),
                 "activity_id": str(row.id),
+                "source": source(getattr(row, "raw", None)),
             })
     return series
 
 
 @router.get("/today")
 async def today(user: User = Depends(safety_confirmed_user), db: AsyncSession = Depends(get_db)):
-    row = await db.scalar(select(DailyHealth).where(DailyHealth.user_id == user.id, DailyHealth.date == date.today()))
-    sleep = await db.scalar(select(SleepSession).where(SleepSession.user_id == user.id, SleepSession.date == date.today()))
-    hrv = await db.scalar(select(HrvDaily).where(HrvDaily.user_id == user.id, HrvDaily.date == date.today()))
+    row = await db.scalar(select(DailyHealth).where(DailyHealth.user_id == user.id, DailyHealth.date == user_today(user)))
+    sleep = await db.scalar(select(SleepSession).where(SleepSession.user_id == user.id, SleepSession.date == user_today(user)))
+    hrv = await db.scalar(select(HrvDaily).where(HrvDaily.user_id == user.id, HrvDaily.date == user_today(user)))
     body = _body_latest(await _body_rows(db, user.id))
 
     vo2 = _vo2_history(await _vo2_rows(db, user.id))
     latest_running = vo2["running"][-1]["value"] if vo2["running"] else None
     latest_cycling = vo2["cycling"][-1]["value"] if vo2["cycling"] else None
 
-    if not row:
-        return {
-            "date": date.today().isoformat(),
-            "available": False,
-            "vo2max_running": latest_running,
-            "vo2max_cycling": latest_cycling,
-            "body": body,
-        }
-    result = _health(row)
-    result["available"] = True
-    result["vo2max_running"] = latest_running or result.get("vo2max_running")
-    result["vo2max_cycling"] = latest_cycling
+    result = _health(row) if row else {"date": user_today(user).isoformat(), "sources": {}}
+    result["available"] = any((row, sleep, hrv))
+    result["body"] = body
+    result["vo2_measurements"] = {}
+    for sport, entries in vo2.items():
+        if entries:
+            current = entries[-1]
+            field = f"vo2max_{sport}"
+            # A same-day daily value is fresher than an older activity estimate.
+            if field not in result or result[field] is None or current["date"] >= result["date"]:
+                result[field] = current["value"]
+                result["sources"][field] = current["source"]
+                result["vo2_measurements"][sport] = current
     result["sleep"] = {
         "duration_seconds": sleep.duration_seconds,
         "score": sleep.sleep_score,
         "deep_seconds": sleep.deep_seconds,
         "rem_seconds": sleep.rem_seconds,
+        "sources": {f: metric_source(sleep.raw, f) for f in ("duration_seconds", "sleep_score", "deep_seconds", "rem_seconds") if getattr(sleep, f) is not None},
         "source": _metric_source(sleep.raw, "duration_seconds") or _source(sleep.raw),
     } if sleep else None
     result["hrv"] = {
         "overnight_average": hrv.overnight_average,
         "highest_5min": hrv.highest_5min,
         "status": hrv.garmin_status,
+        "sources": {f: metric_source(hrv.raw, f) for f in ("overnight_average", "highest_5min", "garmin_status") if getattr(hrv, f) is not None},
         "source": _metric_source(hrv.raw, "overnight_average") or _source(hrv.raw),
     } if hrv else None
     result["body"] = body
@@ -232,7 +189,7 @@ async def health_range(
         sleep_stmt = select(SleepSession).where(SleepSession.user_id == user.id).order_by(SleepSession.date)
         hrv_stmt = select(HrvDaily).where(HrvDaily.user_id == user.id).order_by(HrvDaily.date)
     else:
-        start = date.today() - timedelta(days=days - 1)
+        start = user_today(user) - timedelta(days=days - 1)
         health_stmt = select(DailyHealth).where(DailyHealth.user_id == user.id, DailyHealth.date >= start).order_by(DailyHealth.date)
         sleep_stmt = select(SleepSession).where(SleepSession.user_id == user.id, SleepSession.date >= start).order_by(SleepSession.date)
         hrv_stmt = select(HrvDaily).where(HrvDaily.user_id == user.id, HrvDaily.date >= start).order_by(HrvDaily.date)
@@ -277,8 +234,11 @@ async def save_manual_body_measurement(
     user: User = Depends(safety_confirmed_user),
     db: AsyncSession = Depends(get_db),
 ):
-    day_start = datetime.combine(payload.measured_on, time.min, tzinfo=timezone.utc)
-    day_end = datetime.combine(payload.measured_on, time.max, tzinfo=timezone.utc)
+    payload.measured_on = payload.measured_on or user_today(user)
+    if payload.measured_on > user_today(user):
+        raise HTTPException(status_code=422, detail="BODY_MEASUREMENT_IN_FUTURE")
+    day_start = local_day_start(payload.measured_on, user)
+    day_end = local_day_start(payload.measured_on + timedelta(days=1), user) - timedelta(microseconds=1)
     rows = list((await db.scalars(select(BodyMeasurement).where(
         BodyMeasurement.user_id == user.id,
         BodyMeasurement.measured_at >= day_start,
@@ -286,21 +246,24 @@ async def save_manual_body_measurement(
     ).order_by(BodyMeasurement.measured_at.desc()))).all())
     row = next((item for item in rows if (item.raw or {}).get("source") == "manual_body"), None)
     if row is None:
-        # Keep the manual snapshot at the end of its calendar day. A measurement
-        # from Garmin/Withings/SparkyFitness on a later day naturally supersedes it, while
-        # the manual fallback remains available indefinitely if no newer value
-        # exists for a specific metric.
+        # Today uses the actual entry time; historical date-only entries use midnight.
         row = BodyMeasurement(
             user_id=user.id,
-            measured_at=datetime.combine(payload.measured_on, time(23, 59, 59), tzinfo=timezone.utc),
+            measured_at=datetime.now(timezone.utc) if payload.measured_on == user_today(user) else day_start,
             raw={"source": "manual_body", "_metric_sources": {}},
         )
         db.add(row)
+    metric_times = dict((row.raw or {}).get("_metric_times") or {})
+    for field in BODY_FIELDS:
+        if getattr(row, field) is not None and field not in metric_times:
+            metric_times[field] = (row.measured_at.replace(hour=0, minute=0, second=0) if (row.measured_at.hour, row.measured_at.minute, row.measured_at.second) == (23, 59, 59) else row.measured_at).isoformat()
+    row.measured_at = datetime.now(timezone.utc) if payload.measured_on == user_today(user) else day_start
     values = payload.model_dump(exclude={"measured_on"}, exclude_none=True)
     sources = dict((row.raw or {}).get("_metric_sources") or {})
     for field, value in values.items():
         setattr(row, field, value)
         sources[field] = "manual"
+        metric_times[field] = row.measured_at.isoformat()
 
     # BMI is deterministic and useful to Coach/Training. Recalculate it only
     # when this manual entry actually changes weight or height; the other part
@@ -314,7 +277,7 @@ async def save_manual_body_measurement(
         if effective_weight and effective_height:
             row.bmi = round(float(effective_weight) / ((float(effective_height) / 100.0) ** 2), 2)
             sources["bmi"] = "manual"
-    row.raw = {"source": "manual_body", "_metric_sources": sources}
+    row.raw = {"source": "manual_body", "_metric_sources": sources, "_metric_times": metric_times}
     await db.commit()
     await db.refresh(row)
     return {"saved": True, "measurement": _body_row(row), "current": _body_latest(await _body_rows(db, user.id))}
@@ -326,8 +289,8 @@ async def delete_manual_body_measurement(
     user: User = Depends(safety_confirmed_user),
     db: AsyncSession = Depends(get_db),
 ):
-    day_start = datetime.combine(measured_on, time.min, tzinfo=timezone.utc)
-    day_end = datetime.combine(measured_on, time.max, tzinfo=timezone.utc)
+    day_start = local_day_start(measured_on, user)
+    day_end = local_day_start(measured_on + timedelta(days=1), user) - timedelta(microseconds=1)
     rows = list((await db.scalars(select(BodyMeasurement).where(
         BodyMeasurement.user_id == user.id,
         BodyMeasurement.measured_at >= day_start,
@@ -349,7 +312,7 @@ async def vo2_history(
     user: User = Depends(safety_confirmed_user),
     db: AsyncSession = Depends(get_db),
 ):
-    start = None if all_data else date.today() - timedelta(days=days - 1)
+    start = None if all_data else user_today(user) - timedelta(days=days - 1)
     series = _vo2_history(await _vo2_rows(db, user.id, start_date=start))
     return {
         **series,
@@ -359,5 +322,15 @@ async def vo2_history(
             "running": series["running"][-1]["value"] if series["running"] else None,
             "cycling": series["cycling"][-1]["value"] if series["cycling"] else None,
         },
-        "source": "garmin_activity_summary",
+        "source": "activity_summary",
     }
+
+
+@router.get("/sources")
+async def sources_status(user: User = Depends(safety_confirmed_user), db: AsyncSession = Depends(get_db)):
+    from pengucoach.db.models import GarminConnection, SparkyFitnessConnection
+    result = []
+    for model, key, name in ((GarminConnection, "garmin", "Garmin"), (SparkyFitnessConnection, "sparkyfitness", "SparkyFitness")):
+        conn = await db.scalar(select(model).where(model.user_id == user.id))
+        result.append({"source": key, "name": name, "connected": bool(conn and conn.status == "connected"), "last_synced_at": getattr(conn, "last_successful_sync_at", None)})
+    return {"connections": result}

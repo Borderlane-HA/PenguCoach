@@ -7,6 +7,10 @@ import {bi,useI18n} from "../../../lib/i18n";
 
 type Appearance={theme:string;has_avatar:boolean;has_app_icon:boolean;avatar_version?:number;app_icon_version?:number};
 const themes=[
+  {id:"sand",nameDe:"Warm Sand",nameEn:"Warm Sand",descDe:"Warme Naturtöne und ruhiger Kontrast.",descEn:"Warm natural tones and calm contrast.",swatches:["#f8f3eb","#fffdfa","#926638"]},
+  {id:"rose",nameDe:"Rose",nameEn:"Rose",descDe:"Helles Rosé mit kräftigen Beeren-Akzenten.",descEn:"Light rose with rich berry accents.",swatches:["#fcf4f6","#ffffff","#a64365"]},
+  {id:"slate",nameDe:"Nordic Night",nameEn:"Nordic Night",descDe:"Dunkles Schieferblau, klar und fokussiert.",descEn:"Dark slate blue, clear and focused.",swatches:["#101722","#1b2636","#85b9ed"]},
+  {id:"aurora",nameDe:"Aurora",nameEn:"Aurora",descDe:"Dunkles Violett mit frischem Türkis.",descEn:"Dark violet with fresh turquoise.",swatches:["#181526","#242035","#68d3c1"]},
   {id:"light",nameDe:"Mint Light",nameEn:"Mint Light",descDe:"Das helle PenguCoach Gesundheitsdesign.",descEn:"The bright PenguCoach health theme.",swatches:["#f5faf7","#ffffff","#16866d"]},
   {id:"dark",nameDe:"Midnight Health",nameEn:"Midnight Health",descDe:"Dunkel, kontrastreich und angenehm am Abend.",descEn:"Dark, high-contrast and comfortable at night.",swatches:["#0d1512","#15211d","#5fd0ad"]},
   {id:"ocean",nameDe:"Ocean",nameEn:"Ocean",descDe:"Kühles Blau mit klaren Aqua-Akzenten.",descEn:"Cool blues with clean aqua accents.",swatches:["#f4f8fb","#ffffff","#287fa3"]},

@@ -6,13 +6,14 @@ def test_training_plan_context_is_selectable_and_defaults_to_seven_days():
     context = Path("pengucoach/coach/context.py").read_text()
     ui = Path("apps/web/app/training/page.tsx").read_text()
     assert "context_days: Literal[3, 7, 14, 21, 28] = 7" in router
-    assert "class TrainingContextSelection" in router
+    assert "TrainingContextSelection = ContextSelection" in router
     assert "days = days if days in {3, 7, 14, 21, 28} else 7" in context
     assert 'const CONTEXT_DAYS=[3,7,14,21,28]' in ui
     assert 'context_data:contextData' in ui
-    assert 'Training & FIT' in ui
-    assert 'Schlaf & HRV' in ui
-    assert 'Erholung & Stress' in ui
+    picker = Path('apps/web/components/ContextPicker.tsx').read_text()
+    assert 'Aktivitäten' in picker
+    assert 'Schlaf & HRV' in picker
+    assert 'Erholung & Stress' in picker
 
 
 def test_ollama_generation_streams_and_reports_live_token_progress():

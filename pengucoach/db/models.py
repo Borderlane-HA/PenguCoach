@@ -94,38 +94,6 @@ class SparkyFitnessConnection(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
 
-class WithingsConnection(Base):
-    __tablename__ = "withings_connections"
-    id: Mapped[uuid.UUID] = uuid_pk()
-    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), unique=True, index=True)
-    status: Mapped[str] = mapped_column(String(32), default="disconnected")
-    client_id: Mapped[str] = mapped_column(String(255))
-    client_secret_ciphertext: Mapped[str] = mapped_column(Text)
-    redirect_uri: Mapped[str] = mapped_column(Text)
-    withings_user_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
-    access_token_ciphertext: Mapped[str | None] = mapped_column(Text, nullable=True)
-    refresh_token_ciphertext: Mapped[str | None] = mapped_column(Text, nullable=True)
-    token_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    scope: Mapped[str | None] = mapped_column(Text, nullable=True)
-    oauth_state: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
-    oauth_state_created_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    sync_days: Mapped[int] = mapped_column(Integer, default=365)
-    auto_sync_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
-    sync_interval_minutes: Mapped[int] = mapped_column(Integer, default=60)
-    next_sync_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    sync_body: Mapped[bool] = mapped_column(Boolean, default=True)
-    sync_daily_activity: Mapped[bool] = mapped_column(Boolean, default=True)
-    sync_sleep: Mapped[bool] = mapped_column(Boolean, default=True)
-    sync_cursors: Mapped[dict] = mapped_column(JSONB, default=dict)
-    last_sync_summary: Mapped[dict] = mapped_column(JSONB, default=dict)
-    last_validated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    last_successful_sync_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    last_error_code: Mapped[str | None] = mapped_column(String(128), nullable=True)
-    last_error_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
-
-
 class GarminSyncSetting(Base):
     __tablename__ = "garmin_sync_settings"
     user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)

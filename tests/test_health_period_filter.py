@@ -5,7 +5,7 @@ def test_health_vo2_history_accepts_same_period_filter_as_health_range():
     router = Path("apps/api/routers/health.py").read_text()
     assert '@router.get("/vo2-history")' in router
     assert 'all_data: bool = Query(default=False, alias="all")' in router
-    assert 'start = None if all_data else date.today() - timedelta(days=days - 1)' in router
+    assert 'start = None if all_data else user_today(user) - timedelta(days=days - 1)' in router
     assert 'Activity.started_at >= start_dt' in router
 
 

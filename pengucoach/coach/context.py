@@ -15,12 +15,20 @@ from pengucoach.fit.service import load_activity_detail
 from pengucoach.garmin.zones import activity_zone_time, training_zone_snapshot
 
 
+from pengucoach.common.dates import user_today, user_zone, day_start
+from pengucoach.health.provenance import body_snapshot, source, metric_source
+
+
 SOURCE_NOTICE = (
-    "Each summary contains a source field. Direct Garmin summaries are authoritative Garmin totals when present; "
-    "Withings is a direct read-only health/body source; SparkyFitness is a secondary read-only source that can include "
-    "Apple Health and other providers and may overlap with direct Garmin data. Do not double-count apparently identical "
-    "sessions. manual_upload summaries come from imported FIT/GPX/TCX files. PenguCoach analytics are locally calculated "
-    "supplements. Missing values are null and must not be invented."
+    "Sources are attached to each metric/session: Garmin, SparkyFitness or manual imports. "
+    "No Garmin connection is required. Use only provided, selected categories. "
+    "Daily totals from different providers overlap: never add them together. Missing is not zero. "
+    "Body values are selected independently by measurement time, with the time retained per field. "
+    "BMI is calculated from the effective weight and height. Hydration is recorded intake, not proof of dehydration. "
+    "Rest days in summaries mean days without recorded training, not guaranteed inactivity. "
+    "Calendar-day health aggregates may include readings after the activity. "
+    "An activity summary uses its declared source, regardless of legacy key names. "
+    "Do not invent unavailable measurements, zones or medical readiness."
 )
 
 
@@ -40,6 +48,7 @@ def _activity_garmin(a: Activity) -> dict[str, Any]:
     extra = selected_activity_extras(raw)
     return {
         "activity_id": str(a.id),
+        "metric_sources": raw.get("_metric_sources", {}),
         "garmin_activity_id": a.garmin_activity_id if source in {"garmin", "garmin+sparkyfitness"} else None,
         "name": a.name,
         "sport": a.sport_type,
@@ -99,13 +108,13 @@ def _metric_payload(metric: ActivityMetric | None) -> dict[str, Any] | None:
     }
 
 
-def _window_summary(rows: list[Activity], end_date: date, days: int) -> dict[str, Any]:
+def _window_summary(rows: list[Activity], end_date: date, days: int, user: User | None = None) -> dict[str, Any]:
     start_date = end_date - timedelta(days=max(0, days - 1))
-    selected = [a for a in rows if a.started_at and start_date <= a.started_at.date() <= end_date]
+    selected = [a for a in rows if a.started_at and start_date <= a.started_at.replace(tzinfo=a.started_at.tzinfo or timezone.utc).astimezone(user_zone(user)).date() <= end_date]
     loads = [float(a.training_load) for a in selected if a.training_load is not None]
     durations = [float(a.duration_seconds) for a in selected if a.duration_seconds is not None]
     distances = [float(a.distance_m) for a in selected if a.distance_m is not None]
-    training_dates = {a.started_at.date() for a in selected if a.started_at}
+    training_dates = {a.started_at.replace(tzinfo=a.started_at.tzinfo or timezone.utc).astimezone(user_zone(user)).date() for a in selected if a.started_at}
     sports = Counter((a.sport_type or "unknown") for a in selected)
     return {
         "days": days,
@@ -116,28 +125,14 @@ def _window_summary(rows: list[Activity], end_date: date, days: int) -> dict[str
         "rest_days": max(0, days - len(training_dates)),
         "duration_hours": round(sum(durations) / 3600.0, 2),
         "distance_km": round(sum(distances) / 1000.0, 2),
-        "garmin_training_load_total": round(sum(loads), 1) if loads else None,
-        "garmin_training_load_avg": round(sum(loads) / len(loads), 1) if loads else None,
+        "training_load_total": round(sum(loads), 1) if loads else None,
+        "training_load_avg": round(sum(loads) / len(loads), 1) if loads else None,
         "sport_counts": dict(sports),
     }
 
 
 def _row_source(raw: dict[str, Any] | None) -> str:
-    data = raw or {}
-    metric_sources = data.get("_metric_sources") if isinstance(data, dict) else None
-    if isinstance(metric_sources, dict) and metric_sources:
-        values = {str(value) for value in metric_sources.values() if value}
-        order = ("withings", "garmin", "sparkyfitness", "manual")
-        ordered = [name for name in order if name in values]
-        ordered.extend(sorted(values - set(ordered)))
-        if ordered:
-            return "+".join(ordered)
-    has_withings = any(key in data for key in ("withings", "withings_activity", "withings_measurements"))
-    has_sparky = "sparkyfitness" in data
-    non_meta = {key for key in data if not str(key).startswith("_") and key not in {"withings", "withings_activity", "withings_measurements", "sparkyfitness"}}
-    sources = (["withings"] if has_withings else []) + (["garmin"] if non_meta else []) + (["sparkyfitness"] if has_sparky else [])
-    return "+".join(sources) if sources else "garmin"
-
+    return source(raw)
 
 def _compact_sparky_session(record: SourceRecord) -> dict[str, Any]:
     payload = record.payload if isinstance(record.payload, dict) else {}
@@ -193,12 +188,7 @@ def _materialized_sparky_ids(rows: list[Activity]) -> set[str]:
 
 
 def _metric_source(raw: dict[str, Any] | None, field: str) -> str:
-    data = raw or {}
-    sources = data.get("_metric_sources") if isinstance(data, dict) else None
-    if isinstance(sources, dict) and isinstance(sources.get(field), str):
-        return str(sources[field])
-    return _row_source(raw)
-
+    return metric_source(raw, field)
 
 BODY_CONTEXT_FIELDS = (
     "weight_kg", "height_cm", "bmi", "body_fat_percent",
@@ -207,37 +197,22 @@ BODY_CONTEXT_FIELDS = (
 
 
 def _body_snapshot(rows: list[BodyMeasurement]) -> dict[str, Any] | None:
-    result: dict[str, Any] = {"sources": {}, "measured_at": None}
-    latest_dt = None
-    source_priority = {"withings": 40, "garmin": 30, "sparkyfitness": 20, "manual": 10}
-    for field in BODY_CONTEXT_FIELDS:
-        candidates = [row for row in rows if getattr(row, field, None) is not None]
-        if not candidates:
-            continue
-        newest_day = max(row.measured_at.date() for row in candidates)
-        same_day = [row for row in candidates if row.measured_at.date() == newest_day]
-        same_day.sort(key=lambda row: (source_priority.get(_metric_source(row.raw, field), 0), row.measured_at), reverse=True)
-        row = same_day[0]
-        result[field] = getattr(row, field)
-        result["sources"][field] = _metric_source(row.raw, field)
-        if latest_dt is None or row.measured_at > latest_dt:
-            latest_dt = row.measured_at
-    if all(result.get(field) is None for field in BODY_CONTEXT_FIELDS):
-        return None
-    result["measured_at"] = latest_dt
-    return result
+    return body_snapshot(rows)
 
-
-async def _body_context(db: AsyncSession, user_id: uuid.UUID, start_date: date, end_date: date) -> dict[str, Any] | None:
+async def _body_context(db: AsyncSession, user_id: uuid.UUID, start_date: date, end_date: date, *, user: User | None = None) -> dict[str, Any] | None:
+    start_time = day_start(start_date, user) if user else datetime.combine(start_date, datetime.min.time(), tzinfo=timezone.utc)
+    end_time = (day_start(end_date + timedelta(days=1), user) - timedelta(microseconds=1)) if user else datetime.combine(end_date, datetime.max.time(), tzinfo=timezone.utc)
     recent = list((await db.scalars(select(BodyMeasurement).where(
         BodyMeasurement.user_id == user_id,
-        BodyMeasurement.measured_at >= datetime.combine(start_date, datetime.min.time(), tzinfo=timezone.utc),
-        BodyMeasurement.measured_at <= datetime.combine(end_date, datetime.max.time(), tzinfo=timezone.utc),
+        BodyMeasurement.measured_at >= start_time,
+        BodyMeasurement.measured_at <= end_time,
     ).order_by(BodyMeasurement.measured_at))).all())
     all_rows = list((await db.scalars(select(BodyMeasurement).where(
-        BodyMeasurement.user_id == user_id
-    ).order_by(BodyMeasurement.measured_at.desc()).limit(1000))).all())
-    latest = _body_snapshot(all_rows)
+        BodyMeasurement.user_id == user_id,
+        BodyMeasurement.measured_at <= end_time
+    ).order_by(BodyMeasurement.measured_at.desc()))).all())
+    latest = body_snapshot(all_rows, as_of=min(end_time, datetime.now(timezone.utc)))
+    recent = [r for r in recent if body_snapshot([r], as_of=min(end_time, datetime.now(timezone.utc))) is not None]
     if latest is None and not recent:
         return None
     return {
@@ -259,6 +234,10 @@ def _health_payload(rows: list[DailyHealth]) -> list[dict[str, Any]]:
         "body_battery_high": x.body_battery_high,
         "body_battery_low": x.body_battery_low,
         "hydration_ml": x.hydration_ml,
+        "distance_m": x.distance_m,
+        "active_calories_kcal": x.active_calories,
+        "respiration_avg": x.respiration_avg,
+        "spo2_avg": x.spo2_avg,
         "hydration_goal_ml": x.hydration_goal_ml,
         "training_readiness": x.training_readiness,
         "vo2max_running": x.vo2max_running,
@@ -310,44 +289,28 @@ async def _recovery_window(db: AsyncSession, user_id: uuid.UUID, start_date: dat
     return list(health), list(sleep), list(hrv)
 
 
-async def build_coach_context(db: AsyncSession, user: User, days: int = 30) -> dict[str, Any]:
-    end = datetime.now(timezone.utc).date()
-    start = end - timedelta(days=max(1, days) - 1)
-    health, sleep, hrv = await _recovery_window(db, user.id, start, end)
-    activities = (await db.scalars(select(Activity).where(
-        Activity.user_id == user.id,
-        Activity.started_at >= datetime.combine(start, datetime.min.time(), tzinfo=timezone.utc),
-    ).order_by(Activity.started_at.desc()).limit(40))).all()
-    activity_context: list[dict[str, Any]] = []
-    for a in activities:
-        metric = await db.scalar(select(ActivityMetric).where(ActivityMetric.activity_id == a.id))
-        activity_context.append({"garmin": _activity_garmin(a), "pengucoach": _metric_payload(metric)})
-    zones = await training_zone_snapshot(db, user.id)
-    sparky_sessions = await _sparky_sessions(db, user.id, start, end, limit=40, exclude_external_ids=_materialized_sparky_ids(list(activities)))
-    body = await _body_context(db, user.id, start, end)
+async def build_coach_context(db: AsyncSession, user: User, days: int = 7, **selection) -> dict[str, Any]:
+    result = await build_training_plan_context(db, user, days, **selection)
+    lookback = result["lookback"]
+    acts = lookback.get("activities", [])
+    health = lookback.get("daily_health", [])
+    sleeps, hrv = lookback.get("sleep", []), lookback.get("hrv", [])
+    summary = lookback.get("summary_period")
     return {
         "source_notice": SOURCE_NOTICE,
-        "training_zones": zones,
-        "period_days": days,
+        "period_days": lookback["days"], "from": lookback["from"], "to": lookback["to"],
+        "selected_data": lookback["selected_data"],
         "data_inventory": {
-            "activity_count": len(activities),
-            "health_days": len(health),
-            "sleep_days": len(sleep),
-            "hrv_days": len(hrv),
-            "sparkyfitness_unmaterialized_sessions": len(sparky_sessions),
-            "latest_activity_at": activities[0].started_at if activities else None,
-            "latest_health_date": health[-1].date if health else None,
-            "latest_sleep_date": sleep[-1].date if sleep else None,
-            "latest_hrv_date": hrv[-1].date if hrv else None,
+            "activity_count": summary["activity_count"] if summary else 0,
+            "health_days": len(health), "sleep_days": len(sleeps), "hrv_days": len(hrv),
+            "body_available": bool(lookback.get("body_profile")),
         },
-        "summary_7d": _window_summary(list(activities), end, min(7, days)),
-        "summary_28d": _window_summary(list(activities), end, min(28, days)),
-        "health_30d": _health_payload(health),
-        "sleep_30d": _sleep_payload(sleep),
-        "hrv_30d": _hrv_payload(hrv),
-        "recent_activities": activity_context[:20],
-        "sparkyfitness_sessions": sparky_sessions[:20],
-        "body_profile": body,
+        "summary_7d": lookback.get("summary_recent_7d", summary),
+        "summary_28d": summary,  # Legacy key; days/from/to declare actual selected range.
+        "health_30d": health, "sleep_30d": sleeps, "hrv_30d": hrv,
+        "recent_activities": list(reversed(acts)),
+        "sparkyfitness_sessions": lookback.get("sparkyfitness_sessions", []),
+        "body_profile": lookback.get("body_profile"), "training_zones": result.get("training_zones"),
     }
 
 
@@ -380,7 +343,7 @@ async def build_activity_analysis_context(
     end_dt = activity.started_at or datetime.now(timezone.utc)
     if end_dt.tzinfo is None:
         end_dt = end_dt.replace(tzinfo=timezone.utc)
-    end_date = end_dt.date()
+    end_date = end_dt.astimezone(user_zone(user)).date()
     lookback_days = lookback_days if lookback_days in {0, 1, 3, 7} else 7
     # 0 = only this session; 1 = calendar day of the session; 3/7 = inclusive calendar-day windows.
     # Using days - 1 avoids accidentally turning a 3-day request into four calendar dates.
@@ -391,7 +354,7 @@ async def build_activity_analysis_context(
     sleep: list[SleepSession] = []
     hrv: list[HrvDaily] = []
     if lookback_days:
-        start_dt = datetime.combine(start_date, datetime.min.time(), tzinfo=timezone.utc)
+        start_dt = day_start(start_date, user)
         prior = list((await db.scalars(select(Activity).where(
             Activity.user_id == user.id,
             Activity.started_at >= start_dt,
@@ -401,17 +364,17 @@ async def build_activity_analysis_context(
 
     prior_payload = [_activity_garmin(a) for a in prior]
     current = {
-        "garmin": _activity_garmin(activity),
+        "summary": _activity_garmin(activity),
         "pengucoach": _metric_payload(metric),
         "fit_analytics_source": "pengucoach_fit",
         "fit_analytics": fit_detail.get("stats"),
-        "training_zones": zones,
+        "training_zones": zones if zones.get("synced") else None,
         "time_in_zones": zone_time,
         "splits_source": "pengucoach_fit",
         "splits": (fit_detail.get("splits") or [])[:120],
     }
     scope = {0: "session_only", 1: "activity_day", 3: "three_days", 7: "seven_days"}[lookback_days]
-    body = await _body_context(db, user.id, start_date, end_date)
+    body = await _body_context(db, user.id, start_date, end_date, user=user) if lookback_days else None
     lookback: dict[str, Any] = {
         "scope": scope,
         "days": lookback_days,
@@ -424,11 +387,11 @@ async def build_activity_analysis_context(
         "body_profile": body,
     }
     if lookback_days == 1:
-        lookback["summary_day"] = _window_summary(prior, end_date, 1)
+        lookback["summary_day"] = _window_summary(prior, end_date, 1, user)
     if lookback_days >= 3:
-        lookback["summary_3d"] = _window_summary(prior, end_date, 3)
+        lookback["summary_3d"] = _window_summary(prior, end_date, 3, user)
     if lookback_days >= 7:
-        lookback["summary_7d"] = _window_summary(prior, end_date, 7)
+        lookback["summary_7d"] = _window_summary(prior, end_date, 7, user)
     return {"source_notice": SOURCE_NOTICE, "activity": current, "lookback": lookback}
 
 
@@ -441,7 +404,9 @@ async def build_training_plan_context(
     include_zones: bool = True,
     include_sleep_hrv: bool = True,
     include_recovery: bool = True,
-    include_daily_activity: bool = False,
+    include_daily_activity: bool = True,
+    include_hydration: bool = True,
+    include_body: bool = True,
 ) -> dict[str, Any]:
     """Build the explicitly selected training-plan context.
 
@@ -450,15 +415,16 @@ async def build_training_plan_context(
     prompt mirrors the briefing a human coach would receive.
     """
     days = days if days in {3, 7, 14, 21, 28} else 7
-    end = datetime.now(timezone.utc).date()
+    end = user_today(user)
     start = end - timedelta(days=days - 1)
-    start_dt = datetime.combine(start, datetime.min.time(), tzinfo=timezone.utc)
+    start_dt = day_start(start, user)
 
     activities: list[Activity] = []
     activity_payload: list[dict[str, Any]] = []
     if include_training:
         activities = list((await db.scalars(select(Activity).where(
-            Activity.user_id == user.id, Activity.started_at >= start_dt
+            Activity.user_id == user.id, Activity.started_at >= start_dt,
+            Activity.started_at <= datetime.now(timezone.utc)
         ).order_by(Activity.started_at))).all())
         metric_map: dict[uuid.UUID, ActivityMetric] = {}
         activity_ids = [a.id for a in activities]
@@ -466,17 +432,17 @@ async def build_training_plan_context(
             metrics = list((await db.scalars(select(ActivityMetric).where(ActivityMetric.activity_id.in_(activity_ids)))).all())
             metric_map = {m.activity_id: m for m in metrics}
         activity_payload = [
-            {"garmin": _activity_garmin(a), "pengucoach_fit": _metric_payload(metric_map.get(a.id))}
+            {"summary": _activity_garmin(a), "pengucoach_fit": _metric_payload(metric_map.get(a.id))}
             for a in activities[-40:]
         ]
 
     health: list[DailyHealth] = []
     sleep: list[SleepSession] = []
     hrv: list[HrvDaily] = []
-    if include_sleep_hrv or include_recovery or include_daily_activity:
+    if include_sleep_hrv or include_recovery or include_daily_activity or include_hydration:
         health, sleep, hrv = await _recovery_window(db, user.id, start, end)
 
-    body = await _body_context(db, user.id, start, end)
+    body = await _body_context(db, user.id, start, end, user=user) if include_body else None
 
     lookback: dict[str, Any] = {
         "days": days,
@@ -487,23 +453,25 @@ async def build_training_plan_context(
             "training_zones": include_zones,
             "sleep_and_hrv": include_sleep_hrv,
             "recovery": include_recovery,
-            "steps_and_hydration": include_daily_activity,
+            "daily_activity": include_daily_activity,
+            "hydration": include_hydration,
+            "body": include_body,
         },
     }
     lookback["body_profile"] = body
 
     if include_training:
-        lookback["summary_period"] = _window_summary(activities, end, days)
+        lookback["summary_period"] = _window_summary(activities, end, days, user)
         lookback["sparkyfitness_sessions"] = await _sparky_sessions(db, user.id, start, end, limit=80, exclude_external_ids=_materialized_sparky_ids(activities))
         if days > 7:
-            lookback["summary_recent_7d"] = _window_summary(activities, end, 7)
+            lookback["summary_recent_7d"] = _window_summary(activities, end, 7, user)
         lookback["activities"] = activity_payload
 
     if include_sleep_hrv:
         lookback["sleep"] = _sleep_payload(sleep)
         lookback["hrv"] = _hrv_payload(hrv)
 
-    if include_recovery or include_daily_activity:
+    if include_recovery or include_daily_activity or include_hydration:
         daily: list[dict[str, Any]] = []
         for row in health:
             item: dict[str, Any] = {"date": row.date, "source": _row_source(row.raw), "sources": {}}
@@ -519,17 +487,25 @@ async def build_training_plan_context(
             if include_daily_activity:
                 item.update({
                     "steps": row.steps,
+                    "distance_m": row.distance_m,
+                    "active_calories_kcal": row.active_calories,
+                })
+            if include_hydration:
+                item.update({
                     "hydration_ml": row.hydration_ml,
                     "hydration_goal_ml": row.hydration_goal_ml,
                 })
-            for field in ("resting_hr", "stress_avg", "body_battery_high", "body_battery_low", "training_readiness", "vo2max_running", "steps", "hydration_ml", "hydration_goal_ml"):
-                if getattr(row, field, None) is not None:
+            for field in ("resting_hr", "stress_avg", "body_battery_high", "body_battery_low", "training_readiness", "vo2max_running", "steps", "hydration_ml", "hydration_goal_ml", "distance_m", "active_calories"):
+                alias = {"resting_hr": "resting_hr_bpm", "active_calories": "active_calories_kcal"}.get(field, field)
+                if alias in item and getattr(row, field, None) is not None:
                     item["sources"][field] = _metric_source(row.raw, field)
+                    item["sources"][alias] = _metric_source(row.raw, field)
             daily.append(item)
         lookback["daily_health"] = daily
 
+    zones = await training_zone_snapshot(db, user.id) if include_zones else None
     return {
         "source_notice": SOURCE_NOTICE,
-        "training_zones": await training_zone_snapshot(db, user.id) if include_zones else None,
+        "training_zones": zones if zones and zones.get("synced") else None,
         "lookback": lookback,
     }

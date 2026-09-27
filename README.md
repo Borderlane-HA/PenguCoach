@@ -8,21 +8,21 @@
 
 > **Development project / Entwicklungsprojekt.** PenguCoach analyses fitness, training and wellness data. It is not a medical device and does not replace qualified medical, sports, physiotherapy or nutrition advice. Every new login requires confirmation of the Development & Health Notice.
 
-PenguCoach is designed as a local-first, multi-user platform that reads Garmin Connect data, archives original FIT files, calculates deterministic activity metrics and can use local or cloud LLMs for contextual training analysis.
+PenguCoach is designed as a local-first, multi-user platform that reads Garmin Connect and/or SparkyFitness data, supports manual body measurements and FIT/GPX/TCX imports, archives original FIT files, calculates deterministic activity metrics and can use local or cloud LLMs for contextual training analysis.
 
 ## Current alpha scope
 
 Alpha.23 adds AI usage and cost transparency across local and cloud models, configurable response-quality profiles, and a dedicated Garmin activity-catalogue repair path. Per-model input/output prices can be stored in AI Studio; completed AI runs snapshot the active prices and actual provider token usage so historical costs stay stable when prices change. Coach, activity analysis and training planning expose Very low / Low / Standard / High response profiles, with Standard retaining the previous behavior. Garmin data synchronization stays read-only; the new activities-only history action fills gaps in the local activity catalogue without repeating years of wellness requests.
 
-`v0.1.0-alpha.37` is the current end-to-end alpha baseline:
+`v0.1.0-alpha.38` is the current end-to-end alpha baseline:
 
+- **Unified data:** Today, Health, activity analysis, Coach and training planning use the same per-metric provenance and body snapshot. No Garmin connection is required. See [`docs/UNIFIED_DATA.md`](docs/UNIFIED_DATA.md).
 - **SparkyFitness read-only connection:** configurable self-hosted URL + encrypted API key, capability probing, multi-year/all-history manual sync plus a small configurable interval sync for today + yesterday. Sleep, daily/check-in data, HRV/resting-HR custom metrics, body/scale values and paginated workout history are imported. Compact history rows are enriched from SparkyFitness exercise-entry/provider details so HealthKit/Apple Health heart rate, speed, elevation, distance, duration and calories can reach the activity diary. Conservative duplicate matching merges the same Garmin/Sparky workout instead of double-counting it.
 
-- **Withings read-only connection:** official OAuth2 authorization with encrypted client secret/access/refresh tokens, configurable manual history plus automatic sync, and direct import of body/scale measurements (including weight/height and body composition where available), daily activity and sleep. Incremental measurement sync uses Withings update cursors while short recurring syncs refresh today + yesterday for daily/sleep data. For equal-date body values, direct Withings measurements outrank Garmin, SparkyFitness and manual fallbacks; newer measurement dates always win. Withings workouts are intentionally not imported in this first connector version to avoid duplicate activity sources. See [`docs/WITHINGS.md`](docs/WITHINGS.md).
 
 - German and English web UI
 - bright health-first responsive web design with desktop sidebar and mobile navigation dock
-- per-user appearance themes (Mint Light, Midnight Health, Ocean, Forest and Lavender)
+- per-user appearance themes (Mint Light, Midnight Health, Ocean, Forest, Lavender, Warm Sand, Rose, Nordic Night and Aurora)
 - profile-picture and custom app-icon upload stored locally and included in normal backups
 - built-in PenguCoach app icon used by default in the UI plus a browser favicon; a custom app icon can still override the sidebar branding
 - simplified Garmin synchronization with one everyday Sync action and a separate history/backfill section
@@ -191,7 +191,7 @@ AI is deliberately near the end of the pipeline. Numbers that can be calculated 
 
 PenguCoach does **not** expose generic access to the Garmin client. Normal synchronization still goes exclusively through `GarminReadOnlyGateway`, an explicit allow-list of getters/download operations. Health, activity, FIT, body and training-data synchronization therefore remains read-only.
 
-Alpha.14 adds one deliberately separate exception: `GarminWorkoutGateway`. It is disabled by default, is never passed to the AI layer, and exposes only the operations PenguCoach needs to upload a concrete structured workout, schedule it on a chosen calendar date, and delete an orphaned workout template if scheduling fails. The user must first enable **Training & Kalender → Trainingsplan zu Garmin exportieren** and then explicitly select/confirm sessions in a generated plan. An export ledger blocks duplicate session/date exports. Hydration, weight and other Garmin mutation methods remain unavailable. Before export, the calendar supports export-only editing of workout content and drag & drop scheduling: non-exported sessions can be moved to another day, and dropping onto an occupied day swaps both sessions. The AI-generated source plan remains unchanged.
+Alpha.14 adds one deliberately separate exception: `GarminWorkoutGateway`. It is disabled by default, is never passed to the AI layer, and exposes only the operations PenguCoach needs to upload a concrete structured workout, schedule it on a chosen calendar date, and delete an orphaned workout template if scheduling fails. The user must first enable **Training & Kalender → Trainingsplan zu Garmin exportieren** and then explicitly select/confirm sessions in a generated plan. An export ledger blocks duplicate session/date exports. Hydration, weight and other Garmin mutation methods remain unavailable. Before export, the calendar supports browser-local editing of workout content and drag & drop or touch-select scheduling: non-exported sessions can be moved to another day, and dropping onto an occupied day swaps both sessions. The AI-generated source plan remains unchanged.
 
 Strength export is validated against the Garmin exercise catalogue before upload. Exact catalogue names and safe built-in aliases resolve automatically; otherwise the calendar shows the missing mapping and lets the user search Garmin's catalogue. A selected mapping is stored per user and reused for the same local/AI exercise label in later plans. If the user exports before mapping an unknown movement, only that movement falls back visibly to Garmin's real `Total Body` exercise instead of failing the complete strength workout.
 

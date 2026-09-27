@@ -45,7 +45,7 @@ def _emit_progress(callback: ProgressCallback | None, **payload: Any) -> None:
 
 SYSTEM_PROMPT_DE = """Du bist PenguCoach, ein selbst gehosteter Assistent für Trainings- und Wellnessanalyse.
 Nutze ausschließlich Fakten aus dem bereitgestellten Kontext. Erfinde niemals Messwerte, Trainingseinheiten,
-Symptome oder Erholungsdaten. Unterscheide klar zwischen Garmin-Werten, von PenguCoach berechneten
+Symptome oder Erholungsdaten. Unterscheide klar zwischen Messwerten der angegebenen Quellen, von PenguCoach berechneten
 Metriken und Angaben des Nutzers. Garmin-Zusammenfassungen sind – sofern vorhanden – die maßgebliche
 Quelle für offizielle Aktivitäts-Gesamtwerte; PenguCoach-Berechnungen ergänzen die Analyse.
 PenguCoach ist kein Medizinprodukt. Stelle keine Diagnosen und erteile keine medizinische Trainingsfreigabe.
@@ -56,7 +56,7 @@ Erholungssignale mit angemessener Unsicherheit. Antworte ausschließlich auf Deu
 
 SYSTEM_PROMPT_EN = """You are PenguCoach, a self-hosted training and wellness analysis assistant.
 Use only facts in the supplied context. Never invent measurements, workouts, symptoms or recovery data.
-Clearly distinguish Garmin values, PenguCoach-calculated metrics and user-provided information. Garmin summary
+Clearly distinguish values from the declared sources, PenguCoach-calculated metrics and user-provided information. Garmin summary
 values are the authoritative source for official activity totals when present; PenguCoach calculations are analytical
 supplements. You are not a medical device and you do not diagnose, treat, or provide medical clearance. If a user
 describes urgent or potentially serious symptoms, recommend prompt professional medical assessment rather than
@@ -65,7 +65,7 @@ training data alone; describe patterns such as high/low recent load and recovery
 Reply exclusively in English."""
 
 DEEP_ACTIVITY_PROMPT_DE = """Führe eine tiefgehende, datenbasierte Analyse dieser Trainingseinheit durch.
-Priorisiere die offiziellen Garmin-Gesamtwerte und verwende PenguCoach-FIT-Metriken als ergänzende analytische Evidenz.
+Nutze die Gesamtwerte der angegebenen Aktivitätsquelle und verwende PenguCoach-FIT-Metriken als ergänzende analytische Evidenz.
 Analysiere – sofern Daten vorhanden sind – Tempo/Geschwindigkeit, Herzfrequenzreaktion, Leistung, Kadenz,
 Höhenprofil, Splits, Sensorabdeckung, Effizienz und auffällige Veränderungen innerhalb der Einheit.
 Wenn training_zones vorhanden sind, verwende die von Garmin konfigurierten sportartspezifischen Herzfrequenz- und
@@ -74,13 +74,13 @@ klar: Zonengrenzen = Garmin, Zeit in Zone = PenguCoach/FIT. Erfinde keine fehlen
 
 Wenn Kontextdaten vorhanden sind, verwende exakt den angeforderten Kontextumfang aus lookback.scope:
 - session_only: ausschließlich diese Trainingseinheit; keine Tages- oder Rückblickbewertung erfinden.
-- activity_day: Tageskontext des Trainingstags einschließlich verfügbarer Garmin-Tageswerte wie Schlaf, HRV,
+- activity_day: Tageskontext des Trainingstags einschließlich verfügbarer Tageswerte der angegebenen Quellen wie Schlaf, HRV,
   Ruhepuls, Stress, Body Battery, Training Readiness, Schritte und Hydration sowie weitere Einheiten dieses Tages.
 - three_days: die Einheit plus den inklusiven 3-Tage-Kontext mit Trainingshäufigkeit, Dauer, Distanz, Garmin
   Training Load, Ruhetagen und verfügbaren Erholungsdaten.
 - seven_days: die Einheit plus den inklusiven 7-Tage-Kontext; nutze zusätzlich den 3-Tage-Vergleich, wenn vorhanden.
 Ordne kurzfristige Belastung vorsichtig als eher niedrig, ausgewogen oder hoch ein, ohne ein Übertrainingssyndrom
-zu diagnostizieren. Tageswerte sind Garmin-Tagesaggregate und können den gesamten Kalendertag abbilden.
+zu diagnostizieren. Tageswerte sind Tagesaggregate der angegebenen Quellen und können den gesamten Kalendertag abbilden.
 
 Strukturiere die Antwort passend zum tatsächlich gelieferten Kontext in:
 1. Kurzfazit
@@ -97,7 +97,7 @@ Nutze konkrete Zahlen aus dem Kontext. Erfinde keine fehlenden Werte. Kennzeichn
 stammt und was von PenguCoach berechnet wurde. Antworte ausschließlich auf Deutsch."""
 
 DEEP_ACTIVITY_PROMPT_EN = """Perform a deep, evidence-focused analysis of this training session.
-Prioritize official Garmin activity totals and use PenguCoach FIT metrics as supplementary analytical evidence.
+Use totals from the declared activity source and use PenguCoach FIT metrics as supplementary analytical evidence.
 Where data exists, assess pacing/speed, heart-rate response, power, cadence, elevation, splits, sensor coverage,
 efficiency and meaningful changes within the session. If training_zones are supplied, use Garmin's configured
 sport-specific heart-rate and power zones. If time_in_zones is supplied, use the locally FIT-calculated distribution
@@ -105,13 +105,13 @@ and state clearly: zone boundaries = Garmin, time in zone = PenguCoach/FIT. Neve
 
 When context data is supplied, use exactly the requested scope from lookback.scope:
 - session_only: analyse only this training session; do not invent daily or lookback conclusions.
-- activity_day: use the calendar-day context for the session, including available Garmin daily values such as sleep,
+- activity_day: use the calendar-day context for the session, including available daily values from the declared sources such as sleep,
   HRV, resting heart rate, stress, Body Battery, Training Readiness, steps and hydration, plus other sessions that day.
 - three_days: use the session plus the inclusive 3-day context with training frequency, duration, distance, Garmin
   Training Load, rest days and available recovery data.
 - seven_days: use the session plus the inclusive 7-day context and the 3-day comparison when available.
 Describe short-term load cautiously as relatively light, balanced or heavy; do not diagnose overtraining syndrome.
-Daily values are Garmin calendar-day aggregates and may represent the complete calendar day.
+Daily values are calendar-day aggregates from the declared sources and may represent the complete calendar day.
 
 Complete the answer using sections appropriate to the supplied context:
 1. Executive summary
@@ -151,7 +151,7 @@ sessions and rest days. Structure the result as: Goal & assumptions, Weekly stru
 Progression rules, Recovery/load guardrails, and How to adjust when sessions are missed or recovery data is poor.
 Do not invent health data. Reply exclusively in English."""
 
-COACH_CHAT_PROMPT_DE = """Beantworte die Frage des Nutzers anhand des bereitgestellten Garmin- und PenguCoach-Kontexts.
+COACH_CHAT_PROMPT_DE = """Beantworte die Frage des Nutzers anhand des bereitgestellten Kontexts und der angegebenen Datenquellen.
 Nutze konkrete Werte, wenn sie relevant sind, unterscheide Messwerte von Interpretation und sage klar, wenn die Datenlage
 für eine Aussage nicht ausreicht. Bevor du behauptest, dass Aktivitäten, Gesundheits-, Schlaf- oder HRV-Daten fehlen,
 prüfe data_inventory sowie die zugehörigen Kontextlisten und Zusammenfassungen; melde niemals "keine Daten", wenn
@@ -159,7 +159,7 @@ Inventar oder Summaries Datensätze ausweisen. Nutze Garmin-Trainingszonen aus t
 Puls oder Leistung betrifft. Wenn die Frage keinen Trainings-/Gesundheitskontext benötigt, antworte direkt und ignoriere
 irrelevante Trainingsdaten. Antworte ausschließlich auf Deutsch."""
 
-COACH_CHAT_PROMPT_EN = """Answer the user's question from the supplied Garmin and PenguCoach context.
+COACH_CHAT_PROMPT_EN = """Answer the user's question from the supplied context and its declared sources.
 Use concrete values when relevant, distinguish measured facts from interpretation, and state when the available data is
 insufficient. Before claiming that activities, health, sleep or HRV data are absent, inspect data_inventory and the relevant
 context arrays/summaries; never report "no data" when the inventory or summaries show records. Use Garmin training zones
@@ -170,6 +170,8 @@ training/wellness context, answer directly and ignore irrelevant training data. 
 DEEP_ACTIVITY_PROMPT = DEEP_ACTIVITY_PROMPT_EN
 TRAINING_PLAN_PROMPT = TRAINING_PLAN_PROMPT_EN
 COACH_CHAT_PROMPT = COACH_CHAT_PROMPT_EN
+COACH_ADVICE_DE = "Beantworte kurze Alltagsfragen knapp mit einer Empfehlung und einer kurzen Begründung aus den gewählten Daten. Erstelle keinen mehrtägigen Trainingsplan, außer wenn ausdrücklich gewünscht. Fehlende Messwerte sind kein Nachweis von Erholung oder Inaktivität. Bei 'heute' beziehe dich auf das Kontext-Enddatum."
+COACH_ADVICE_EN = "Answer short everyday questions concisely with a recommendation and a brief reason from selected data. Do not create a multi-day training plan unless explicitly requested. Missing readings do not prove recovery or inactivity. Use the context end date for today."
 SYSTEM_PROMPT = SYSTEM_PROMPT_EN
 
 TASK_DEFAULTS: dict[str, dict[str, Any]] = {
@@ -351,6 +353,8 @@ def _bounded_context(context: dict[str, Any], max_chars: int) -> tuple[str, dict
             compact = {
                 "source_notice": working.get("source_notice"),
                 "period_days": working.get("period_days"),
+                "selected_data": working.get("selected_data"),
+                "from": working.get("from"), "to": working.get("to"),
                 "data_inventory": working.get("data_inventory"),
                 "summary_7d": working.get("summary_7d"),
                 "summary_28d": working.get("summary_28d"),
@@ -376,7 +380,7 @@ def _bounded_context(context: dict[str, Any], max_chars: int) -> tuple[str, dict
                 payload, size = _json_size(compact)
             if size > max_chars:
                 compact["recent_activities"] = [
-                    {"garmin": item.get("garmin")} if isinstance(item, dict) else item
+                    {"summary": item.get("summary", item.get("garmin"))} if isinstance(item, dict) else item
                     for item in (compact.get("recent_activities") or [])[:3]
                 ]
                 compact["sparkyfitness_sessions"] = (compact.get("sparkyfitness_sessions") or [])[:1]
@@ -393,6 +397,9 @@ def _bounded_context(context: dict[str, Any], max_chars: int) -> tuple[str, dict
                     "from": working.get("lookback", {}).get("from"),
                     "to": working.get("lookback", {}).get("to"),
                     "selected_data": working.get("lookback", {}).get("selected_data"),
+                    "scope": working.get("lookback", {}).get("scope"),
+                    "health": (working.get("lookback", {}).get("health") or [])[-7:],
+                    "body_profile": working.get("lookback", {}).get("body_profile"),
                     "summary_period": working.get("lookback", {}).get("summary_period"),
                     "summary_recent_7d": working.get("lookback", {}).get("summary_recent_7d"),
                     # Activity analysis still uses these legacy summary keys.
@@ -414,7 +421,7 @@ def _bounded_context(context: dict[str, Any], max_chars: int) -> tuple[str, dict
                 # Reduce the current-session payload before discarding lookback data.
                 activity = compact["activity"]
                 compact["activity"] = {
-                    "garmin": activity.get("garmin"),
+                    "summary": activity.get("summary", activity.get("garmin")),
                     "pengucoach": activity.get("pengucoach"),
                     "fit_analytics_source": activity.get("fit_analytics_source"),
                     "fit_analytics": activity.get("fit_analytics"),
@@ -428,7 +435,7 @@ def _bounded_context(context: dict[str, Any], max_chars: int) -> tuple[str, dict
             if size > max_chars and isinstance(compact.get("activity"), dict):
                 activity = compact["activity"]
                 compact["activity"] = {
-                    "garmin": activity.get("garmin"),
+                    "summary": activity.get("summary", activity.get("garmin")),
                     "pengucoach": activity.get("pengucoach"),
                     "training_zones": activity.get("training_zones"),
                     "time_in_zones": activity.get("time_in_zones"),
@@ -517,6 +524,9 @@ async def chat(
 
     task_prompt = (instruction_prompt or config["default_prompt"]).strip()[:16000]
     task_prompt = (task_prompt + quality_instruction(quality_profile, locale, task))[:18000]
+    if task == "coach_chat":
+        advice = COACH_ADVICE_DE if _locale_key(locale) == "de" else COACH_ADVICE_EN
+        task_prompt += "\n" + advice
     context_json, context_meta = _bounded_context(context, max_context_chars)
     output_target = max(128, int(max_tokens * 0.88))
     budget_notice = (

@@ -71,7 +71,7 @@ def test_garmin_preview_and_worker_apply_user_calendar_edits():
     assert "session_overrides" in router
     assert "apply_session_overrides" in router
     assert 'payload.get("session_overrides")' in worker
-    assert "Vor Garmin bearbeiten" in ui
+    assert "Einheit bearbeiten" in ui
     assert "Gesamtdauer aus Schritten übernehmen" in ui
     assert "session_overrides:overrides" in ui
     assert "localStorage.setItem(editKey" in ui

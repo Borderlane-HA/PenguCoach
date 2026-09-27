@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pengucoach"
-version = "0.1.0-alpha.37"
+version = "0.1.0-alpha.38"
 description = "Self-hosted AI training and health coach"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -36,6 +36,7 @@ dependencies = [
 dev = [
   "pytest>=8.4,<9",
   "pytest-asyncio>=1.1,<2",
+  "aiosqlite>=0.21,<1",
   "ruff>=0.12,<1",
 ]
 

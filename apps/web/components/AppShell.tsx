@@ -7,7 +7,7 @@ import {bi,useI18n} from "../lib/i18n";
 
 type Me={username:string;role:string;locale:string;safety_required:boolean;app_version:string};
 type Appearance={theme:string;has_avatar:boolean;has_app_icon:boolean;avatar_version?:number;app_icon_version?:number};
-type IconName="today"|"health"|"activities"|"training"|"coach"|"garmin"|"sparky"|"withings"|"privacy"|"appearance"|"ai"|"users"|"logout";
+type IconName="today"|"health"|"activities"|"training"|"coach"|"garmin"|"sparky"|"privacy"|"appearance"|"ai"|"users"|"logout";
 
 function Icon({name}:{name:IconName}){
   const common={width:20,height:20,viewBox:"0 0 24 24",fill:"none",stroke:"currentColor",strokeWidth:1.8,strokeLinecap:"round" as const,strokeLinejoin:"round" as const,"aria-hidden":true};
@@ -18,7 +18,6 @@ function Icon({name}:{name:IconName}){
   if(name==="coach")return <svg {...common}><path d="m12 3 1.2 3.4L16.5 8l-3.3 1.6L12 13l-1.2-3.4L7.5 8l3.3-1.6L12 3Z"/><path d="m18.5 13 .8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8.8-2.2ZM5.5 14l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7.7-1.8Z"/></svg>;
   if(name==="garmin")return <svg {...common}><rect x="7" y="4" width="10" height="16" rx="3"/><path d="M9 1h6M9 23h6M10 9l2-2 2 2M10 14h4"/></svg>;
   if(name==="sparky")return <svg {...common}><path d="M12 3 5 12h5l-1 9 7-10h-5l1-8Z"/></svg>;
-  if(name==="withings")return <svg {...common}><path d="M4 6h3l2 11 3-8 3 8 2-11h3"/><path d="M3 4h18"/></svg>;
   if(name==="privacy")return <svg {...common}><path d="M12 3 5 6v5c0 4.7 2.7 8.1 7 10 4.3-1.9 7-5.3 7-10V6l-7-3Z"/><path d="m9.5 12 1.6 1.6 3.4-3.6"/></svg>;
   if(name==="appearance")return <svg {...common}><circle cx="12" cy="12" r="9"/><path d="M12 3v18M3 12h18M6.2 6.2l11.6 11.6M17.8 6.2 6.2 17.8"/></svg>;
   if(name==="ai")return <svg {...common}><rect x="6" y="6" width="12" height="12" rx="3"/><path d="M9 10h6M9 14h4M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M18 9h4M2 15h4M18 15h4"/></svg>;
@@ -44,7 +43,6 @@ export default function AppShell({children,title}:{children:React.ReactNode;titl
   const settings=useMemo(()=>[
     {href:"/settings/garmin",icon:"garmin" as IconName,label:"Garmin"},
     {href:"/settings/sparkyfitness",icon:"sparky" as IconName,label:"SparkyFitness"},
-    {href:"/settings/withings",icon:"withings" as IconName,label:"Withings"},
     {href:"/settings/appearance",icon:"appearance" as IconName,label:bi(lang,"Darstellung","Appearance")},
     {href:"/settings/privacy",icon:"privacy" as IconName,label:bi(lang,"Datenschutz","Privacy")},
   ],[lang]);
@@ -76,9 +74,9 @@ export default function AppShell({children,title}:{children:React.ReactNode;titl
   return <div className="app-frame">
     <aside className="side-nav" aria-label={bi(lang,"Hauptnavigation","Main navigation")}>
       <a className="side-brand" href="/today"><span className="brand-mark custom"><img src={appIcon} alt=""/></span><span><strong>PenguCoach</strong><small>Training & Health</small></span></a>
-      <div className="side-section"><div className="side-label">{bi(lang,"Übersicht","Overview")}</div>{nav.map(x=><a className={`side-link ${active(x.href)?"active":""}`} href={x.href} key={x.href}><Icon name={x.icon}/><span>{x.label}</span>{active(x.href)&&<i/>}</a>)}</div>
-      <div className="side-section"><div className="side-label">{bi(lang,"Verbindungen & Einstellungen","Connections & settings")}</div>{settings.map(x=><a className={`side-link ${active(x.href)?"active":""}`} href={x.href} key={x.href}><Icon name={x.icon}/><span>{x.label}</span>{active(x.href)&&<i/>}</a>)}</div>
-      {me.role==="admin"&&<div className="side-section"><div className="side-label">Admin</div>{admin.map(x=><a className={`side-link ${active(x.href)?"active":""}`} href={x.href} key={x.href}><Icon name={x.icon}/><span>{x.label}</span>{active(x.href)&&<i/>}</a>)}</div>}
+      <div className="side-section"><div className="side-label">{bi(lang,"Übersicht","Overview")}</div>{nav.map(x=><a className={`side-link ${active(x.href)?"active":""}`} href={x.href} key={x.href} aria-current={active(x.href)?"page":undefined}><Icon name={x.icon}/><span>{x.label}</span>{active(x.href)&&<i/>}</a>)}</div>
+      <div className="side-section"><div className="side-label">{bi(lang,"Verbindungen & Einstellungen","Connections & settings")}</div>{settings.map(x=><a className={`side-link ${active(x.href)?"active":""}`} href={x.href} key={x.href} aria-current={active(x.href)?"page":undefined}><Icon name={x.icon}/><span>{x.label}</span>{active(x.href)&&<i/>}</a>)}</div>
+      {me.role==="admin"&&<div className="side-section"><div className="side-label">Admin</div>{admin.map(x=><a className={`side-link ${active(x.href)?"active":""}`} href={x.href} key={x.href} aria-current={active(x.href)?"page":undefined}><Icon name={x.icon}/><span>{x.label}</span>{active(x.href)&&<i/>}</a>)}</div>}
       <div className="side-account">
         <a className="side-user" href="/settings/appearance"><span className={`side-avatar ${avatar?"photo":""}`}>{avatar?<img src={avatar} alt=""/>:initials}</span><span><strong>{me.username}</strong><small>{me.role}</small></span></a>
         <button className="side-logout" type="button" onClick={()=>void logout()} disabled={loggingOut} title={bi(lang,"Abmelden","Sign out")}><Icon name="logout"/><span>{loggingOut?bi(lang,"Abmelden…","Signing out…"):bi(lang,"Abmelden","Sign out")}</span></button>
@@ -86,8 +84,8 @@ export default function AppShell({children,title}:{children:React.ReactNode;titl
       </div>
     </aside>
 
-    <section className="app-main"><header className="topbar"><div className="top-context"><span className="top-kicker">PenguCoach</span><strong>{title??current?.label??bi(lang,"Übersicht","Overview")}</strong></div><div className="top-actions"><span className="health-live"><i/>{bi(lang,"System aktiv","System online")}</span><button className="language-switch" onClick={()=>setLang(lang==="de"?"en":"de")} aria-label={bi(lang,"Sprache wechseln","Change language")}>{lang==="de"?"DE":"EN"}<span>⌄</span></button><a className={`top-avatar ${avatar?"photo":""}`} href="/settings/appearance" title={me.username}>{avatar?<img src={avatar} alt=""/>:initials}</a><button className="top-logout" type="button" onClick={()=>void logout()} disabled={loggingOut} title={bi(lang,"Abmelden","Sign out")} aria-label={bi(lang,"Abmelden","Sign out")}><Icon name="logout"/></button></div></header><main className="stack page">{title&&<div className="page-title"><h1>{title}</h1></div>}{children}</main></section>
+    <section className="app-main"><header className="topbar"><div className="top-context"><span className="top-kicker">PenguCoach</span><strong>{title??current?.label??bi(lang,"Übersicht","Overview")}</strong></div><div className="top-actions"><details className="mobile-more"><summary aria-label={bi(lang,"Einstellungen öffnen","Open settings")}>☰</summary><nav aria-label={bi(lang,"Einstellungen","Settings")}>{[...settings,...(me.role==="admin"?admin:[])].map(x=><a key={x.href} href={x.href} aria-current={active(x.href)?"page":undefined}><Icon name={x.icon}/>{x.label}</a>)}</nav></details><span className="health-live"><i/>{bi(lang,"System aktiv","System online")}</span><button className="language-switch" onClick={()=>setLang(lang==="de"?"en":"de")} aria-label={bi(lang,"Sprache wechseln","Change language")}>{lang==="de"?"DE":"EN"}<span>⌄</span></button><a className={`top-avatar ${avatar?"photo":""}`} href="/settings/appearance" title={me.username}>{avatar?<img src={avatar} alt=""/>:initials}</a><button className="top-logout" type="button" onClick={()=>void logout()} disabled={loggingOut} title={bi(lang,"Abmelden","Sign out")} aria-label={bi(lang,"Abmelden","Sign out")}><Icon name="logout"/></button></div></header><main className="stack page">{title&&<div className="page-title"><h1>{title}</h1></div>}{children}</main></section>
 
-    <nav className="mobile-dock" aria-label={bi(lang,"Mobile Navigation","Mobile navigation")}>{nav.map(x=><a className={active(x.href)?"active":""} href={x.href} key={x.href}><Icon name={x.icon}/><span>{x.label}</span></a>)}</nav>
+    <nav className="mobile-dock" aria-label={bi(lang,"Mobile Navigation","Mobile navigation")}>{nav.map(x=><a className={active(x.href)?"active":""} href={x.href} key={x.href} aria-current={active(x.href)?"page":undefined}><Icon name={x.icon}/><span>{x.label}</span></a>)}</nav>
   </div>;
 }

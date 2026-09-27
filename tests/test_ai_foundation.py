@@ -74,6 +74,6 @@ def test_coach_context_compaction_keeps_real_training_and_latest_recovery_data()
     assert parsed["data_inventory"]["activity_count"] == 12
     assert parsed["summary_28d"]["activity_count"] == 12
     assert parsed["recent_activities"]
-    assert parsed["recent_activities"][0]["garmin"]["name"] == "Run 0"
+    assert parsed["recent_activities"][0]["summary"]["name"] == "Run 0"
     assert parsed["hrv_30d"][-1]["date"] == "2026-09-20"
     assert parsed["health_30d"][-1]["date"] == "2026-09-28"

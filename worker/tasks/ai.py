@@ -44,27 +44,14 @@ async def _privacy(db, user: User) -> bool:
     return True if not pref else (pref.local_ai_only or not pref.cloud_health_ai_allowed)
 
 
-def _auto_context_days(message: str) -> int:
-    text = message.lower()
-    training_terms = (
-        "training", "trainings", "workout", "lauf", "running", "run ", "rennrad", "rad", "cycling", "bike",
-        "herz", "heart", "hrv", "puls", "power", "leistung", "pace", "schlaf", "sleep", "recovery",
-        "erholung", "belastung", "load", "fitness", "vo2", "kadenz", "cadence", "garmin", "fit ",
-        "muskel", "strength", "kraft", "ausdauer", "endurance", "form", "training plan", "trainingsplan",
-    )
-    return 28 if any(term in text for term in training_terms) else 0
+from pengucoach.coach.selection import auto_context_days, context_selection
 
+
+def _auto_context_days(message: str) -> int:
+    return auto_context_days(message)
 
 def _context_selection(payload: dict[str, Any]) -> dict[str, bool]:
-    raw = payload.get("context_data") if isinstance(payload.get("context_data"), dict) else {}
-    return {
-        "include_training": bool(raw.get("training", True)),
-        "include_zones": bool(raw.get("zones", True)),
-        "include_sleep_hrv": bool(raw.get("sleep_hrv", True)),
-        "include_recovery": bool(raw.get("recovery", True)),
-        "include_daily_activity": bool(raw.get("daily_activity", False)),
-    }
-
+    return context_selection(payload)
 
 def _progress_callback(task, payload: dict[str, Any], kind: str) -> ProgressCallback:
     de = str(payload.get("locale") or "de").startswith("de")
@@ -203,12 +190,12 @@ async def _coach_chat(
         context_mode = str(payload.get("context_mode") or "auto")
         if context_mode == "none":
             context_days = 0
-        elif context_mode in {"7", "28"}:
+        elif context_mode in {"3", "7", "14", "21", "28"}:
             context_days = int(context_mode)
         else:
             context_days = _auto_context_days(message)
         if context_days:
-            context = await build_coach_context(db, user, days=context_days)
+            context = await build_coach_context(db, user, days=context_days, **context_selection(payload))
         else:
             context = {"source_notice": SOURCE_NOTICE, "period_days": 0, "note": "No training context required for this question."}
 

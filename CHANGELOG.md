@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.1.0-alpha.38 - 2026-09-27
+
+- Unifies body snapshots and per-metric source handling across Today, Health and all AI contexts. Actual measurement time wins, including within one day; older imports and missing values cannot erase newer readings. BMI uses the effective weight and height. Undated profile values are explicit fallbacks.
+- Refreshes SparkyFitness corrections for health, body, sleep and HRV. Adds water-intake range reads with a bounded 28-day daily fallback for older servers; missing permission/endpoint does not block other imports.
+- Preserves source-specific activity metrics across Garmin refreshes and promotes an unambiguous SparkyFitness session when Garmin arrives later, keeping its local ID and stored analyses.
+- Fixes Today dropping sleep/HRV without a DailyHealth row, provider-default labels, historical activity analysis using future body values, invalid negative/non-finite provider readings, zero-value handling, Body Battery charge/delta interpretation and weekly HRV being reported as overnight HRV.
+- Adds a shared collapsible seven-category AI data selector with source/coverage preview: activities, sleep/HRV, recovery, daily movement, hydration, body metrics and zones. Both synchronous API and background worker honor the same selection.
+- Coach defaults to seven days, recognizes explicit 3/7/14/21/28-day requests and keeps context for short follow-up questions. A concise advice instruction applies even with saved custom task prompts.
+- Retires Withings routes, OAuth, credentials model, tasks, scheduler and navigation. Migration 0010 removes connection credentials; imported measurements remain labeled as historical Withings data. Inert compatibility files allow web-upload updates without manual file deletion.
+- Adds Warm Sand, Rose, Nordic Night and Aurora (nine themes total), harmonizes surfaces, adds mobile settings navigation and touch-based calendar rescheduling, hides irrelevant Garmin export controls when disconnected. Calendar draft edits remain browser-local.
+- Updates Next.js within the 15.5 line to 15.5.26 and includes a dependency lockfile.
+- Adds behavior tests covering isolated/mixed sources, measurement recency, AI category exclusion, hydration compatibility, metric quality and connector retirement.
+
 ## 0.1.0-alpha.37 - 2026-09-27
 
 - Fixes a Coach context-compaction regression that could discard the top-level `recent_activities`, health, sleep and HRV arrays whenever a 7/28-day context exceeded the Coach input budget. The model could then incorrectly claim there were no activities or recovery data even though PenguCoach had them.

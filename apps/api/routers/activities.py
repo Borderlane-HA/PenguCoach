@@ -52,6 +52,7 @@ def _summary(x: Activity) -> dict:
         "fit_status": x.fit_status,
         "source": sources[0],
         "sources": sources,
+        "metric_sources": raw.get("_metric_sources", {}),
         "source_detail": raw.get("sparkyfitness_provider"),
         "original_filename": raw.get("filename"),
     }

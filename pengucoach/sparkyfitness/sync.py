@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pengucoach.health.provenance import merge_metric
+
 import hashlib
 import json
 import uuid
@@ -537,6 +539,15 @@ async def _merge_activity(db: AsyncSession, user_id: uuid.UUID, item: dict[str, 
         if provider:
             raw["sparkyfitness_provider"] = provider
         candidate.raw = raw
+        for field, value in {
+            "avg_hr": _int(_nested_first(item, "avg_heart_rate", "avgHeartRate", "avg_hr", "averageHeartRate")),
+            "max_hr": _int(_nested_first(item, "max_heart_rate", "maxHeartRate", "max_hr")),
+            "avg_power": _num(_nested_first(item, "avg_power_watts", "avg_power", "avgPower")),
+            "avg_cadence": _num(_nested_first(item, "avg_cadence", "avgCadence")),
+            "elevation_gain": _num(_nested_first(item, "elevation_gain_meters", "elevation_gain", "elevationGain")),
+        }.items():
+            if getattr(candidate, field) is None or _metric_sources(candidate.raw).get(field) == "sparkyfitness":
+                merge_metric(candidate, field, value, "sparkyfitness")
         return "merged", candidate.id
 
     synthetic = _synthetic_activity_id(external_id)
@@ -858,6 +869,8 @@ async def _merge_checkins(db: AsyncSession, user_id: uuid.UUID, rows: Iterable[d
             db.add(health)
         fill = {
             "steps": _int(_first(item, "steps", "step_count", "stepCount")),
+            "hydration_ml": _num(_first(item, "hydration_ml", "water_ml", "waterConsumedInML")),
+            "hydration_goal_ml": _num(_first(item, "hydration_goal_ml", "water_goal_ml")),
             "resting_hr": _int(_first(item, "resting_hr", "restingHeartRate", "resting_heart_rate")),
             "active_calories": _num(_first(item, "active_calories", "activeCalories")),
             "distance_m": _num(_first(item, "distance_m", "distanceMeters")),
@@ -865,21 +878,9 @@ async def _merge_checkins(db: AsyncSession, user_id: uuid.UUID, rows: Iterable[d
             "respiration_avg": _num(_first(item, "respiration_avg", "respirationAverage")),
             "spo2_avg": _num(_first(item, "spo2_avg", "spo2Average", "averageSpo2")),
         }
-        prior_health_raw = dict(health.raw or {})
-        prior_health_sources = _metric_sources(prior_health_raw)
-        prior_health_non_meta = {key for key in prior_health_raw if not str(key).startswith("_") and key != "sparkyfitness"}
         health.raw = _source_tag(health.raw, item)
         for field, value in fill.items():
-            if value is None:
-                continue
-            if getattr(health, field) is None:
-                setattr(health, field, value)
-                health.raw = _tag_metric_source(health.raw, field)
-                changed += 1
-            elif field not in prior_health_sources and not prior_health_non_meta:
-                # Backfill provenance for values imported by alpha.24/25 before
-                # per-metric source tracking existed.
-                health.raw = _tag_metric_source(health.raw, field)
+            changed += int(merge_metric(health, field, value, "sparkyfitness", observed_at))
 
         body_values = {
             "weight_kg": _kg(_first(item, "weight", "weight_kg", "weightKg", "weightInGrams")),
@@ -917,19 +918,10 @@ async def _merge_checkins(db: AsyncSession, user_id: uuid.UUID, rows: Iterable[d
             if not body:
                 body = BodyMeasurement(user_id=user_id, measured_at=measured_at, raw={})
                 db.add(body)
-            prior_body_raw = dict(body.raw or {})
-            prior_body_sources = _metric_sources(prior_body_raw)
-            prior_body_non_meta = {key for key in prior_body_raw if not str(key).startswith("_") and key != "sparkyfitness"}
             body.raw = _source_tag(body.raw, item)
             for field, value in body_values.items():
-                if value is None:
-                    continue
-                if getattr(body, field) is None:
-                    setattr(body, field, value)
-                    body.raw = _tag_metric_source(body.raw, field)
-                    changed += 1
-                elif field not in prior_body_sources and not prior_body_non_meta:
-                    body.raw = _tag_metric_source(body.raw, field)
+                changed += int(merge_metric(body, field, value, "sparkyfitness", measured_at))
+
     return changed
 
 
@@ -948,7 +940,12 @@ async def _merge_profile(db: AsyncSession, user_id: uuid.UUID, payload: Any) -> 
         height = _height_cm(_first(item, "height", "height_cm", "heightCm", "heightInCentimeters", "heightInMeters"))
         if height is None:
             continue
-        measured_at = datetime.combine(date.today(), time.min, tzinfo=timezone.utc)
+        measured_at = _as_dt(_first(item, "updated_at", "updatedAt"))
+        if measured_at is None:
+            previous = (await db.scalars(select(BodyMeasurement).where(BodyMeasurement.user_id == user_id, BodyMeasurement.height_cm.is_not(None)))).all()
+            if any((r.raw or {}).get("_profile_source") == "sparkyfitness" and r.height_cm == height for r in previous):
+                continue
+            measured_at = datetime(1970, 1, 1, tzinfo=timezone.utc)
         body = await db.scalar(select(BodyMeasurement).where(
             BodyMeasurement.user_id == user_id, BodyMeasurement.measured_at == measured_at
         ))
@@ -956,10 +953,8 @@ async def _merge_profile(db: AsyncSession, user_id: uuid.UUID, payload: Any) -> 
             body = BodyMeasurement(user_id=user_id, measured_at=measured_at, raw={})
             db.add(body)
         body.raw = _source_tag(body.raw, item)
-        if body.height_cm is None:
-            body.height_cm = height
-            body.raw = _tag_metric_source(body.raw, "height_cm")
-            changed += 1
+        changed += int(merge_metric(body, "height_cm", height, "sparkyfitness", measured_at))
+        body.raw = {**body.raw, "_profile_source": "sparkyfitness"}
     return changed
 
 
@@ -1026,10 +1021,7 @@ async def _merge_sleep(db: AsyncSession, user_id: uuid.UUID, rows: Iterable[dict
         values.update({f"{key}_seconds": value for key, value in stage.items()})
         row.raw = _source_tag(row.raw, item)
         for field, value in values.items():
-            if value is not None and getattr(row, field) is None:
-                setattr(row, field, value)
-                row.raw = _tag_metric_source(row.raw, field)
-                changed += 1
+            changed += int(merge_metric(row, field, value, "sparkyfitness", end_at))
     return changed
 
 
@@ -1082,20 +1074,14 @@ async def _merge_custom_metrics(
                     row = HrvDaily(user_id=user_id, date=day, raw={})
                     db.add(row)
                 row.raw = _source_tag(row.raw, item)
-                if row.overnight_average is None:
-                    row.overnight_average = value
-                    row.raw = _tag_metric_source(row.raw, "overnight_average")
-                    hrv_count += 1
+                hrv_count += int(merge_metric(row, "overnight_average", value, "sparkyfitness", observed_at))
             else:
                 row = await db.scalar(select(DailyHealth).where(DailyHealth.user_id == user_id, DailyHealth.date == day))
                 if not row:
                     row = DailyHealth(user_id=user_id, date=day, raw={})
                     db.add(row)
                 row.raw = _source_tag(row.raw, item)
-                if row.resting_hr is None:
-                    row.resting_hr = int(round(value))
-                    row.raw = _tag_metric_source(row.raw, "resting_hr")
-                    rhr_count += 1
+                rhr_count += int(merge_metric(row, "resting_hr", int(round(value)), "sparkyfitness", observed_at))
     return hrv_count, rhr_count
 
 
@@ -1288,6 +1274,34 @@ async def _read_range_chunks(
     return list(unique.values())
 
 
+async def _sync_hydration(db: AsyncSession, client: SparkyFitnessClient, user_id: uuid.UUID, start: date, end: date) -> dict:
+    try:
+        rows = await _read_range_chunks(client,
+            lambda a, b: f"/measurements/water-intake-range/{a}/{b}",
+            start, end, phase="hydration")
+        mode = "range"
+    except SparkyFitnessError as exc:
+        if exc.status_code not in {404, 405}:
+            return {"available": False, "reason": exc.code}
+        # Older APIs offer daily reads only. Keep routine syncs and large history
+        # imports bounded; report the effective coverage instead of claiming all.
+        start = max(start, end - timedelta(days=27))
+        rows = []
+        for offset in range((end - start).days + 1):
+            day = start + timedelta(days=offset)
+            try:
+                payload = await client.request(f"/measurements/water-intake/{day}")
+            except SparkyFitnessError as daily_exc:
+                return {"available": False, "reason": daily_exc.code}
+            if isinstance(payload, dict) and payload.get("water_ml") is not None:
+                rows.append({**payload, "entry_date": day.isoformat()})
+        mode = "daily_fallback_max_28_days"
+    normalized = [{"entry_date": item.get("entry_date"), "water_ml": item.get("water_ml")}
+                  for item in rows if isinstance(item, dict) and item.get("water_ml") is not None]
+    changed = await _merge_checkins(db, user_id, normalized)
+    return {"available": True, "days": len(normalized), "fields_updated": changed, "mode": mode, "from": start.isoformat(), "to": end.isoformat()}
+
+
 async def sync_sparkyfitness(db: AsyncSession, user_id: uuid.UUID, *, progress=None, incremental: bool = False) -> dict[str, Any]:
     conn = await db.scalar(select(SparkyFitnessConnection).where(SparkyFitnessConnection.user_id == user_id))
     if not conn or conn.status != "connected":
@@ -1326,14 +1340,16 @@ async def sync_sparkyfitness(db: AsyncSession, user_id: uuid.UUID, *, progress=N
             )
             summary["checkins"] = len(rows)
             summary["health_fields_filled"] = await _merge_checkins(db, user_id, rows)
-            if capabilities.get("custom_metrics"):
-                categories_payload = await client.request("/measurements/custom-categories")
-                categories = _list_payload(categories_payload)
-                if isinstance(categories_payload, list):
-                    categories = [x for x in categories_payload if isinstance(x, dict)]
-                hrv, rhr = await _merge_custom_metrics(db, client, user_id, categories, start, end)
-                summary["hrv_days_filled"] = hrv
-                summary["resting_hr_days_filled"] = rhr
+        if conn.sync_daily_health and capabilities.get("custom_metrics"):
+            categories_payload = await client.request("/measurements/custom-categories")
+            categories = _list_payload(categories_payload)
+            if isinstance(categories_payload, list):
+                categories = [x for x in categories_payload if isinstance(x, dict)]
+            hrv, rhr = await _merge_custom_metrics(db, client, user_id, categories, start, end)
+            summary["hrv_days_filled"] = hrv
+            summary["resting_hr_days_filled"] = rhr
+        if conn.sync_daily_health:
+            summary["hydration"] = await _sync_hydration(db, client, user_id, start, end)
         if conn.sync_sleep and capabilities.get("sleep"):
             if progress:
                 progress({"phase": "sleep", "message": "SparkyFitness sleep"})

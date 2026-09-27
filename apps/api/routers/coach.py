@@ -18,6 +18,8 @@ from worker.tasks.ai import coach_chat as coach_chat_task
 from worker.tasks.ai import training_plan as training_plan_task
 
 router = APIRouter(prefix="/coach", tags=["coach"])
+from pengucoach.coach.selection import ContextSelection, auto_context_days, context_selection
+
 TASKS = ("coach_chat", "activity_analysis", "training_plan")
 
 
@@ -39,7 +41,8 @@ class ChatRequest(BaseModel):
     model_id: uuid.UUID | None = None
     max_tokens: int | None = Field(default=None, ge=128, le=65536)
     context_window_tokens: int | None = Field(default=None, ge=2048, le=1048576)
-    context_mode: Literal["auto", "none", "7", "28"] = "auto"
+    context_data: ContextSelection = Field(default_factory=ContextSelection)
+    context_mode: Literal["auto", "none", "3", "7", "14", "21", "28"] = "auto"
     locale: Literal["de", "en"] | None = None
     quality_profile: Literal["very_low", "low", "standard", "high"] = "standard"
 
@@ -55,13 +58,7 @@ class ActivityAnalysisRequest(BaseModel):
     quality_profile: Literal["very_low", "low", "standard", "high"] = "standard"
 
 
-class TrainingContextSelection(BaseModel):
-    training: bool = True
-    zones: bool = True
-    sleep_hrv: bool = True
-    recovery: bool = True
-    daily_activity: bool = False
-
+TrainingContextSelection = ContextSelection
 
 class TrainingPlanRequest(BaseModel):
     goal_type: Literal[
@@ -134,15 +131,7 @@ def _answer_metadata(answer: dict, *, locale: str, goal: dict | None = None) -> 
 
 
 def _auto_context_days(message: str) -> int:
-    text = message.lower()
-    terms = (
-        "training", "workout", "lauf", "running", "rennrad", "rad", "cycling", "bike", "herz", "heart",
-        "hrv", "puls", "power", "leistung", "pace", "schlaf", "sleep", "recovery", "erholung", "belastung",
-        "load", "fitness", "vo2", "kadenz", "cadence", "garmin", "muskel", "strength", "kraft", "ausdauer",
-        "endurance", "form", "trainingsplan", "training plan",
-    )
-    return 28 if any(term in text for term in terms) else 0
-
+    return auto_context_days(message)
 
 @router.get("/capabilities")
 async def capabilities(
@@ -207,11 +196,11 @@ async def coach_chat(payload: ChatRequest, user: User = Depends(safety_confirmed
     messages = [{"role": x.role, "content": x.content} for x in rows]
     if payload.context_mode == "none":
         context_days = 0
-    elif payload.context_mode in {"7", "28"}:
+    elif payload.context_mode in {"3", "7", "14", "21", "28"}:
         context_days = int(payload.context_mode)
     else:
         context_days = _auto_context_days(payload.message)
-    context = await build_coach_context(db, user, context_days) if context_days else {
+    context = await build_coach_context(db, user, context_days, **context_selection(payload.model_dump())) if context_days else {
         "source_notice": SOURCE_NOTICE, "period_days": 0, "note": "No training context required for this question."
     }
     _, local_only = await _privacy(db, user)
@@ -323,6 +312,8 @@ async def training_plan(payload: TrainingPlanRequest, user: User = Depends(safet
         include_sleep_hrv=payload.context_data.sleep_hrv,
         include_recovery=payload.context_data.recovery,
         include_daily_activity=payload.context_data.daily_activity,
+        include_hydration=payload.context_data.hydration,
+        include_body=payload.context_data.body,
     )
     context["goal"] = {
         "goal_type": payload.goal_type, "goal_text": payload.goal_text, "experience": payload.experience,
@@ -428,3 +419,37 @@ async def delete_training_plan_local(
     await db.delete(run)
     await db.commit()
     return {"deleted": True, "plan_run_id": str(run_id), "garmin_untouched": True}
+
+
+@router.get("/context-preview")
+async def context_preview(
+    days: int = Query(default=7, ge=1, le=28),
+    user: User = Depends(safety_confirmed_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Counts/provenance only. No model call, credentials or raw provider payloads."""
+    context = await build_training_plan_context(db, user, days)
+    lookback = context["lookback"]
+    categories = {}
+    def describe(key, rows, fields=None):
+        selected = [r for r in rows if fields is None or any(r.get(f) is not None for f in fields)]
+        origins = set()
+        for r in selected:
+            sources = r.get("sources") or {}
+            if fields is not None:
+                origins.update(sources.get(f, r.get("source", "unknown")) for f in fields if r.get(f) is not None)
+            else:
+                origins.update(sources.values() or [r.get("source", "unknown")])
+        categories[key] = {"count": len(selected), "sources": sorted(x for x in origins if x)}
+    describe("training", [a["summary"] for a in lookback.get("activities", [])])
+    categories["training"]["count"] = lookback.get("summary_period", {}).get("activity_count", 0)
+    daily = lookback.get("daily_health", [])
+    describe("recovery", daily, ("resting_hr_bpm", "stress_avg", "body_battery_high", "training_readiness"))
+    describe("daily_activity", daily, ("steps", "distance_m", "active_calories_kcal"))
+    describe("hydration", daily, ("hydration_ml", "hydration_goal_ml"))
+    describe("sleep_hrv", lookback.get("sleep", []) + lookback.get("hrv", []))
+    body = (lookback.get("body_profile") or {}).get("latest")
+    describe("body", [body] if body else [])
+    zones = context.get("training_zones") or {}
+    categories["zones"] = {"count": sum(int((zones.get(k) or {}).get("profile_count", 0)) for k in ("heart_rate", "power")), "sources": ["garmin"] if zones.get("available") or zones.get("synced") else []}
+    return {"days": lookback["days"], "categories": categories}

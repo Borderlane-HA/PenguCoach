@@ -69,3 +69,7 @@ pct exec <CTID> -- journalctl -u pengucoach-worker -n 200 --no-pager
 ## GitHub Actions
 
 A push automatically starts `.github/workflows/ci.yml`. Check the repository's **Actions** tab. The workflow installs the real Python/npm dependencies, runs backend tests, builds the Next.js frontend, and validates the Proxmox shell scripts. Fix CI failures before treating the build as stable.
+
+## Incremental web-update packages
+
+For an existing installation, `github-web-update` ZIPs contain only changed/new repository files, directly at the archive root. Extract and upload those files into the root of the existing GitHub repository. The full release ZIP instead contains a `PenguCoach/` directory. Retired connector files are harmless compatibility stubs so an incremental web upload does not require deleting files. Run the normal updater after uploading, and restart every worker/scheduler along with the API and web app.
