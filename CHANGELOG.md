@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.1.0-alpha.43.1 — Persistent training-job status
+
+- Makes an in-progress training-plan generation permanently visible on the Training start view with live phase/chunk/token information plus Details and Cancel actions, so leaving or reloading the page no longer makes the work look lost.
+- Restores running training-plan jobs from the server, not only from browser `localStorage`. A second tab or another browser session for the same PenguCoach user can therefore see that generation is already in progress.
+- Tracks training-plan jobs in the existing `background_jobs` table and adds a user-scoped `/jobs/active?job_type=training_plan` lookup. No database migration is required.
+- Prevents accidental duplicate plan generation server-side: if the same user already has a recent running training-plan job, the create endpoint returns that existing job instead of queueing another one. Cancelled jobs are marked in the existing job table so they are not falsely restored after a reload.
+- Changes the Training assistant's first action while generation is active from **Create a new plan** to **Plan is already being generated**; selecting it opens the running job details rather than starting a second plan.
+- Keeps the running-job banner compact and adds dedicated phone layouts for status metadata and actions.
+
 ## v0.1.0-alpha.43 — Guided Training Planner
 
 - Reworks the Training page around progressive disclosure instead of one long configuration form. New plans are created in four focused steps: Goal, Framework, Data and Review.

@@ -12,7 +12,9 @@ PenguCoach is designed as a local-first, multi-user platform that reads Garmin C
 
 ## Current alpha scope
 
-`v0.1.0-alpha.43` is the current end-to-end alpha baseline:
+`v0.1.0-alpha.43.1` is the current end-to-end alpha baseline:
+
+- Running training-plan generation survives page/browser changes visibly: PenguCoach restores the active server-side job, shows a compact live status card and prevents accidentally queueing a duplicate plan.
 
 - **Adaptive coach:** editable Coach Memory v1 profile and explicit memories, deterministic Pengu Readiness with transparent factors, daily check-ins, post-workout feedback including optional discomfort notes, and reviewed adaptive plan suggestions for missed or recovery-sensitive sessions. No plan change is applied without confirmation. See [`docs/COACH_COMPANION.md`](docs/COACH_COMPANION.md).
 - **Weather-aware everyday Coach:** relevant short-range questions such as “What should I train today?”, “Should I ride tomorrow?” or direct weather questions can receive a bounded Open-Meteo snapshot. Answer details show whether weather, Readiness, plan, profile, zones and recovery data were actually supplied; the desktop **Model & response** column can be collapsed and remembered locally.

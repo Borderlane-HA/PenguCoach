@@ -1,7 +1,8 @@
 import uuid
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Literal
 
+from celery.result import AsyncResult
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select
@@ -19,6 +20,7 @@ from pengucoach.weather.service import build_coach_weather_context, build_traini
 from worker.tasks.ai import activity_analysis as activity_analysis_task
 from worker.tasks.ai import coach_chat as coach_chat_task
 from worker.tasks.ai import training_plan as training_plan_task
+from worker.celery_app import app as celery_app
 
 router = APIRouter(prefix="/coach", tags=["coach"])
 from pengucoach.coach.selection import ContextSelection, auto_context_days, context_selection
@@ -200,9 +202,51 @@ async def queue_activity_analysis(payload: ActivityAnalysisRequest, user: User =
 
 
 @router.post("/training-plan/jobs")
-async def queue_training_plan(payload: TrainingPlanRequest, user: User = Depends(safety_confirmed_user)):
-    task = training_plan_task.delay(str(user.id), payload.model_dump(mode="json"))
-    return {"task_id": task.id, "status": "queued"}
+async def queue_training_plan(
+    payload: TrainingPlanRequest,
+    user: User = Depends(safety_confirmed_user),
+    db: AsyncSession = Depends(get_db),
+):
+    # Prevent accidental duplicate plans when a user reloads the page, opens a
+    # second tab/browser window, or clicks create again while Celery is still
+    # working. Only recent tracked jobs are considered because expired Celery
+    # results otherwise look like PENDING again.
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=12)
+    recent = (
+        await db.scalars(
+            select(BackgroundJob)
+            .where(
+                BackgroundJob.user_id == user.id,
+                BackgroundJob.job_type == "training_plan",
+                BackgroundJob.created_at >= cutoff,
+            )
+            .order_by(BackgroundJob.created_at.desc())
+            .limit(20)
+        )
+    ).all()
+    for row in recent:
+        if row.status in {"cancel_requested", "cancelled", "failed", "finished"}:
+            continue
+        existing = AsyncResult(str(row.id), app=celery_app)
+        if not existing.ready() and existing.state not in {"FAILURE", "REVOKED"}:
+            existing_payload = row.payload if isinstance(row.payload, dict) else {}
+            return {
+                "task_id": str(row.id),
+                "status": "already_running",
+                "resumed": True,
+                "summary": {key: existing_payload.get(key) for key in ("goal_type", "goal_text", "weeks", "days_per_week", "session_minutes", "start_date", "model_id")},
+            }
+
+    payload_json = payload.model_dump(mode="json")
+    task = training_plan_task.delay(str(user.id), payload_json)
+    db.add(BackgroundJob(id=uuid.UUID(task.id), user_id=user.id, job_type="training_plan", payload=payload_json))
+    await db.commit()
+    return {
+        "task_id": task.id,
+        "status": "queued",
+        "resumed": False,
+        "summary": {key: payload_json.get(key) for key in ("goal_type", "goal_text", "weeks", "days_per_week", "session_minutes", "start_date", "model_id")},
+    }
 
 
 # Synchronous compatibility endpoints remain available for API clients.

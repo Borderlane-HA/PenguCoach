@@ -49,7 +49,7 @@ function friendlyPlanError(raw:string,lang:Lang){
 export default function Training(){
   const{lang}=useI18n();const de=lang!=="en";
   const[caps,setCaps]=useState<AnyObj|null>(null),[history,setHistory]=useState<AnyObj[]>([]),[result,setResult]=useState<AnyObj|null>(null),[busy,setBusy]=useState(false),[error,setError]=useState(""),[status,setStatus]=useState("");
-  const[jobId,setJobId]=useState<string|null>(null),[jobProgress,setJobProgress]=useState<AnyObj|null>(null);
+  const[jobId,setJobId]=useState<string|null>(null),[jobProgress,setJobProgress]=useState<AnyObj|null>(null),[activeJobSummary,setActiveJobSummary]=useState<AnyObj|null>(null),[jobLookup,setJobLookup]=useState(true);
   const ignoredJobs=useRef<Set<string>>(new Set());
   const[deleteCandidate,setDeleteCandidate]=useState<AnyObj|null>(null),[deleteInfo,setDeleteInfo]=useState<AnyObj|null>(null),[deleteBusy,setDeleteBusy]=useState(false),[deleteStatus,setDeleteStatus]=useState("");
   const[usePersonal,setUsePersonal]=useState(true),[profileStatus,setProfileStatus]=useState("");
@@ -61,11 +61,21 @@ export default function Training(){
   const jobKey="pengucoach_training_plan_job";
 
   useEffect(()=>{
-    void Promise.all([api<AnyObj>(`/coach/capabilities?locale=${lang}`),api<AnyObj[]>("/coach/training-plans?limit=30")]).then(([c,h])=>{
+    const storedJob=localStorage.getItem(jobKey);
+    void Promise.all([
+      api<AnyObj>(`/coach/capabilities?locale=${lang}`),
+      api<AnyObj[]>("/coach/training-plans?limit=30"),
+      api<AnyObj>("/jobs/active?job_type=training_plan").catch(()=>({active:false})),
+    ]).then(([c,h,a])=>{
       setCaps(c);setHistory(h);const t=c.tasks?.training_plan??{};setModel(t.default_model_id??"");setTokens(t.max_output_tokens??4500);setCtx(t.context_window_tokens??8192);setPrompt(t.default_prompt??"");setQuality((t.quality_profile??"standard") as QualityId);
-      if(h.length){setResult(h[0]);setPlanOpen(false);setPlannerOpen(false)}else setPlannerOpen(true);
-    }).catch(e=>setError(String(e)));
-    const j=localStorage.getItem(jobKey);if(j){setBusy(true);setJobId(j);setPlannerOpen(true);setWizardStep(4);void poll(j)}
+      if(h.length){setResult(h[0]);setPlanOpen(false)}
+      const activeId=(a?.active&&a?.task_id)?String(a.task_id):storedJob;
+      if(activeId){
+        localStorage.setItem(jobKey,activeId);setBusy(true);setJobId(activeId);setActiveJobSummary(a?.summary??null);setJobProgress(a?.progress??null);setPlannerOpen(false);setWizardStep(4);void poll(activeId);
+      }else{
+        localStorage.removeItem(jobKey);setBusy(false);setJobId(null);setActiveJobSummary(null);setPlannerOpen(!h.length);
+      }
+    }).catch(e=>setError(String(e))).finally(()=>setJobLookup(false));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   },[lang]);
   useEffect(()=>{void api<AnyObj>("/weather/settings").then(w=>{setWeather(w);setIncludeWeather(Boolean(w.enabled&&w.include_in_training_plans))}).catch(()=>{setWeather(null);setIncludeWeather(false)})},[]);
@@ -93,7 +103,7 @@ export default function Training(){
         const j=await api<AnyObj>(`/jobs/${id}`);
         if(ignoredJobs.current.has(id))return;
         if(j.ready){
-          localStorage.removeItem(jobKey);setBusy(false);setJobId(null);setJobProgress(null);
+          localStorage.removeItem(jobKey);setBusy(false);setJobId(null);setJobProgress(null);setActiveJobSummary(null);
           if(j.successful&&j.result?.cancelled){setStatus(de?"Erstellung abgebrochen":"Generation cancelled");return}
           if(j.successful&&j.result){setResult(j.result);setHistory(v=>[j.result,...v.filter(x=>runId(x)!==runId(j.result))].slice(0,30));setStatus(de?"Plan fertig":"Plan ready");setPlanOpen(true);setPlannerOpen(false);setTimeout(()=>document.getElementById("training-plan-detail")?.scrollIntoView({behavior:"smooth",block:"start"}),80);return}
           setError(friendlyPlanError(j.error||"AI job failed",lang));return;
@@ -102,23 +112,23 @@ export default function Training(){
       }catch{}
       await sleep(1000);
     }
-    setBusy(false);setJobId(null);
+    setBusy(false);setJobId(null);setActiveJobSummary(null);
   }
 
   async function generate(e:FormEvent){
-    e.preventDefault();if(busy||!model)return;
+    e.preventDefault();if(busy||jobLookup||!model)return;
     if(!isMonday(planStart)){setError(bi(lang,"Der Planstart muss ein Montag sein, damit Wochen, Wetter und Garmin-Kalender eindeutig zusammenpassen.","The plan start must be a Monday so weeks, weather and the Garmin calendar stay aligned."));return}
     setBusy(true);setError("");setJobProgress(null);setStatus(de?"Plan wird vorbereitet…":"Preparing plan…");
     try{
       const r=await api<AnyObj>("/coach/training-plan/jobs",{method:"POST",body:JSON.stringify({use_personal_context:usePersonal,goal_type:goalType,goal_text:goalText,experience,weeks,days_per_week:days,session_minutes:minutes,equipment,constraints,context_days:contextDays,context_data:contextData,start_date:planStart,include_weather:includeWeather,prompt:prompt||null,model_id:model,max_tokens:tokens,context_window_tokens:ctx,quality_profile:quality,locale:lang})});
-      setJobId(r.task_id);localStorage.setItem(jobKey,r.task_id);void poll(r.task_id);
+      setJobId(r.task_id);setActiveJobSummary(r.summary??{goal_type:goalType,goal_text:goalText,weeks,days_per_week:days,session_minutes:minutes,start_date:planStart,model_id:model});localStorage.setItem(jobKey,r.task_id);setPlannerOpen(false);setWizardStep(4);void poll(r.task_id);
     }catch(e){setBusy(false);setError(e instanceof Error?e.message:String(e))}
   }
 
   async function cancelGeneration(){
     if(!jobId)return;const id=jobId;ignoredJobs.current.add(id);
     try{await api(`/jobs/${id}/cancel`,{method:"POST"})}catch{}
-    localStorage.removeItem(jobKey);setBusy(false);setJobId(null);setJobProgress(null);setStatus(de?"Erstellung abgebrochen – Angaben können angepasst werden.":"Generation cancelled — you can adjust the request.");
+    localStorage.removeItem(jobKey);setBusy(false);setJobId(null);setJobProgress(null);setActiveJobSummary(null);setStatus(de?"Erstellung abgebrochen – Angaben können angepasst werden.":"Generation cancelled — you can adjust the request.");
   }
 
   async function changeQuality(value:QualityId,suggested:number){
@@ -152,11 +162,14 @@ export default function Training(){
 
   function openPlan(x:AnyObj){setResult(x);setPlanOpen(true);setPlannerOpen(false);setTimeout(()=>document.getElementById("training-plan-detail")?.scrollIntoView({behavior:"smooth",block:"start"}),60)}
   function openLatest(){if(history[0])openPlan(history[0])}
-  function startPlanner(){setPlanOpen(false);setPlannerOpen(true);setWizardStep(1);setTimeout(()=>document.getElementById("training-planner")?.scrollIntoView({behavior:"smooth",block:"start"}),60)}
+  function showRunningJob(){setPlanOpen(false);setPlannerOpen(true);setWizardStep(4);setTimeout(()=>document.getElementById("training-planner")?.scrollIntoView({behavior:"smooth",block:"start"}),60)}
+  function startPlanner(){if(busy){showRunningJob();return}setPlanOpen(false);setPlannerOpen(true);setWizardStep(1);setTimeout(()=>document.getElementById("training-planner")?.scrollIntoView({behavior:"smooth",block:"start"}),60)}
   function goCoach(){const q=de?"Prüfe meinen aktuellen Trainingsplan anhand meiner aktuellen Readiness, der letzten Trainings, meines Profils und des Wetters. Schlage nur Änderungen vor, wenn sie sinnvoll sind.":"Review my current training plan using my current readiness, recent training, profile and weather. Only suggest changes when they are useful.";window.location.href=`/coach?prompt=${encodeURIComponent(q)}`}
 
   const stepLabels=[bi(lang,"Ziel","Goal"),bi(lang,"Rahmen","Framework"),bi(lang,"Daten","Data"),bi(lang,"Prüfen","Review")];
   const latest=history[0]??null;
+  const activeGoal=GOALS.find(x=>x[0]===activeJobSummary?.goal_type);
+  const activeGoalLabel=activeGoal?(de?activeGoal[1]:activeGoal[2]):bi(lang,"Trainingsplan","Training plan");
 
   return <AppShell>
     <div className="coach-modern-head"><div><span className="eyebrow">AI TRAINING PLANNER</span><h1>{bi(lang,"Training","Training")}</h1><p className="muted">{bi(lang,"Planen, verwalten und mit deinem Coach anpassen – ohne alle Details gleichzeitig sehen zu müssen.","Plan, manage and adapt with your coach without showing every detail at once.")}</p></div><div className="coach-model-chip"><span className={`ai-local-dot ${selected?.local?"local":"cloud"}`}/><div><small>{bi(lang,"Aktives Modell","Active model")}</small><strong>{selected?.display_name??model??"—"}</strong><span>{selected?.provider??""}</span></div></div></div>
@@ -164,11 +177,13 @@ export default function Training(){
     <section className="card training-assistant-home">
       <div className="training-assistant-copy"><span className="eyebrow">PENGUCOACH</span><h2>{bi(lang,"Was möchtest du machen?","What would you like to do?")}</h2><p className="muted">{bi(lang,"Der Assistent zeigt dir nur die Einstellungen, die du im jeweiligen Schritt brauchst.","The assistant only shows the settings you need in each step.")}</p></div>
       <div className="training-assistant-actions">
-        <button type="button" className={plannerOpen?"active":""} onClick={startPlanner}><span>＋</span><strong>{bi(lang,"Neuen Plan erstellen","Create a new plan")}</strong><small>{bi(lang,"Geführt in vier kurzen Schritten","Guided in four short steps")}</small></button>
+        <button type="button" disabled={jobLookup} className={`${plannerOpen?"active":""} ${busy?"job-running":""}`} onClick={startPlanner}><span>{busy?"●":"＋"}</span><strong>{jobLookup?bi(lang,"Planstatus wird geprüft…","Checking plan status…"):busy?bi(lang,"Plan wird bereits erstellt","Plan is already being generated"):bi(lang,"Neuen Plan erstellen","Create a new plan")}</strong><small>{busy?bi(lang,"Laufenden Auftrag ansehen – kein zweiter Plan wird gestartet","View the running job — no second plan will be started"):bi(lang,"Geführt in vier kurzen Schritten","Guided in four short steps")}</small></button>
         <button type="button" disabled={!latest} onClick={openLatest}><span>▣</span><strong>{bi(lang,"Aktuellen Plan ansehen","View current plan")}</strong><small>{latest?`${planWeeks(latest)||"—"} ${bi(lang,"Wochen","weeks")} · ${planSessions(latest)} ${bi(lang,"Einheiten","sessions")}`:bi(lang,"Noch kein Plan vorhanden","No plan yet")}</small></button>
         <button type="button" disabled={!latest} onClick={goCoach}><span>✦</span><strong>{bi(lang,"Plan mit Coach prüfen","Review plan with Coach")}</strong><small>{bi(lang,"Readiness, Training, Profil & Wetter","Readiness, training, profile & weather")}</small></button>
       </div>
     </section>
+
+    {busy&&<section className="card training-running-job" role="status" aria-live="polite"><div className="training-running-job-main"><span className="training-running-pulse"/><div><span className="eyebrow">{bi(lang,"PLANERSTELLUNG LÄUFT","PLAN GENERATION RUNNING")}</span><h3>{activeGoalLabel}{activeJobSummary?.weeks?` · ${activeJobSummary.weeks} ${bi(lang,"Wochen","weeks")}`:""}</h3><p className="muted">{status||bi(lang,"Trainingsplan wird im Hintergrund erstellt…","Training plan is being generated in the background…")}</p><div className="training-running-meta">{jobProgress?.chunk_index&&jobProgress?.chunk_count&&<span>{bi(lang,"Teil","Part")} {jobProgress.chunk_index}/{jobProgress.chunk_count}</span>}{progressTokens(jobProgress)&&<span>{progressTokens(jobProgress)}</span>}{activeJobSummary?.start_date&&<span>{bi(lang,"Start","Start")}: {formatDate(activeJobSummary.start_date,de)}</span>}</div></div></div><div className="training-running-job-actions"><button type="button" className="ghost" onClick={showRunningJob}>{bi(lang,"Details ansehen","View details")}</button><button type="button" className="ghost danger" onClick={cancelGeneration}>{bi(lang,"Abbrechen","Cancel")}</button></div></section>}
 
     <CoachPersonal/>
 
@@ -204,7 +219,7 @@ export default function Training(){
         <details className="planner-advanced-details ai"><summary><span><strong>{bi(lang,"Erweiterte KI-Einstellungen","Advanced AI settings")}</strong><small>{bi(lang,"Modell, Kontext, Antwortbudget, Qualität und Prompt","Model, context, response budget, quality and prompt")}</small></span><b>⌄</b></summary><div className="planner-advanced-body"><div className="ai-analysis-settings"><label>{bi(lang,"Modell","Model")}<select value={model} onChange={e=>setModel(e.target.value)}>{models.map((x:AnyObj)=><option key={x.id} value={x.id}>{x.display_name} · {x.provider} · {x.local?"LOCAL":"CLOUD"}</option>)}</select></label><label>{bi(lang,"Kontextfenster","Context window")}<div className="ai-number-control"><input type="number" min={2048} max={modelCtxMax} step={1024} value={ctx} onChange={e=>setCtx(Math.max(2048,Math.min(modelCtxMax,Number(e.target.value))))}/><span>tokens</span></div></label><label>{bi(lang,"Max. Antwort","Max response")}<div className="ai-number-control"><input type="number" min={128} max={modelOutMax} step={1} value={tokens} onChange={e=>setTokens(Math.max(128,Math.min(modelOutMax,Number(e.target.value))))}/><span>tokens</span></div></label><div className="card subtle ai-budget"><span>{bi(lang,"Trainingskontext","Training context")}</span><strong>{contextDays} {bi(lang,"Tage","days")}</strong><small>{[...selectedContextLabels,...(includeWeather&&weather?.enabled?[`Weather · ${weather.location_name}`]:[])].join(" · ")||bi(lang,"nur Zielangaben","goal details only")}</small><small>ctx {ctx.toLocaleString()} · out {tokens.toLocaleString()}</small></div></div><AiQualityControl lang={lang} profile={quality} onChange={(v,t)=>void changeQuality(v,t)} options={task.quality_profiles??[]} model={selected} contextWindow={ctx} maxOutput={tokens} calls={estimatedCalls}/><p className="muted ai-budget-note">{bi(lang,"Größere Pläne werden automatisch in Wochenblöcke geteilt, validiert und anschließend zusammengeführt. Max. Antwort gilt pro KI-Aufruf/Planabschnitt.","Larger plans are automatically generated in weekly chunks, validated and merged. The response budget applies per plan segment.")}</p><details className="ai-prompt-details"><summary>{bi(lang,"Planungs-Prompt anzeigen / anpassen","Show / edit planning prompt")}</summary><textarea className="prompt-editor modern" value={prompt} onChange={e=>setPrompt(e.target.value)}/></details></div></details>
       </section>}
 
-      <div className="planner-footer"><button type="button" className="ghost" disabled={wizardStep===1||busy} onClick={()=>setWizardStep(Math.max(1,wizardStep-1) as WizardStep)}>← {bi(lang,"Zurück","Back")}</button><div className="planner-status">{status&&<span className={`ai-job-status ${busy?"running":""}`}>{busy&&<i/>}<span>{status}</span>{busy&&progressTokens(jobProgress)&&<b className="ai-token-live">{progressTokens(jobProgress)}</b>}</span>}{error&&<div className="status-bad">{error}</div>}</div>{wizardStep<4?<button type="button" onClick={()=>setWizardStep(Math.min(4,wizardStep+1) as WizardStep)}>{bi(lang,"Weiter","Continue")} →</button>:<div className="row">{busy&&<button type="button" className="ghost danger" onClick={cancelGeneration}>{bi(lang,"Abbrechen","Cancel")}</button>}<button type="submit" disabled={busy||!model||!isMonday(planStart)}>{busy?bi(lang,"Plan läuft…","Plan running…"):bi(lang,"Trainingsplan erstellen","Create training plan")}</button></div>}</div>
+      <div className="planner-footer"><button type="button" className="ghost" disabled={wizardStep===1||busy} onClick={()=>setWizardStep(Math.max(1,wizardStep-1) as WizardStep)}>← {bi(lang,"Zurück","Back")}</button><div className="planner-status">{status&&<span className={`ai-job-status ${busy?"running":""}`}>{busy&&<i/>}<span>{status}</span>{busy&&progressTokens(jobProgress)&&<b className="ai-token-live">{progressTokens(jobProgress)}</b>}</span>}{error&&<div className="status-bad">{error}</div>}</div>{wizardStep<4?<button type="button" onClick={()=>setWizardStep(Math.min(4,wizardStep+1) as WizardStep)}>{bi(lang,"Weiter","Continue")} →</button>:<div className="row">{busy&&<button type="button" className="ghost danger" onClick={cancelGeneration}>{bi(lang,"Abbrechen","Cancel")}</button>}<button type="submit" disabled={busy||jobLookup||!model||!isMonday(planStart)}>{busy?bi(lang,"Plan läuft…","Plan running…"):bi(lang,"Trainingsplan erstellen","Create training plan")}</button></div>}</div>
     </form>}
 
     {history.length>0&&<section className="card training-plan-library" id="training-plan-library"><div className="between training-plan-library-head"><div><span className="eyebrow">TRAINING PLANS</span><h2>{bi(lang,"Deine Trainingspläne","Your training plans")}</h2><p className="muted">{bi(lang,"Beim Öffnen dieser Seite bleiben alle Pläne bewusst eingeklappt.","All plans intentionally stay collapsed when this page opens.")}</p></div><span className="badge">{history.length}</span></div><div className="training-plan-list">{history.map((x:AnyObj,i:number)=><article className={`training-plan-card ${runId(result)===runId(x)&&planOpen?"active":""}`} key={runId(x)}><div className="training-plan-card-main"><div className="training-plan-card-title"><span className="training-plan-index">{i===0?bi(lang,"Aktuell","Current"):String(i+1).padStart(2,"0")}</span><div><strong>{planTitle(x,lang)}</strong><small>{x.created_at?new Date(x.created_at).toLocaleString(de?"de-DE":"en-GB"):""}</small></div></div><div className="training-plan-card-meta"><span>{planWeeks(x)||"—"} {bi(lang,"Wochen","weeks")}</span><span>{planSessions(x)} {bi(lang,"Einheiten","sessions")}</span><span>{formatDate(planStartValue(x),de)}</span><span>{x.model??x.model_name??"AI"}</span></div></div><div className="training-plan-card-actions"><button type="button" className="ghost" onClick={()=>openPlan(x)}>{bi(lang,"Plan öffnen","Open plan")}</button><button type="button" className="icon-danger" title={bi(lang,"Plan löschen","Delete plan")} onClick={()=>askDelete(x)}>×</button></div></article>)}</div></section>}
