@@ -157,7 +157,7 @@ async def briefing(db, user):
     if sleep and sleep.get("duration_s") is not None and sleep["duration_s"] < 6 * 3600:
         reasons.append("short_sleep")
     readiness = compute_readiness(context, checkin, recent_feedback_data, consecutive_active_days=consecutive_active_days, today=today)
-    mode = "check_discomfort" if "discomfort" in reasons else "easy" if readiness.get("status") in {"red", "yellow"} else "review_plan" if personal.get("upcoming_sessions") else "check_in"
+    mode = "check_discomfort" if "discomfort" in reasons else "easy" if reasons or readiness.get("status") in {"red", "yellow"} else "review_plan" if personal.get("upcoming_sessions") else "check_in"
     evidence = []
     for key, label, metric in [("sleep_30d", "sleep", "duration_s"), ("hrv_30d", "hrv", "overnight_ms"), ("health_30d", "resting_hr", "resting_hr_bpm"), ("health_30d", "hydration", "hydration_ml")]:
         available = [r for r in context.get(key, []) if r.get(metric) is not None]

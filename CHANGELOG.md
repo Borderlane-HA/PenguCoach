@@ -11,6 +11,7 @@
 - Adaptive changes remain preview-first and require explicit confirmation. Existing Garmin-export guards and calendar revision checks remain in force.
 - Supplies the deterministic readiness result to Coach/training-plan personal context when recovery context is enabled, so the LLM receives the same transparent state used by the UI.
 - No database migration is required; existing JSON-backed coach profile and activity-feedback records remain compatible.
+- Restores the Alpha.39 daily-briefing precedence: any explicit caution reason such as no available training time keeps the briefing in `easy` mode even when readiness has insufficient data for a yellow/red score.
 
 ## v0.1.0-alpha.40 — Theme polish & weather-aware planning
 
