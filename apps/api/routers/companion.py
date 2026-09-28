@@ -28,6 +28,8 @@ class ProfileIn(BaseModel):
     session_minutes: int = Field(default=45, ge=5, le=480)
     equipment: str = Field(default="", max_length=600)
     constraints: str = Field(default="", max_length=1000)
+    preferences: str = Field(default="", max_length=1000)
+    avoidances: str = Field(default="", max_length=1000)
     milestones: str = Field(default="", max_length=1000)
 
     @model_validator(mode="after")
@@ -51,6 +53,7 @@ class CheckinIn(BaseModel):
 class FeedbackIn(BaseModel):
     feeling: Literal["easy", "right", "hard"] = "right"
     exertion: int | None = Field(default=None, ge=1, le=10)
+    discomfort: str = Field(default="", max_length=500)
     comment: str = Field(default="", max_length=1000)
 
 
@@ -313,12 +316,26 @@ async def comparison(run_id: uuid.UUID, user: User = Depends(safety_confirmed_us
             a = next(a for a in activities if str(a.id) == item["activity_id"])
             feedback = await db.get(ActivityFeedback, a.id)
             item.update(avg_hr=a.avg_hr, training_load=a.training_load, aerobic_effect=a.aerobic_training_effect, feedback=feedback.data if feedback else None)
-    return {"items": items, "revision": schedule.revision}
+    brief = await briefing(db, user)
+    readiness = brief.get("readiness") or {}
+    suggestions = []
+    for item in items:
+        if item["status"] == "unmatched" and date.fromisoformat(item["date"]) >= user_today(user) - timedelta(days=14):
+            suggestions.append({"session_id": item["id"], "action": "postpone", "reason": "missed_session", "priority": 70})
+        elif item["status"] == "planned" and item["date"] == brief.get("date"):
+            if readiness.get("recommendation") == "check_discomfort":
+                suggestions.append({"session_id": item["id"], "action": "postpone", "reason": "readiness_discomfort", "priority": 100})
+            elif readiness.get("status") == "red":
+                suggestions.append({"session_id": item["id"], "action": "easy", "reason": "readiness_red", "priority": 90})
+            elif readiness.get("status") == "yellow":
+                suggestions.append({"session_id": item["id"], "action": "reduce", "reason": "readiness_yellow", "priority": 80})
+    suggestions.sort(key=lambda x: (-x["priority"], x["session_id"]))
+    return {"items": items, "revision": schedule.revision, "date": brief.get("date"), "readiness": readiness, "adaptive_suggestions": suggestions[:6]}
 
 
 class AdaptIn(BaseModel):
     session_id: str = Field(max_length=80)
-    action: Literal["postpone", "easy"]
+    action: Literal["postpone", "easy", "reduce"]
     revision: int
     apply: bool = False
     expected_after: dict | None = None
@@ -347,8 +364,17 @@ async def adapt(run_id: uuid.UUID, payload: AdaptIn, user: User = Depends(safety
         if offset < 0 or offset // 7 + 1 > run.metadata_json["structured_plan"]["weeks"]:
             raise HTTPException(409, "NO_FREE_DAY_IN_PLAN")
         after.update(week=offset // 7 + 1, day=offset % 7 + 1, date=target.isoformat())
-    else:
+    elif payload.action == "easy":
         after.update(name="Lockere Bewegung / Easy movement", sport="walking", duration_min=min(30, before["duration_min"]), steps=[{"type": "work", "duration_seconds": min(30, before["duration_min"]) * 60, "target": {"type": "none"}}], strength_exercises=[], notes="Optional ruhige Bewegung; bei Beschwerden auslassen. / Optional easy movement; skip if uncomfortable.")
+    else:
+        reduced_minutes = max(5, int(round(before["duration_min"] * 0.75)))
+        if before.get("sport") == "strength":
+            exercises = copy.deepcopy(before.get("strength_exercises") or [])
+            for exercise in exercises:
+                exercise["sets"] = max(1, int(round(exercise.get("sets", 1) * 0.67)))
+            after.update(name=(f"Reduziert / Reduced · {before['name']}")[:120], duration_min=reduced_minutes, strength_exercises=exercises, notes=(before.get("notes", "") + "\nVolumen bewusst reduziert; Qualität vor Umfang. / Volume deliberately reduced; quality over quantity.").strip()[:1500])
+        else:
+            after.update(name=(f"Locker reduziert / Easy reduced · {before['name']}")[:120], duration_min=reduced_minutes, steps=[{"type": "work", "duration_seconds": reduced_minutes * 60, "target": {"type": "none"}, "description": "Locker / Easy"}], notes=(before.get("notes", "") + "\nIntensität und Umfang bewusst reduziert. / Intensity and volume deliberately reduced.").strip()[:1500])
     overrides = {**schedule.overrides, after["id"]: {k: v for k, v in after.items() if k != "date"}}
     overrides = validate_overrides(run, overrides)
     await guard_exported(db, user, run, schedule, schedule.start_date, overrides)

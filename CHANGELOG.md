@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.1.0-alpha.41 — Adaptive Coach foundation
+
+- Adds **Pengu Readiness v1**, a deterministic 0–100 training-readiness estimate built from available sleep, HRV, resting HR, stress, Body Battery/provider readiness, the daily check-in and recent workout feedback. Missing data is ignored; sparse data returns no false-precision score.
+- Shows every readiness factor with direction/impact and a data-confidence indicator. The score is explicitly a training estimate, not a medical assessment.
+- Extends Coach Memory v1 with dedicated training preferences and explicit avoidances while keeping all persistent memories user-owned, editable and deletable.
+- Extends activity feedback with optional post-workout discomfort notes in addition to perceived difficulty, RPE and free text.
+- Adds adaptive plan detection for recently missed sessions and today's recovery state. Yellow readiness proposes a reduced version, red readiness can propose an easy alternative, and discomfort proposes postponement.
+- Adds a reviewed **reduce** adaptation that keeps the original sport, lowers duration/volume and strips intensity targets for endurance/cardio work; strength volume is reduced by sets.
+- Adaptive changes remain preview-first and require explicit confirmation. Existing Garmin-export guards and calendar revision checks remain in force.
+- Supplies the deterministic readiness result to Coach/training-plan personal context when recovery context is enabled, so the LLM receives the same transparent state used by the UI.
+- No database migration is required; existing JSON-backed coach profile and activity-feedback records remain compatible.
+
 ## v0.1.0-alpha.40 — Theme polish & weather-aware planning
 
 - Applies the cached per-user theme in the document head before first paint, removing the brief standard-theme flash when navigating between pages; theme changes are cached immediately and still persisted server-side.

@@ -2,7 +2,7 @@
 
 ## Einstieg
 
-1. Unter **Coach → Dein Coach kennt dich** Ziel, optionales Zieldatum, Sportarten, Trainingstage, typische Dauer, Ausrüstung, Einschränkungen und Zwischenziele eintragen.
+1. Unter **Coach → Dein Coach kennt dich** Ziel, optionales Zieldatum, Sportarten, Trainingstage, typische Dauer, Ausrüstung, Einschränkungen, Trainingspräferenzen, Dinge die vermieden werden sollen und Zwischenziele eintragen.
 2. Unter **Heute** bei Bedarf Energie, Muskelkater, verfügbare Zeit und Beschwerden für den aktuellen Tag ergänzen.
 3. Im Chat eine Frage stellen. Das aktuelle Gespräch wird nach erneutem Öffnen wieder geladen; **Verlauf** zeigt auch ältere Gespräche. **Neu** startet ein separates Gespräch.
 4. Im Training mit **Mein Profil als Grundlage übernehmen** die Planvorgaben vorbelegen und vor der Generierung prüfen. Persönliche Angaben können pro Anfrage ausgeschlossen werden.
@@ -18,9 +18,9 @@ Längere Gespräche werden durch **gekürzte Originalauszüge früherer Nutzerna
 
 Profil, Gespräche und Merksätze sind getrennte Daten. Wer Angaben vollständig entfernen möchte, löscht gegebenenfalls auch das Gespräch, in dem sie vorkommen. Beim Löschen eines Gesprächs werden dessen Nachrichten und ab Alpha.39 damit verknüpfte Coach-Ausführungen entfernt; ältere, nicht verknüpfte AI-Runs bleiben über die bisherige Verwaltung löschbar.
 
-## Tagesbriefing und Wochenrückblick
+## Pengu Readiness, Tagesbriefing und Wochenrückblick
 
-Das Tagesbriefing funktioniert ohne Modellaufruf. Es zeigt erfasste Aktivität, die nächste gespeicherte Planeinheit und verfügbare Messwerte mit Quelle und Datum. Transparente Regeln berücksichtigen heutige Selbstauskunft, kurze erfasste Schlafdauer, mehrere aktive Tage und kürzlich als zu schwer bewertete Einheiten. Dies ist kein medizinischer Bereitschaftsscore. Fehlende Daten beweisen weder Inaktivität noch Erholung.
+Das Tagesbriefing funktioniert ohne Modellaufruf. **Pengu Readiness v1** kombiniert vorhandenen Schlaf, HRV, Ruhepuls, Stress, Body Battery bzw. Geräte-Readiness, heutige Selbstauskunft und jüngstes Trainingsfeedback deterministisch zu einer Trainingsampel. Jeder Faktor bleibt mit seinem positiven oder negativen Einfluss sichtbar. Bei zu wenigen unabhängigen Daten wird bewusst kein numerischer Score ausgegeben. Dies ist eine Trainingsschätzung und keine medizinische Bewertung. Fehlende Daten beweisen weder Inaktivität noch Erholung.
 
 Der Check-in gilt nur für das Datum in der Benutzerzeitzone. Der Wochenvergleich stellt die letzten sieben Kalendertage einschließlich heute den sieben Tagen davor gegenüber. **Mit Coach einordnen** öffnet eine passende Frage mit explizitem 14-Tage-Kontext. Der Coach kann daraus eine individuelle Empfehlung und zielbezogene Zwischenziele entwickeln. Übernommene Zwischenziele werden im Profil gepflegt.
 
@@ -28,7 +28,7 @@ Der Check-in gilt nur für das Datum in der Benutzerzeitzone. Der Wochenvergleic
 
 **Dein Plan im Alltag** vergleicht gespeicherte Planeinheiten mit Aktivitäten gleicher Sportart am gleichen lokalen Tag. Nur eindeutige Paarungen werden automatisch zugeordnet; Aktivitäten werden nicht mehreren Einheiten zugeordnet. Angezeigt werden geplante/tatsächliche Dauer, vorhandener Durchschnittspuls und subjektives Feedback. Aus der Dauer allein wird keine Intensität abgeleitet. Für Details die Aktivität öffnen.
 
-Fehlende Einträge werden als „Keine passende Aktivität“ bezeichnet und können auch noch nicht synchronisierte Daten bedeuten. Vorschläge verschieben eine Einheit auf einen freien passenden Tag innerhalb des Plans oder ersetzen eine Einheit durch eine optionale lockere Alternative. Verfügbare Trainingstage werden berücksichtigt. Vorher/Nachher wird vor dem Speichern angezeigt. Ein veralteter Kalenderstand muss neu geladen werden. Bereits nach Garmin exportierte Einheiten sind geschützt.
+Fehlende Einträge werden als „Keine passende Aktivität“ bezeichnet und können auch noch nicht synchronisierte Daten bedeuten. Alpha.41 erkennt kürzlich verpasste Einheiten sowie eine gelbe/rote Readiness am heutigen Trainingstag und erstellt daraus adaptive Vorschläge. Mögliche Aktionen sind Verschieben, lockere Alternative oder eine reduzierte Einheit. Reduzierte Ausdauer-/Cardioeinheiten behalten die Sportart, senken Umfang und entfernen harte Zielzonen; bei Kraft wird das Satzvolumen reduziert. Verfügbare Trainingstage werden berücksichtigt. Vorher/Nachher wird immer vor dem Speichern angezeigt. Ein veralteter Kalenderstand muss neu geladen werden. Bereits nach Garmin exportierte Einheiten sind geschützt.
 
 Coach-Antworten können über **In Kalender übernehmen** als einzelne Einheit gespeichert werden. Datum, Sportart, Name und Dauer werden vorher vom Nutzer festgelegt. Der Text wird als Notiz übernommen. Es erfolgt kein automatischer Garmin-Export; für einen strukturierten Garmin-Export müssen gegebenenfalls zunächst Trainingsschritte im Kalender ergänzt werden.
 
@@ -46,8 +46,8 @@ Die Eingabereserve berücksichtigt die Länge der System-/Aufgabenanweisungen. D
 
 ## Update
 
-Das normale `pengucoach-update` führt Migration `0011_coach_companion` aus. Sie ergänzt Gesprächsmetadaten und Tabellen für Profil, Merksätze, Check-ins, Feedback und Kalender. Bestehende Gesundheitsdaten und Gespräche bleiben erhalten. Withings bleibt entfernt.
+Alpha.41 benötigt **keine neue Datenbankmigration**. Profil- und Feedback-Erweiterungen liegen in den bereits vorhandenen JSON-Feldern aus `0011_coach_companion`; bestehende Profile, Merksätze, Check-ins, Feedbacks und Kalender bleiben kompatibel.
 
 ## Validierung
 
-Die Release-Prüfung umfasst 132 Python-Tests, Ruff, den Next.js-Produktionsbuild sowie Browserabläufe mit simulierten API-Antworten bei 1440 und 390 Pixel Breite. Geprüft wurden unter anderem Chat-Wiederaufnahme, kompakte erste Sprechblase, Merksätze, Tages-Check-in, Kalender speichern und die direkte Kalenderübernahme. Datenbankfunktionen werden zusätzlich mit einer isolierten Testdatenbank geprüft; das PostgreSQL-Migrationsskript wurde als SQL erzeugt. Kein Live-Test gegen persönliche Garmin-/SparkyFitness-Konten, das konkrete lokale Modell oder einen echten iPhone/Safari-Browser.
+Für Alpha.41 gibt es gezielte Verhaltenstests für Readiness, Sparse-/Stale-Data-Schutz und die neuen Adaptive-Coach-Verträge. Zusätzlich werden Python-Dateien kompiliert und alle TSX-Dateien syntaktisch transpiliert. Der vollständige CI-/Produktionsbuild bleibt weiterhin Teil des Repository-Workflows auf einer Umgebung mit installierten Projektabhängigkeiten.

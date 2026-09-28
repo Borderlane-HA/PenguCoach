@@ -131,7 +131,7 @@ from PenguCoach-calculated metrics. Reply exclusively in English."""
 TRAINING_PLAN_PROMPT_DE = """Erstelle einen praktischen, periodisierten Trainingsplan aus dem angegebenen Ziel und dem bereitgestellten
 Trainingskontext. Beachte Wochenanzahl, Trainingstage und typische Sessiondauer. Balanciere Trainingsreiz und Erholung.
 Nutze ausschließlich den im Kontext ausgewählten Zeitraum und die dort freigegebenen Daten zu Training, Belastung und Erholung.
-Behaupte keine medizinische Trainingsbereitschaft und ergänze keine nicht ausgewählten Datenquellen. Wenn training_zones vorhanden sind, verwende die von Garmin konfigurierten Herzfrequenz- und Leistungszonen
+Behaupte keine medizinische Trainingsbereitschaft und ergänze keine nicht ausgewählten Datenquellen. Falls personal_coaching.readiness vorhanden ist, behandle es als transparente, deterministische PenguCoach-Trainingsschätzung und nicht als medizinische Bewertung; erfinde oder berechne keinen zweiten Score. Wenn training_zones vorhanden sind, verwende die von Garmin konfigurierten Herzfrequenz- und Leistungszonen
 für konkrete Intensitätsvorgaben (z. B. Z2 Grundlage oder Z4 Intervalle) und nenne die gelieferten Grenzen, wenn sinnvoll.
 Erfinde keine Zonen, FTP- oder Schwellenwerte. Berücksichtige Progression und leichtere/regenerative Einheiten. Für Kraftziele: große Bewegungsmuster,
 Sätze/Wiederholungen und RPE/RIR-Leitplanken, ohne unbekannte Gewichte zu erfinden. Für Ausdauerziele: lockere aerobe
@@ -147,7 +147,7 @@ Erfinde keine Gesundheitsdaten. Antworte ausschließlich auf Deutsch."""
 
 TRAINING_PLAN_PROMPT_EN = """Create a practical, periodized training plan using the user's stated goal and the supplied recent training context.
 Respect the requested number of weeks, training days and typical session duration. Balance training stimulus and recovery.
-Use only the selected lookback period and the data categories explicitly supplied in context. Do not infer medical readiness or add unselected data sources.
+Use only the selected lookback period and the data categories explicitly supplied in context. Do not infer medical readiness or add unselected data sources. If personal_coaching.readiness is present, treat it as PenguCoach's transparent deterministic training estimate, not a medical assessment; do not invent or recalculate a second score.
 If training_zones are supplied, use Garmin-configured heart-rate and power zones for concrete intensity prescriptions
 (e.g. Z2 aerobic work or Z4 intervals) and include supplied bounds when useful. Never invent zones, FTP or thresholds.
 Include progression and easier/recovery sessions. For strength goals include major movement patterns, sets/reps and
@@ -166,14 +166,14 @@ für eine Aussage nicht ausreicht. Bevor du behauptest, dass Aktivitäten, Gesun
 prüfe data_inventory sowie die zugehörigen Kontextlisten und Zusammenfassungen; melde niemals "keine Daten", wenn
 Inventar oder Summaries Datensätze ausweisen. Nutze Garmin-Trainingszonen aus training_zones, wenn die Frage Intensität,
 Puls oder Leistung betrifft. Wenn die Frage keinen Trainings-/Gesundheitskontext benötigt, antworte direkt und ignoriere
-irrelevante Trainingsdaten. Antworte ausschließlich auf Deutsch."""
+irrelevante Trainingsdaten. Falls personal_coaching.readiness vorhanden ist, nenne ihn nur als PenguCoach-Trainingsschätzung und nutze bei Bedarf die gelieferten Faktoren zur Begründung; erfinde keinen eigenen Bereitschaftsscore. Antworte ausschließlich auf Deutsch."""
 
 COACH_CHAT_PROMPT_EN = """Answer the user's question from the supplied context and its declared sources.
 Use concrete values when relevant, distinguish measured facts from interpretation, and state when the available data is
 insufficient. Before claiming that activities, health, sleep or HRV data are absent, inspect data_inventory and the relevant
 context arrays/summaries; never report "no data" when the inventory or summaries show records. Use Garmin training zones
 from training_zones when the question concerns intensity, heart rate or power. If the question does not require
-training/wellness context, answer directly and ignore irrelevant training data. Reply exclusively in English."""
+training/wellness context, answer directly and ignore irrelevant training data. If personal_coaching.readiness is present, refer to it only as PenguCoach's training estimate and use its supplied factors when useful; do not invent a second readiness score. Reply exclusively in English."""
 
 # Compatibility exports used by older tests/integrations.
 DEEP_ACTIVITY_PROMPT = DEEP_ACTIVITY_PROMPT_EN
