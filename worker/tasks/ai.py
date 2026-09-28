@@ -19,7 +19,7 @@ from pengucoach.llm.job_control import cancel_requested, clear_cancel
 from pengucoach.llm.service import AiGenerationCancelled, chat, task_settings
 from pengucoach.training_plan.generation import merge_plan_segments, normalize_training_plan_answer, training_plan_instruction
 from pengucoach.training_plan.structured import TrainingPlanDocument, extract_structured_plan, render_plan_markdown
-from pengucoach.weather.service import build_training_weather_context
+from pengucoach.weather.service import build_coach_weather_context, build_training_weather_context
 from worker.celery_app import app
 
 ProgressCallback = Callable[[dict[str, Any]], None]
@@ -203,6 +203,9 @@ async def _coach_chat(
             context = {"source_notice": SOURCE_NOTICE, "period_days": 0, "note": "No training context required for this question."}
 
         await add_personal_context(db, user, context, payload, conversation)
+        weather_context = await build_coach_weather_context(db, user, message)
+        if weather_context is not None:
+            context["weather_forecast"] = weather_context
         local_only = await _privacy(db, user)
         answer = await chat(
             db,
@@ -241,6 +244,8 @@ async def _coach_chat(
             "health_days": len(context.get("health_30d", [])),
             "sleep_days": len(context.get("sleep_30d", [])),
             "hrv_days": len(context.get("hrv_30d", [])),
+            "weather": weather_context is not None and bool(weather_context.get("available")),
+            "weather_location": weather_context.get("location") if weather_context else None,
         }
         return {"conversation_id": str(conversation.id), **answer, "data_used": data_used}
 

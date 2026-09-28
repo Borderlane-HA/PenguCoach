@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.1.0-alpha.42 — Weather-aware Coach & usable model drawer
+
+- Extends the Open-Meteo connection from training-plan generation to the everyday Coach. Weather is fetched only for direct weather questions or near-term training decisions such as today/tomorrow, outdoor sport choices, named upcoming weekdays or short time-constrained Coach prompts. Retrospective training/health questions do not spend weather context.
+- Gives the Coach a bounded eight-day Open-Meteo snapshot with current conditions and explicit forecast dates. Fetch failures never fail the Coach request and the model is instructed not to invent weather or claim it has no weather access when a snapshot was supplied.
+- Adds a per-user **Use for relevant Coach questions** weather setting. Existing weather configurations inherit the enabled default while the whole weather integration remains opt-in. Only stored coordinates are sent to Open-Meteo.
+- Expands answer evidence with transparent context badges for training, sleep, HRV, recovery, Readiness, plan, profile, Garmin zones and weather. Weather evidence includes location, fetch time, current conditions and forecast horizon, or an explicit unavailable state.
+- Makes **Model & response** functional on desktop: it now collapses/expands the right AI-settings column, lets the chat use the full width and remembers the desktop choice locally. On smaller screens it continues to open/close the settings panel.
+- Preserves Coach weather and evidence during context compaction so large training histories cannot silently drop the short-range forecast.
+- No database migration is required.
+
 ## v0.1.0-alpha.41 — Adaptive Coach foundation
 
 - Adds **Pengu Readiness v1**, a deterministic 0–100 training-readiness estimate built from available sleep, HRV, resting HR, stress, Body Battery/provider readiness, the daily check-in and recent workout feedback. Missing data is ignored; sparse data returns no false-precision score.

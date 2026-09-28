@@ -21,6 +21,7 @@ class WeatherSettingsIn(BaseModel):
     country_code: str = Field(default="", max_length=8)
     admin1: str = Field(default="", max_length=120)
     include_in_training_plans: bool = True
+    include_in_coach: bool = True
 
 
 def _public(config: dict) -> dict:

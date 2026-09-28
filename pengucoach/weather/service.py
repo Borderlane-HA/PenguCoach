@@ -46,6 +46,7 @@ def default_weather_config() -> dict[str, Any]:
         "country_code": "",
         "admin1": "",
         "include_in_training_plans": True,
+        "include_in_coach": True,
     }
 
 
@@ -153,5 +154,100 @@ async def build_training_weather_context(
     result["planning_note"] = (
         "Use only listed calendar dates. Weather is short-range context, not a promise. "
         "Never infer weather for plan dates outside this forecast."
+    )
+    return result
+
+
+def coach_weather_relevant(message: str) -> bool:
+    """Return whether short-range weather can materially improve a Coach answer.
+
+    The classifier is deliberately deterministic and conservative: explicit weather
+    questions always qualify, while training questions require either a near-term
+    date reference or recommendation/decision wording. This avoids spending context
+    on weather for retrospective questions such as "How was my training week?".
+    """
+    import re
+
+    text = " ".join(str(message or "").casefold().split())
+    if not text:
+        return False
+
+    past_terms = ("wie war", "how was", "gestern", "yesterday", "letzte woche", "last week", "letzten monat", "last month")
+    if any(term in text for term in past_terms):
+        return False
+
+    weather_terms = (
+        "wetter", "weather", "regen", "rain", "wind", "sturm", "storm",
+        "gewitter", "thunder", "temperatur", "temperature", "hitze", "heat",
+        "kälte", "kaelte", "cold", "schnee", "snow", "uv", "vorhersage", "forecast",
+    )
+    if any(term in text for term in weather_terms):
+        return True
+
+    activity_terms = (
+        "train", "lauf", "run", "jogg", "rennrad", "radfahr", "cycling", "bike",
+        "wander", "hiking", "walk", "gehen", "outdoor", "intervall", "interval",
+        "long run", "longrun",
+    )
+    limited_time = bool(re.search(r"\b(?:nur|only)\s+\d{1,3}\s*(?:minuten|minutes)\b", text))
+    if not any(term in text for term in activity_terms) and not limited_time:
+        return False
+
+    near_term = (
+        "heute", "today", "morgen", "tomorrow", "übermorgen", "uebermorgen",
+        "day after tomorrow", "wochenende", "weekend", "kommenden tage",
+        "nächsten tage", "naechsten tage", "next days", "diese woche", "this week",
+        "montag", "dienstag", "mittwoch", "donnerstag", "freitag", "samstag", "sonntag",
+        "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday",
+    )
+    decision_terms = (
+        "was soll", "soll ich", "sollte ich", "kann ich", "wann", "welcher tag",
+        "welchen tag", "empfiehl", "empfehl", "beste tag", "bester tag",
+        "what should", "should i", "can i", "when", "which day", "recommend", "best day",
+    )
+    return any(term in text for term in near_term) or any(term in text for term in decision_terms) or limited_time or bool(
+        re.search(r"\b\d{1,2}[./-]\d{1,2}(?:[./-]\d{2,4})?\b", text)
+    )
+
+
+async def build_coach_weather_context(
+    db: AsyncSession,
+    user: User,
+    message: str,
+    *,
+    days: int = 8,
+) -> dict[str, Any] | None:
+    """Fetch bounded Open-Meteo context only when the current Coach question needs it."""
+    pref = await db.get(UserPreference, user.id)
+    config = weather_config(pref)
+    if not config.get("enabled") or not config.get("include_in_coach", True):
+        return None
+    if not coach_weather_relevant(message):
+        return None
+    latitude = config.get("latitude")
+    longitude = config.get("longitude")
+    if latitude is None or longitude is None:
+        return None
+    forecast_days = max(1, min(8, int(days)))
+    try:
+        result = await fetch_forecast(
+            float(latitude), float(longitude), str(config.get("timezone") or "auto"), forecast_days
+        )
+    except (httpx.HTTPError, ValueError, TypeError) as exc:
+        return {
+            "available": False,
+            "provider": "Open-Meteo",
+            "location": config.get("location_name") or "",
+            "forecast_limit_days": forecast_days,
+            "note": (
+                f"Weather was relevant to this Coach question but unavailable at answer time "
+                f"({type(exc).__name__}). Do not invent current conditions or a forecast."
+            ),
+        }
+    result["location"] = config.get("location_name") or ""
+    result["forecast_limit_days"] = forecast_days
+    result["planning_note"] = (
+        "Use only the supplied current conditions and listed forecast dates. Treat forecasts as uncertain. "
+        "Never claim weather access beyond this supplied snapshot and never invent weather for other dates."
     )
     return result

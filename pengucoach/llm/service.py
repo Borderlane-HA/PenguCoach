@@ -166,21 +166,21 @@ für eine Aussage nicht ausreicht. Bevor du behauptest, dass Aktivitäten, Gesun
 prüfe data_inventory sowie die zugehörigen Kontextlisten und Zusammenfassungen; melde niemals "keine Daten", wenn
 Inventar oder Summaries Datensätze ausweisen. Nutze Garmin-Trainingszonen aus training_zones, wenn die Frage Intensität,
 Puls oder Leistung betrifft. Wenn die Frage keinen Trainings-/Gesundheitskontext benötigt, antworte direkt und ignoriere
-irrelevante Trainingsdaten. Falls personal_coaching.readiness vorhanden ist, nenne ihn nur als PenguCoach-Trainingsschätzung und nutze bei Bedarf die gelieferten Faktoren zur Begründung; erfinde keinen eigenen Bereitschaftsscore. Antworte ausschließlich auf Deutsch."""
+irrelevante Trainingsdaten. Falls personal_coaching.readiness vorhanden ist, nenne ihn nur als PenguCoach-Trainingsschätzung und nutze bei Bedarf die gelieferten Faktoren zur Begründung; erfinde keinen eigenen Bereitschaftsscore. Falls weather_forecast vorhanden ist, darfst du dieses Open-Meteo-Snapshot für kurzfristige Trainingsentscheidungen oder direkte Wetterfragen verwenden. Behaupte dann nicht, keinen Wetterzugriff zu haben. Nutze ausschließlich die gelieferten aktuellen Werte und expliziten Forecast-Daten, kennzeichne Vorhersagen als unsicher und erfinde kein Wetter für andere Tage. Antworte ausschließlich auf Deutsch."""
 
 COACH_CHAT_PROMPT_EN = """Answer the user's question from the supplied context and its declared sources.
 Use concrete values when relevant, distinguish measured facts from interpretation, and state when the available data is
 insufficient. Before claiming that activities, health, sleep or HRV data are absent, inspect data_inventory and the relevant
 context arrays/summaries; never report "no data" when the inventory or summaries show records. Use Garmin training zones
 from training_zones when the question concerns intensity, heart rate or power. If the question does not require
-training/wellness context, answer directly and ignore irrelevant training data. If personal_coaching.readiness is present, refer to it only as PenguCoach's training estimate and use its supplied factors when useful; do not invent a second readiness score. Reply exclusively in English."""
+training/wellness context, answer directly and ignore irrelevant training data. If personal_coaching.readiness is present, refer to it only as PenguCoach's training estimate and use its supplied factors when useful; do not invent a second readiness score. If weather_forecast is present, you may use that Open-Meteo snapshot for short-range training decisions or direct weather questions. Do not claim that you lack weather access when the snapshot is supplied. Use only the supplied current values and explicit forecast dates, treat forecasts as uncertain, and never invent weather for other dates. Reply exclusively in English."""
 
 # Compatibility exports used by older tests/integrations.
 DEEP_ACTIVITY_PROMPT = DEEP_ACTIVITY_PROMPT_EN
 TRAINING_PLAN_PROMPT = TRAINING_PLAN_PROMPT_EN
 COACH_CHAT_PROMPT = COACH_CHAT_PROMPT_EN
-COACH_ADVICE_DE = "Beantworte kurze Alltagsfragen knapp mit einer Empfehlung und einer kurzen Begründung aus den gewählten Daten. Erstelle keinen mehrtägigen Trainingsplan, außer wenn ausdrücklich gewünscht. Fehlende Messwerte sind kein Nachweis von Erholung oder Inaktivität. Bei 'heute' beziehe dich auf das Kontext-Enddatum."
-COACH_ADVICE_EN = "Answer short everyday questions concisely with a recommendation and a brief reason from selected data. Do not create a multi-day training plan unless explicitly requested. Missing readings do not prove recovery or inactivity. Use the context end date for today."
+COACH_ADVICE_DE = "Beantworte kurze Alltagsfragen knapp mit einer Empfehlung und einer kurzen Begründung aus den gewählten Daten. Erstelle keinen mehrtägigen Trainingsplan, außer wenn ausdrücklich gewünscht. Fehlende Messwerte sind kein Nachweis von Erholung oder Inaktivität. Bei 'heute' beziehe dich auf das Kontext-Enddatum. Wenn weather_forecast geliefert wird, nutze nur diesen Open-Meteo-Snapshot und behaupte nicht, keinen Wetterzugriff zu haben; erfinde keine Werte außerhalb der gelieferten Daten."
+COACH_ADVICE_EN = "Answer short everyday questions concisely with a recommendation and a brief reason from selected data. Do not create a multi-day training plan unless explicitly requested. Missing readings do not prove recovery or inactivity. Use the context end date for today. When weather_forecast is supplied, use only that Open-Meteo snapshot and do not claim that you lack weather access; never invent values outside the supplied data."
 SYSTEM_PROMPT = SYSTEM_PROMPT_EN
 
 TASK_DEFAULTS: dict[str, dict[str, Any]] = {
@@ -374,6 +374,7 @@ def _bounded_context(context: dict[str, Any], max_chars: int) -> tuple[str, dict
                 "hrv_30d": (working.get("hrv_30d") or [])[-7:],
                 "body_profile": working.get("body_profile"),
                 "training_zones": working.get("training_zones"),
+                "weather_forecast": working.get("weather_forecast"),
                 "context_truncated": True,
             }
             payload, size = _json_size(compact)
@@ -891,7 +892,7 @@ def _shrink_json(value, maximum):
         visit(result)
         if not candidates:
             # Keep the data inventory/range even at very small budgets.
-            result = {k: result[k] for k in ("data_inventory", "period_days", "from", "to", "goal", "activity", "personal_coaching", "conversation_summary") if k in result}
+            result = {k: result[k] for k in ("data_inventory", "period_days", "from", "to", "goal", "activity", "personal_coaching", "conversation_summary", "weather_forecast") if k in result}
             if len(_json_size(result)[0]) > maximum:
                 result = {"context_note": "Context could not fit; do not infer missing facts."}
             break
@@ -915,4 +916,41 @@ def bounded_personal_context(context, maximum):
 
 def context_evidence(context):
     lookback = context.get("lookback") or context
-    return {"from": context.get("from", lookback.get("from")), "to": context.get("to", lookback.get("to")), "selected": context.get("selected_data", lookback.get("selected_data")), "inventory": context.get("data_inventory"), "personal_context": bool(context.get("personal_coaching")), "conversation_summary": bool(context.get("conversation_summary")), "daily_values": context.get("health_30d", lookback.get("daily_health", []))[-3:], "sleep": context.get("sleep_30d", lookback.get("sleep", []))[-3:], "hrv": context.get("hrv_30d", lookback.get("hrv", []))[-3:]}
+    personal = context.get("personal_coaching") if isinstance(context.get("personal_coaching"), dict) else {}
+    readiness = personal.get("readiness") if isinstance(personal.get("readiness"), dict) else None
+    weather = context.get("weather_forecast") if isinstance(context.get("weather_forecast"), dict) else None
+    weather_evidence = None
+    if weather is not None:
+        current = weather.get("current") if isinstance(weather.get("current"), dict) else {}
+        weather_evidence = {
+            "available": bool(weather.get("available")),
+            "provider": weather.get("provider"),
+            "location": weather.get("location"),
+            "fetched_at": weather.get("fetched_at"),
+            "forecast_days": len(weather.get("daily") or []),
+            "current": {
+                key: current.get(key)
+                for key in ("temperature_2m", "apparent_temperature", "precipitation", "weather_code", "wind_speed_10m", "wind_gusts_10m")
+                if current.get(key) is not None
+            },
+            "note": weather.get("note"),
+        }
+    return {
+        "from": context.get("from", lookback.get("from")),
+        "to": context.get("to", lookback.get("to")),
+        "selected": context.get("selected_data", lookback.get("selected_data")),
+        "inventory": context.get("data_inventory"),
+        "personal_context": bool(personal),
+        "conversation_summary": bool(context.get("conversation_summary")),
+        "training_zones": bool(context.get("training_zones")),
+        "upcoming_sessions": len(personal.get("upcoming_sessions") or []),
+        "readiness": {
+            "score": readiness.get("score"),
+            "status": readiness.get("status"),
+            "available_factors": readiness.get("available_factors"),
+        } if readiness else None,
+        "weather": weather_evidence,
+        "daily_values": context.get("health_30d", lookback.get("daily_health", []))[-3:],
+        "sleep": context.get("sleep_30d", lookback.get("sleep", []))[-3:],
+        "hrv": context.get("hrv_30d", lookback.get("hrv", []))[-3:],
+    }

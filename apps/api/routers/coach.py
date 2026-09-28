@@ -15,7 +15,7 @@ from pengucoach.db.session import get_db
 from pengucoach.llm.service import chat, eligible_models, resolve_model, task_settings
 from pengucoach.llm.usage import normalize_quality, quality_options
 from pengucoach.training_plan.generation import normalize_training_plan_answer, training_plan_instruction
-from pengucoach.weather.service import build_training_weather_context
+from pengucoach.weather.service import build_coach_weather_context, build_training_weather_context
 from worker.tasks.ai import activity_analysis as activity_analysis_task
 from worker.tasks.ai import coach_chat as coach_chat_task
 from worker.tasks.ai import training_plan as training_plan_task
@@ -230,6 +230,9 @@ async def coach_chat(payload: ChatRequest, user: User = Depends(safety_confirmed
         "source_notice": SOURCE_NOTICE, "period_days": 0, "note": "No training context required for this question."
     }
     await add_personal_context(db, user, context, payload.model_dump(), conversation)
+    weather_context = await build_coach_weather_context(db, user, payload.message)
+    if weather_context is not None:
+        context["weather_forecast"] = weather_context
     _, local_only = await _privacy(db, user)
     try:
         answer = await chat(
@@ -257,6 +260,8 @@ async def coach_chat(payload: ChatRequest, user: User = Depends(safety_confirmed
             "sleep_days": len(context.get("sleep_30d", [])),
             "hrv_days": len(context.get("hrv_30d", [])),
             "activities": len(context.get("recent_activities", [])),
+            "weather": weather_context is not None and bool(weather_context.get("available")),
+            "weather_location": weather_context.get("location") if weather_context else None,
         },
     }
 

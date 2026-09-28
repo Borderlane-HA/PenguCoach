@@ -32,6 +32,14 @@ Fehlende Einträge werden als „Keine passende Aktivität“ bezeichnet und kö
 
 Coach-Antworten können über **In Kalender übernehmen** als einzelne Einheit gespeichert werden. Datum, Sportart, Name und Dauer werden vorher vom Nutzer festgelegt. Der Text wird als Notiz übernommen. Es erfolgt kein automatischer Garmin-Export; für einen strukturierten Garmin-Export müssen gegebenenfalls zunächst Trainingsschritte im Kalender ergänzt werden.
 
+## Wetter im Coach und transparente Antwortdaten
+
+Wenn die Wetterintegration aktiviert ist und **Bei passenden Coach-Fragen berücksichtigen** eingeschaltet ist, erhält der Coach bei kurzfristigen Wetter-/Trainingsfragen automatisch einen begrenzten Open-Meteo-Snapshot. Dazu zählen zum Beispiel „Was soll ich heute trainieren?“, „Soll ich morgen Rennrad fahren?“, „Wann wäre diese Woche ein guter Tag zum Laufen?“ und direkte Wetterfragen. Rückblicke wie „Wie war meine Trainingswoche?“ lösen keinen Wetterabruf aus. Der Coach erhält maximal acht Forecast-Tage sowie die aktuellen Bedingungen; weiter entfernte oder vergangene Wetterwerte werden nicht erfunden. Ein Fehler bei Open-Meteo blockiert die Coach-Antwort nicht.
+
+Unter **Verwendete Daten & Antwortdetails** zeigt jede neue Coach-Antwort Kontext-Badges für tatsächlich mitgelieferte Kategorien wie Training, Schlaf, HRV, Erholung, Readiness, Plan, Profil, Garmin-Zonen und Wetter. Beim Wetter werden Ort, Abrufzeit, aktuelle Bedingungen und Forecast-Horizont angezeigt; bei einem fehlgeschlagenen Abruf erscheint stattdessen ein Warnstatus. Damit lässt sich direkt prüfen, ob die KI das Wetter für genau diese Antwort erhalten hat.
+
+Der Button **Modell & Antwort** blendet auf Desktop die rechte AI-Einstellungsspalte ein oder aus und gibt dem Gespräch bei ausgeblendeter Spalte die volle Breite. Diese Desktop-Auswahl wird lokal im Browser gespeichert. Auf kleineren Bildschirmen öffnet bzw. schließt derselbe Button weiterhin das Einstellungsfeld.
+
 ## Datenschutz und Datenwahl
 
 Die bestehende Freigabe für lokale/Cloud-KI gilt auch für persönliche Angaben. Der Schalter **Mein Profil** im Chat bzw. **Profil, Merksätze & Feedback einbeziehen** im Training gilt für die jeweilige Anfrage. Der Profilschalter deaktiviert persönlichen Kontext generell. Die bestehenden Kategorien begrenzen Trainings- und Erholungsdaten; persönliche Angaben bleiben eine separat auswählbare Kategorie. Feedback und Planabgleich folgen dem gewählten Zeitraum. Zukünftige Einheiten sind ausdrücklich als Planung gekennzeichnet.
@@ -46,8 +54,8 @@ Die Eingabereserve berücksichtigt die Länge der System-/Aufgabenanweisungen. D
 
 ## Update
 
-Alpha.41 benötigt **keine neue Datenbankmigration**. Profil- und Feedback-Erweiterungen liegen in den bereits vorhandenen JSON-Feldern aus `0011_coach_companion`; bestehende Profile, Merksätze, Check-ins, Feedbacks und Kalender bleiben kompatibel.
+Alpha.42 benötigt **keine neue Datenbankmigration**. Profil- und Feedback-Erweiterungen liegen in den bereits vorhandenen JSON-Feldern aus `0011_coach_companion`; bestehende Profile, Merksätze, Check-ins, Feedbacks und Kalender bleiben kompatibel.
 
 ## Validierung
 
-Für Alpha.41 gibt es gezielte Verhaltenstests für Readiness, Sparse-/Stale-Data-Schutz und die neuen Adaptive-Coach-Verträge. Zusätzlich werden Python-Dateien kompiliert und alle TSX-Dateien syntaktisch transpiliert. Der vollständige CI-/Produktionsbuild bleibt weiterhin Teil des Repository-Workflows auf einer Umgebung mit installierten Projektabhängigkeiten.
+Für Alpha.42 gibt es zusätzlich gezielte Verhaltenstests für die Wetter-Relevanzlogik, den fehlertoleranten Coach-Forecast, Antwort-Evidenz und den funktionalen Einstellungs-Drawer; die Alpha.40/41-Verhaltenstests bleiben bestehen. Zusätzlich werden Python-Dateien kompiliert und alle TSX-Dateien syntaktisch transpiliert. Der vollständige CI-/Produktionsbuild bleibt weiterhin Teil des Repository-Workflows auf einer Umgebung mit installierten Projektabhängigkeiten.
