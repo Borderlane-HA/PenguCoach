@@ -12,7 +12,11 @@ PenguCoach is designed as a local-first, multi-user platform that reads Garmin C
 
 ## Current alpha scope
 
-`v0.1.0-alpha.43.1` is the current end-to-end alpha baseline:
+`v0.1.0-alpha.44` is the current end-to-end alpha baseline:
+
+- **Training Intelligence:** deterministic 7/28-day training-load trends, weekly volume and sport mix; near-term Open-Meteo badges on outdoor plan sessions; deterministic plan-conflict detection; reviewed weather-based indoor alternatives; and a persistent AI Decision Log for accepted adaptive changes.
+- **Coach Memory suggestions:** PenguCoach can propose a memory only after repeated explicit evidence such as confirmed indoor adaptations or repeated very-hard workout feedback. Suggestions are never saved without confirmation and can be dismissed.
+- **Noncommercial license from Alpha.44:** new releases use PolyForm Noncommercial 1.0.0. Personal and other permitted noncommercial use/modification/redistribution remain available; commercial use, resale, paid hosting/SaaS and commercial integration require separate permission. Earlier MIT releases keep their original rights.
 
 - Running training-plan generation survives page/browser changes visibly: PenguCoach restores the active server-side job, shows a compact live status card and prevents accidentally queueing a duplicate plan.
 
@@ -233,7 +237,9 @@ See [`SECURITY.md`](SECURITY.md).
 
 ## License
 
-MIT. See [`LICENSE`](LICENSE).
+Starting with `v0.1.0-alpha.44`, PenguCoach is provided under the **PolyForm Noncommercial License 1.0.0**. Personal and other permitted noncommercial use, modification and redistribution are allowed under those terms. Commercial use, resale, paid hosting/SaaS or commercial product integration require separate permission from the copyright holder. See [`LICENSE`](LICENSE) and the in-app **About PenguCoach** page.
+
+Earlier PenguCoach releases that were distributed under MIT retain the rights granted with those specific releases.
 
 Garmin and Garmin Connect are trademarks of Garmin Ltd. or its subsidiaries. PenguCoach is an independent development project and is not affiliated with or endorsed by Garmin.
 

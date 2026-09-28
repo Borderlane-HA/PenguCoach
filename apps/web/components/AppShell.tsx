@@ -7,7 +7,7 @@ import {bi,useI18n} from "../lib/i18n";
 
 type Me={username:string;role:string;locale:string;safety_required:boolean;app_version:string};
 type Appearance={theme:string;has_avatar:boolean;has_app_icon:boolean;avatar_version?:number;app_icon_version?:number};
-type IconName="today"|"health"|"activities"|"training"|"coach"|"garmin"|"sparky"|"weather"|"privacy"|"appearance"|"ai"|"users"|"logout";
+type IconName="today"|"health"|"activities"|"training"|"coach"|"garmin"|"sparky"|"weather"|"privacy"|"appearance"|"about"|"ai"|"users"|"logout";
 
 function Icon({name}:{name:IconName}){
   const common={width:20,height:20,viewBox:"0 0 24 24",fill:"none",stroke:"currentColor",strokeWidth:1.8,strokeLinecap:"round" as const,strokeLinejoin:"round" as const,"aria-hidden":true};
@@ -21,6 +21,7 @@ function Icon({name}:{name:IconName}){
   if(name==="weather")return <svg {...common}><path d="M7 18h10a4 4 0 0 0 .7-7.9A6 6 0 0 0 6.5 9.2 4.5 4.5 0 0 0 7 18Z"/><path d="M12 3v2M4.9 5.9l1.4 1.4M19.1 5.9l-1.4 1.4"/></svg>;
   if(name==="privacy")return <svg {...common}><path d="M12 3 5 6v5c0 4.7 2.7 8.1 7 10 4.3-1.9 7-5.3 7-10V6l-7-3Z"/><path d="m9.5 12 1.6 1.6 3.4-3.6"/></svg>;
   if(name==="appearance")return <svg {...common}><circle cx="12" cy="12" r="9"/><path d="M12 3v18M3 12h18M6.2 6.2l11.6 11.6M17.8 6.2 6.2 17.8"/></svg>;
+  if(name==="about")return <svg {...common}><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>;
   if(name==="ai")return <svg {...common}><rect x="6" y="6" width="12" height="12" rx="3"/><path d="M9 10h6M9 14h4M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M18 9h4M2 15h4M18 15h4"/></svg>;
   if(name==="logout")return <svg {...common}><path d="M10 5H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h4"/><path d="m15 16 4-4-4-4M19 12H9"/></svg>;
   return <svg {...common}><path d="M16 20v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 20v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/></svg>;
@@ -47,6 +48,7 @@ export default function AppShell({children,title}:{children:React.ReactNode;titl
     {href:"/settings/weather",icon:"weather" as IconName,label:bi(lang,"Wetter","Weather")},
     {href:"/settings/appearance",icon:"appearance" as IconName,label:bi(lang,"Darstellung","Appearance")},
     {href:"/settings/privacy",icon:"privacy" as IconName,label:bi(lang,"Datenschutz","Privacy")},
+    {href:"/settings/about",icon:"about" as IconName,label:bi(lang,"Über PenguCoach","About PenguCoach")},
   ],[lang]);
   const admin=useMemo(()=>[
     {href:"/admin/ai",icon:"ai" as IconName,label:"AI Studio"},

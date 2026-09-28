@@ -11,8 +11,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from pengucoach.auth.dependencies import safety_confirmed_user
 from pengucoach.coach.companion import briefing, compare_sessions, scheduled_sessions, sport_family
+from pengucoach.coach.training_intelligence import plan_intelligence, training_load_summary
 from pengucoach.common.dates import day_start, user_today
-from pengucoach.db.models import Activity, ActivityFeedback, AiRun, CoachCheckin, CoachMemory, CoachProfile, Conversation, GarminWorkoutExport, Message, PlanSchedule, User
+from pengucoach.db.models import Activity, ActivityFeedback, AiRun, CoachCheckin, CoachDecisionLog, CoachMemory, CoachProfile, Conversation, GarminWorkoutExport, Message, PlanSchedule, User
 from pengucoach.db.session import get_db
 from pengucoach.training_plan.structured import TrainingPlanDocument
 
@@ -31,6 +32,7 @@ class ProfileIn(BaseModel):
     preferences: str = Field(default="", max_length=1000)
     avoidances: str = Field(default="", max_length=1000)
     milestones: str = Field(default="", max_length=1000)
+    dismissed_memory_suggestions: list[str] = Field(default_factory=list, max_length=20)
 
     @model_validator(mode="after")
     def valid_days(self):
@@ -196,6 +198,78 @@ async def get_briefing(user: User = Depends(safety_confirmed_user), db: AsyncSes
     return await briefing(db, user)
 
 
+@router.get("/training-load")
+async def get_training_load(user: User = Depends(safety_confirmed_user), db: AsyncSession = Depends(get_db)):
+    return await training_load_summary(db, user)
+
+
+async def _memory_suggestion_candidates(db: AsyncSession, user: User) -> list[dict]:
+    profile_row = await db.get(CoachProfile, user.id)
+    profile = dict(profile_row.data or {}) if profile_row else {}
+    dismissed = set(profile.get("dismissed_memory_suggestions") or [])
+    existing = [str(x).casefold() for x in (await db.scalars(select(CoachMemory.content).where(CoachMemory.user_id == user.id))).all()]
+    since = datetime.now(timezone.utc) - timedelta(days=90)
+    logs = list((await db.scalars(select(CoachDecisionLog).where(CoachDecisionLog.user_id == user.id, CoachDecisionLog.created_at >= since))).all())
+    feedback_rows = list((await db.execute(
+        select(ActivityFeedback, Activity).join(Activity, Activity.id == ActivityFeedback.activity_id).where(
+            ActivityFeedback.user_id == user.id, Activity.started_at >= since
+        )
+    )).all())
+    candidates = []
+    indoor_count = sum(1 for row in logs if row.action == "indoor")
+    if indoor_count >= 2:
+        candidates.append({
+            "key": "prefer_indoor_bad_weather",
+            "text": "Bei ungünstigem Wetter bevorzuge ich eine passende Indoor-Alternative.",
+            "reason": "confirmed_indoor_adaptations",
+            "evidence_count": indoor_count,
+        })
+    hard_count = sum(1 for feedback, _ in feedback_rows if (feedback.data or {}).get("feeling") == "hard" or int((feedback.data or {}).get("exertion") or 0) >= 9)
+    if hard_count >= 3:
+        candidates.append({
+            "key": "conservative_after_hard_feedback",
+            "text": "Wenn sich mehrere Einheiten zu hart anfühlen, soll mein Coach die nächste Belastung eher konservativ planen.",
+            "reason": "repeated_hard_feedback",
+            "evidence_count": hard_count,
+        })
+    result = []
+    for item in candidates:
+        if item["key"] in dismissed:
+            continue
+        if any(item["text"].casefold() == value for value in existing):
+            continue
+        result.append(item)
+    return result
+
+
+@router.get("/memory-suggestions")
+async def memory_suggestions(user: User = Depends(safety_confirmed_user), db: AsyncSession = Depends(get_db)):
+    return await _memory_suggestion_candidates(db, user)
+
+
+@router.post("/memory-suggestions/{key}/accept")
+async def accept_memory_suggestion(key: str, user: User = Depends(safety_confirmed_user), db: AsyncSession = Depends(get_db)):
+    candidates = {item["key"]: item for item in await _memory_suggestion_candidates(db, user)}
+    item = candidates.get(key)
+    if not item:
+        raise HTTPException(404, "MEMORY_SUGGESTION_NOT_FOUND")
+    return await save_memory(MemoryIn(content=item["text"]), user, db)
+
+
+@router.post("/memory-suggestions/{key}/dismiss")
+async def dismiss_memory_suggestion(key: str, user: User = Depends(safety_confirmed_user), db: AsyncSession = Depends(get_db)):
+    row = await db.get(CoachProfile, user.id)
+    if not row:
+        row = CoachProfile(user_id=user.id, data=ProfileIn().model_dump(mode="json"))
+        db.add(row)
+    data = dict(row.data or {})
+    dismissed = list(dict.fromkeys([*(data.get("dismissed_memory_suggestions") or []), key]))[-20:]
+    data["dismissed_memory_suggestions"] = dismissed
+    row.data = data
+    await db.commit()
+    return {"dismissed": True, "key": key}
+
+
 @router.get("/conversations")
 async def conversations(offset: int = Query(0, ge=0), limit: int = Query(30, ge=1, le=100), user: User = Depends(safety_confirmed_user), db: AsyncSession = Depends(get_db)):
     rows = (await db.scalars(select(Conversation).where(Conversation.user_id == user.id).order_by(Conversation.updated_at.desc(), Conversation.id).offset(offset).limit(limit))).all()
@@ -329,13 +403,59 @@ async def comparison(run_id: uuid.UUID, user: User = Depends(safety_confirmed_us
                 suggestions.append({"session_id": item["id"], "action": "easy", "reason": "readiness_red", "priority": 90})
             elif readiness.get("status") == "yellow":
                 suggestions.append({"session_id": item["id"], "action": "reduce", "reason": "readiness_yellow", "priority": 80})
-    suggestions.sort(key=lambda x: (-x["priority"], x["session_id"]))
-    return {"items": items, "revision": schedule.revision, "date": brief.get("date"), "readiness": readiness, "adaptive_suggestions": suggestions[:6]}
+    intelligence = await plan_intelligence(db, user, run_id, sessions)
+    for session_id, info in (intelligence.get("sessions") or {}).items():
+        weather = info.get("weather") or {}
+        if weather.get("indoor_recommended") and date.fromisoformat(info["date"]) >= user_today(user):
+            suggestions.append({"session_id": session_id, "action": "indoor", "reason": "weather_unfavorable", "priority": 75})
+    for conflict in intelligence.get("conflicts") or []:
+        if conflict.get("session_id") and conflict.get("proposed_action"):
+            suggestions.append({"session_id": conflict["session_id"], "action": conflict["proposed_action"], "reason": f"conflict_{conflict['type']}", "priority": 65})
+    dedup = {}
+    for suggestion in suggestions:
+        key = (suggestion["session_id"], suggestion["action"])
+        if key not in dedup or suggestion["priority"] > dedup[key]["priority"]:
+            dedup[key] = suggestion
+    suggestions = sorted(dedup.values(), key=lambda x: (-x["priority"], x["session_id"]))
+    logs = list((await db.scalars(select(CoachDecisionLog).where(CoachDecisionLog.user_id == user.id, CoachDecisionLog.plan_run_id == run_id).order_by(CoachDecisionLog.created_at.desc()).limit(20))).all())
+    decision_log = [{"id": str(row.id), "session_id": row.session_id, "action": row.action, "before": row.before, "after": row.after, "reasons": row.reasons, "created_at": row.created_at} for row in logs]
+    return {"items": items, "revision": schedule.revision, "date": brief.get("date"), "readiness": readiness, "adaptive_suggestions": suggestions[:8], "conflicts": intelligence.get("conflicts", []), "session_intelligence": intelligence.get("sessions", {}), "weather": intelligence.get("weather", {}), "training_load": intelligence.get("load", {}), "decision_log": decision_log}
+
+
+@router.get("/plans/{run_id}/intelligence")
+async def get_plan_intelligence(run_id: uuid.UUID, user: User = Depends(safety_confirmed_user), db: AsyncSession = Depends(get_db)):
+    run = await plan_owned(db, user, run_id)
+    schedule = await db.get(PlanSchedule, run_id)
+    virtual = False
+    if not schedule:
+        raw_start = ((run.metadata_json or {}).get("goal") or {}).get("start_date")
+        try:
+            generated_start = date.fromisoformat(str(raw_start)) if raw_start else None
+        except ValueError:
+            generated_start = None
+        if not generated_start or generated_start.weekday() != 0:
+            return {"needs_schedule": True, "load": await training_load_summary(db, user), "sessions": {}, "conflicts": [], "weather": {"available": False}}
+        # Use the generated plan start for a read-only preview. The row is never
+        # added to the session, so merely opening a plan does not persist data.
+        schedule = PlanSchedule(plan_run_id=run_id, user_id=user.id, start_date=generated_start, overrides={}, revision=0)
+        virtual = True
+    result = await plan_intelligence(db, user, run_id, scheduled_sessions(run, schedule))
+    result["needs_schedule"] = virtual
+    result["preview_schedule"] = virtual
+    result["revision"] = schedule.revision
+    return result
+
+
+@router.get("/plans/{run_id}/decision-log")
+async def get_decision_log(run_id: uuid.UUID, user: User = Depends(safety_confirmed_user), db: AsyncSession = Depends(get_db)):
+    await plan_owned(db, user, run_id)
+    rows = list((await db.scalars(select(CoachDecisionLog).where(CoachDecisionLog.user_id == user.id, CoachDecisionLog.plan_run_id == run_id).order_by(CoachDecisionLog.created_at.desc()).limit(100))).all())
+    return [{"id": str(row.id), "session_id": row.session_id, "action": row.action, "before": row.before, "after": row.after, "reasons": row.reasons, "created_at": row.created_at} for row in rows]
 
 
 class AdaptIn(BaseModel):
     session_id: str = Field(max_length=80)
-    action: Literal["postpone", "easy", "reduce"]
+    action: Literal["postpone", "easy", "reduce", "indoor"]
     revision: int
     apply: bool = False
     expected_after: dict | None = None
@@ -366,6 +486,9 @@ async def adapt(run_id: uuid.UUID, payload: AdaptIn, user: User = Depends(safety
         after.update(week=offset // 7 + 1, day=offset % 7 + 1, date=target.isoformat())
     elif payload.action == "easy":
         after.update(name="Lockere Bewegung / Easy movement", sport="walking", duration_min=min(30, before["duration_min"]), steps=[{"type": "work", "duration_seconds": min(30, before["duration_min"]) * 60, "target": {"type": "none"}}], strength_exercises=[], notes="Optional ruhige Bewegung; bei Beschwerden auslassen. / Optional easy movement; skip if uncomfortable.")
+    elif payload.action == "indoor":
+        label = "Indoor Bike" if before.get("sport") == "cycling" else "Laufband / Treadmill" if before.get("sport") == "running" else "Indoor Alternative"
+        after.update(name=(f"{label} · {before['name']}")[:120], notes=(before.get("notes", "") + "\nWetterbedingte Indoor-Alternative; Trainingsreiz möglichst beibehalten. / Weather-based indoor alternative; keep the intended training stimulus where practical.").strip()[:1500])
     else:
         reduced_minutes = max(5, int(round(before["duration_min"] * 0.75)))
         if before.get("sport") == "strength":
@@ -381,7 +504,21 @@ async def adapt(run_id: uuid.UUID, payload: AdaptIn, user: User = Depends(safety
     if payload.apply and payload.expected_after != after:
         raise HTTPException(409, "PROPOSAL_CHANGED_REVIEW_AGAIN")
     if payload.apply:
+        reasons = [{"type": "action", "value": payload.action}]
+        brief = await briefing(db, user)
+        readiness = brief.get("readiness") or {}
+        if payload.action in {"easy", "reduce", "postpone"} and readiness.get("status") in {"yellow", "red"}:
+            reasons.append({"type": "readiness", "status": readiness.get("status"), "score": readiness.get("score")})
+            for factor in (readiness.get("factors") or [])[:5]:
+                reasons.append({"type": "readiness_factor", **factor})
+        if payload.action == "indoor":
+            intelligence = await plan_intelligence(db, user, run_id, sessions)
+            weather = ((intelligence.get("sessions") or {}).get(before["id"]) or {}).get("weather")
+            if weather:
+                reasons.append({"type": "weather", **weather})
         await save_schedule(run_id, ScheduleIn(start_date=schedule.start_date, overrides=overrides, revision=payload.revision), user, db)
+        db.add(CoachDecisionLog(user_id=user.id, plan_run_id=run_id, session_id=before["id"], action=payload.action, before=before, after=after, reasons=reasons))
+        await db.commit()
     return {"before": before, "after": after, "applied": payload.apply, "revision": schedule.revision}
 
 

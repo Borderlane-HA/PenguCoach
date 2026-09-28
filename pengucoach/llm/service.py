@@ -918,6 +918,7 @@ def context_evidence(context):
     lookback = context.get("lookback") or context
     personal = context.get("personal_coaching") if isinstance(context.get("personal_coaching"), dict) else {}
     readiness = personal.get("readiness") if isinstance(personal.get("readiness"), dict) else None
+    training_load = personal.get("training_load") if isinstance(personal.get("training_load"), dict) else None
     weather = context.get("weather_forecast") if isinstance(context.get("weather_forecast"), dict) else None
     weather_evidence = None
     if weather is not None:
@@ -949,6 +950,14 @@ def context_evidence(context):
             "status": readiness.get("status"),
             "available_factors": readiness.get("available_factors"),
         } if readiness else None,
+        "training_load": {
+            "basis": training_load.get("basis"),
+            "status": training_load.get("status"),
+            "trend": training_load.get("trend"),
+            "acute_7d": training_load.get("acute_7d"),
+            "chronic_28d_weekly": training_load.get("chronic_28d_weekly"),
+            "ratio": training_load.get("ratio"),
+        } if training_load else None,
         "weather": weather_evidence,
         "daily_values": context.get("health_30d", lookback.get("daily_health", []))[-3:],
         "sleep": context.get("sleep_30d", lookback.get("sleep", []))[-3:],

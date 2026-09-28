@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.1.0-alpha.44 — Training Intelligence
+
+- Changes new releases from MIT to **PolyForm Noncommercial License 1.0.0**. The repository and in-app About page state that commercial use, resale, paid hosting/SaaS and commercial integration require separate permission; earlier MIT releases keep the rights granted with those releases.
+- Adds deterministic **Training Load & Trends v1**: 7-day acute load versus a 28-day weekly baseline, weekly volume, sport mix and understandable trend labels. Garmin `training_load` is used when coverage is sufficient; otherwise the UI explicitly falls back to training minutes rather than inventing a synthetic load score.
+- Adds **weather directly to planned outdoor sessions** with temperature/rain/wind summaries, risk badges and reviewed Indoor Alternative proposals for unfavorable forecast days. Weather failure never blocks the calendar.
+- Adds **Plan Conflict Detection v1** for saved training-day availability, unusually long sessions, high-volume double days, hard back-to-back days and collisions with other saved PenguCoach plan sessions, including an indicator when the other session is already exported to Garmin. Conflicts are advisory; no plan is changed automatically.
+- Adds a persistent **AI Decision Log v1**. Accepted adaptive changes store before/after session snapshots and structured Readiness/weather evidence.
+- Adds **Coach Memory Suggestions v1**. Suggestions require repeated explicit evidence and must be accepted by the user; dismissed suggestions stay hidden.
+- Adds a compact load card to Today, exposes load as transparent Coach answer evidence when it was supplied to the model, and adds an **About PenguCoach** settings page with the active license summary.
+- Adds Alembic migration `0012_training_intelligence` for the decision log.
+
+
 ## v0.1.0-alpha.43.1 — Persistent training-job status
 
 - Makes an in-progress training-plan generation permanently visible on the Training start view with live phase/chunk/token information plus Details and Cancel actions, so leaving or reloading the page no longer makes the work look lost.

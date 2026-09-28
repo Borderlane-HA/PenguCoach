@@ -10,6 +10,7 @@ from pengucoach.common.dates import day_start, user_today, user_zone
 from pengucoach.db.models import Activity, ActivityFeedback, AiRun, CoachCheckin, CoachMemory, CoachProfile, Message, PlanSchedule
 from pengucoach.training_plan.structured import TrainingPlanDocument
 from pengucoach.coach.readiness import compute_readiness
+from pengucoach.coach.training_intelligence import training_load_summary
 
 
 def activity_day(activity, user):
@@ -111,6 +112,8 @@ async def add_personal_context(db, user, context, payload, conversation=None):
         personal = await personal_context(db, user, training=enabled and selection.get("training", True), recovery=enabled and selection.get("recovery", True), days=int(context.get("period_days") or (context.get("lookback") or {}).get("days") or 7))
         if enabled and selection.get("recovery", True):
             personal["readiness"] = compute_readiness(_readiness_context(context), personal.get("today_checkin") or {}, personal.get("recent_feedback") or [], today=user_today(user))
+        if enabled and selection.get("training", True):
+            personal["training_load"] = await training_load_summary(db, user)
         context["personal_coaching"] = personal
     if conversation and conversation.summary:
         context["conversation_summary"] = conversation.summary

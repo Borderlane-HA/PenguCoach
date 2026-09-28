@@ -65,7 +65,7 @@ def test_memory_feedback_and_adaptive_plan_contracts_are_exposed():
     assert 'preferences: str = Field(default="", max_length=1000)' in backend
     assert 'avoidances: str = Field(default="", max_length=1000)' in backend
     assert 'discomfort: str = Field(default="", max_length=500)' in backend
-    assert 'Literal["postpone", "easy", "reduce"]' in backend
+    assert 'Literal["postpone", "easy", "reduce", "indoor"]' in backend
     assert '"adaptive_suggestions"' in backend
     assert "Trainingspräferenzen" in personal and "Was der Coach vermeiden soll" in personal
     assert "Beschwerden nach der Einheit" in feedback

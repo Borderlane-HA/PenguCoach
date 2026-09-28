@@ -4,17 +4,17 @@ This roadmap keeps the Adaptive Coach direction explicit while the UI follows a 
 
 ## Adaptive Coach priorities
 
-| Priority | Capability | Status in alpha.43 | Next meaningful step |
+| Priority | Capability | Status in alpha.44 | Next meaningful step |
 | --- | --- | --- | --- |
-| 1 | Coach Memory v1 | **Shipped** | Continue improving suggestions for user-confirmed memories; never create hidden permanent rules. |
+| 1 | Coach Memory v1 | **Shipped + suggestions v1** | Suggestions require repeated explicit evidence and user confirmation; never create hidden permanent rules. |
 | 2 | Adaptive training plans | **Foundation shipped** | Broaden adaptation triggers and plan-level rescheduling while keeping preview + explicit confirmation. |
 | 3 | Daily Readiness / traffic light | **Shipped (v1)** | Improve trend context and calibration without turning it into a medical score. |
-| 4 | Weather + training | **Partially shipped** | Weather already informs plan generation and relevant Coach chat. Next: show forecast/risk directly on near-term planned sessions and offer indoor alternatives. |
+| 4 | Weather + training | **Shipped (v1)** | Forecast/risk is shown on near-term outdoor plan sessions; reviewed indoor alternatives are available when conditions are unfavorable. |
 | 5 | Coach chat with context | **Shipped (v1)** | Deepen plan-aware follow-ups and reuse the same structured decision context as adaptive planning. |
-| 6 | Training load & trends | **Planned** | Add understandable acute/chronic load, weekly volume, sport mix and trend labels; avoid dashboard overload. |
+| 6 | Training load & trends | **Shipped (v1)** | 7/28-day load, volume, sport mix and understandable trend labels are deterministic and compact. |
 | 7 | Manual post-workout feedback | **Shipped (v1)** | Use RPE/difficulty/discomfort more consistently in adaptation and trends. |
-| 8 | Plan conflict detection | **Planned** | Detect existing planned/Garmin sessions and explicit availability constraints; external calendar support can follow later. |
-| 9 | AI Decision Log | **Planned** | Store/show structured reasons behind meaningful recommendations or accepted plan changes. |
+| 8 | Plan conflict detection | **Shipped (v1)** | Detect saved training-day constraints, unusual duration, back-to-back hard sessions and other saved PenguCoach plan sessions (with Garmin-export enrichment); external calendars can follow later. |
+| 9 | AI Decision Log | **Shipped (v1)** | Accepted adaptive changes persist before/after snapshots plus structured Readiness/weather reasons. |
 | 10 | Coach Dashboard | **Planned** | Build a concise start view around Today, Readiness, next session, weekly progress, load, weather and 1–2 actionable Coach notes. |
 
 ## UI placement principles

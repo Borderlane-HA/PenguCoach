@@ -17,8 +17,8 @@ const sportGlyph=(s?:string)=>{const v=(s||"").toLowerCase();if(v.includes("run"
 
 export default function Today(){
   const{lang}=useI18n();
-  const[h,setH]=useState<H|null>(null),[acts,setActs]=useState<A[]>([]),[trend,setTrend]=useState<any[]>([]);
-  useEffect(()=>{api<H>("/health/today").then(setH);api<A[]>("/activities?limit=4").then(setActs);api<any>("/health/range?days=14").then(v=>setTrend(v.health??[]))},[]);
+  const[h,setH]=useState<H|null>(null),[acts,setActs]=useState<A[]>([]),[trend,setTrend]=useState<any[]>([]),[load,setLoad]=useState<any|null>(null);
+  useEffect(()=>{api<H>("/health/today").then(setH);api<A[]>("/activities?limit=4").then(setActs);api<any>("/health/range?days=14").then(v=>setTrend(v.health??[]));api<any>("/coach/training-load").then(setLoad).catch(()=>setLoad(null))},[]);
   const date=useMemo(()=>new Intl.DateTimeFormat(lang==="de"?"de-DE":"en-US",{weekday:"long",day:"2-digit",month:"long"}).format(new Date()),[lang]);
   const sleepHours=h?.sleep?.duration_seconds?h.sleep.duration_seconds/3600:null;
   const metricSource=(field:string)=>sourceLabel(h?.sources?.[field]);
@@ -55,6 +55,7 @@ export default function Today(){
     </section>
 
     <DailyCompanion/>
+    {load&&<section className={`card today-load-card load-${load.status||"unknown"}`}><div><span className="eyebrow">TRAINING LOAD</span><h2>{load.trend==="strongly_rising"?bi(lang,"Belastung steigt stark","Load rising strongly"):load.trend==="rising"?bi(lang,"Belastung steigt leicht","Load rising slightly"):load.trend==="falling"?bi(lang,"Belastung sinkt","Load falling"):bi(lang,"Belastung stabil","Load stable")}</h2><p className="muted">{load.basis==="garmin_training_load"?bi(lang,"Garmin Training Load · 7 Tage gegenüber deinem 28-Tage-Wochenmittel","Garmin Training Load · 7 days versus your 28-day weekly average"):bi(lang,"Trainingsminuten · 7 Tage gegenüber deinem 28-Tage-Wochenmittel","Training minutes · 7 days versus your 28-day weekly average")}</p></div><div className="today-load-metrics"><span><small>{bi(lang,"7 Tage","7 days")}</small><strong>{load.acute_7d}</strong></span><span><small>{bi(lang,"28-Tage-Mittel","28d average")}</small><strong>{load.chronic_28d_weekly}</strong></span><span><small>{bi(lang,"Volumen","Volume")}</small><strong>{load.minutes_7d} min</strong></span></div>{Array.isArray(load.sport_mix)&&load.sport_mix.length>0&&<div className="today-sport-mix">{load.sport_mix.slice(0,4).map((x:any)=><span key={x.sport}>{x.sport} <b>{x.percent}%</b></span>)}</div>}</section>}
     <section className="health-metric-grid">{cards.filter(c=>!["battery","ready"].includes(c.tone)||c.value!=="—").map(c=><div className={`health-metric-card tone-${c.tone}`} key={c.label}><div className="health-metric-top"><span className="health-metric-dot"/><span className="metric-label">{c.label}</span></div><div className="metric-value">{String(c.value)}</div><div className="kpi-note">{c.note}</div></div>)}<div className="health-metric-card tone-vo2 vo2-dual-card"><div className="health-metric-top"><span className="health-metric-dot"/><span className="metric-label">VO₂max</span></div><div className="vo2-dual-values"><div><small>{bi(lang,"Laufen","Running")}</small><strong>{h?.vo2max_running??"—"}</strong></div><div><small>{bi(lang,"Rad","Cycling")}</small><strong>{h?.vo2max_cycling??"—"}</strong></div></div><div className="kpi-note">ml/kg/min · {Array.from(new Set([h?.sources?.vo2max_running,h?.sources?.vo2max_cycling].filter(Boolean))).map(s=>sourceLabel(s,lang)).join(" + ")||"—"}</div></div></section>
 
     <section className="dashboard-main-grid">
