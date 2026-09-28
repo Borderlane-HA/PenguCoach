@@ -12,10 +12,11 @@ PenguCoach is designed as a local-first, multi-user platform that reads Garmin C
 
 ## Current alpha scope
 
-`v0.1.0-alpha.42` is the current end-to-end alpha baseline:
+`v0.1.0-alpha.43` is the current end-to-end alpha baseline:
 
 - **Adaptive coach:** editable Coach Memory v1 profile and explicit memories, deterministic Pengu Readiness with transparent factors, daily check-ins, post-workout feedback including optional discomfort notes, and reviewed adaptive plan suggestions for missed or recovery-sensitive sessions. No plan change is applied without confirmation. See [`docs/COACH_COMPANION.md`](docs/COACH_COMPANION.md).
 - **Weather-aware everyday Coach:** relevant short-range questions such as “What should I train today?”, “Should I ride tomorrow?” or direct weather questions can receive a bounded Open-Meteo snapshot. Answer details show whether weather, Readiness, plan, profile, zones and recovery data were actually supplied; the desktop **Model & response** column can be collapsed and remembered locally.
+- **Guided Training Planner:** training-plan creation is a four-step Goal → Framework → Data → Review assistant. Existing plans, plan descriptions, calendars, weeks and sessions use progressive disclosure; AI model/token/prompt controls stay available under Advanced settings instead of dominating the normal workflow. The layout is responsive down to phone-sized screens.
 - **Chat reliability:** content-sized bubbles, visible local streaming, reasoning disabled for Ollama requests, accurate finish-reason checks and explicit empty-response errors.
 - **Unified data:** Today, Health, activity analysis, Coach and training planning use the same per-metric provenance and body snapshot. No Garmin connection is required. See [`docs/UNIFIED_DATA.md`](docs/UNIFIED_DATA.md).
 - **SparkyFitness read-only connection:** configurable self-hosted URL + encrypted API key, capability probing, multi-year/all-history manual sync plus a small configurable interval sync for today + yesterday. Sleep, daily/check-in data, HRV/resting-HR custom metrics, body/scale values and paginated workout history are imported. Compact history rows are enriched from SparkyFitness exercise-entry/provider details so HealthKit/Apple Health heart rate, speed, elevation, distance, duration and calories can reach the activity diary. Conservative duplicate matching merges the same Garmin/Sparky workout instead of double-counting it.
@@ -69,7 +70,7 @@ PenguCoach is designed as a local-first, multi-user platform that reads Garmin C
 - `pengucoach-update`, `pengucoach-backup`, `pengucoach-status`, `pengucoach-db-utf8`
 - Docker Compose for development/alternative deployments
 
-Advanced long-term baselines, a correlation explorer and the full LangGraph multi-agent workflow remain planned work. Training-plan generation remains AI-assisted and uses only the recent context window and data categories selected for that request. Garmin write access is limited to the explicit workout/calendar export path; PenguCoach does not create or manage Garmin Coach adaptive plans.
+The ten-part Adaptive Coach direction and its shipped/partial/planned status are tracked in [`docs/ROADMAP.md`](docs/ROADMAP.md). Advanced long-term baselines, a correlation explorer and the full LangGraph multi-agent workflow remain planned work. Training-plan generation remains AI-assisted and uses only the recent context window and data categories selected for that request. Garmin write access is limited to the explicit workout/calendar export path; PenguCoach does not create or manage Garmin Coach adaptive plans.
 
 ## Proxmox installation
 

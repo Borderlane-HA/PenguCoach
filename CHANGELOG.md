@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.1.0-alpha.43 — Guided Training Planner
+
+- Reworks the Training page around progressive disclosure instead of one long configuration form. New plans are created in four focused steps: Goal, Framework, Data and Review.
+- Adds a compact Training assistant entry with three clear actions: create a plan, open the current plan, or review the plan with the Coach. Existing Coach Memory stays available in its own collapsed profile section.
+- Keeps every previously generated training plan collapsed whenever the Training page is opened. Plans are shown as compact cards with weeks, sessions, start date and model; the full plan opens only on explicit request.
+- Hides model/context/output/quality/prompt controls behind **Advanced AI settings**. Useful defaults remain visible as a compact review summary, while power-user control is preserved.
+- Makes plan details hierarchical: plan description, calendar and technical generation details are independently collapsed. Inside the calendar, every week starts collapsed and every workout continues to open individually.
+- Preserves all existing Garmin export, drag/drop, workout editing, adaptive-plan review, weather and context controls while reducing the amount of information shown at once.
+- Adds dedicated responsive behavior for the assistant actions, four-step planner, plan library, review cards and week hierarchy. On phones the planner becomes a touch-friendly 2×2 stepper and single-column action flow without removing advanced controls.
+- Adds `docs/ROADMAP.md` to keep the ten-part Adaptive Coach direction explicit while marking which capabilities are already shipped, partially shipped or intentionally deferred so future releases can extend the product without overloading individual screens.
+- No database migration is required.
+
 ## v0.1.0-alpha.42 — Weather-aware Coach & usable model drawer
 
 - Extends the Open-Meteo connection from training-plan generation to the everyday Coach. Weather is fetched only for direct weather questions or near-term training decisions such as today/tomorrow, outdoor sport choices, named upcoming weekdays or short time-constrained Coach prompts. Retrospective training/health questions do not spend weather context.
