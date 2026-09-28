@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="PENGUCOACH_", env_file=".env", extra="ignore")
 
     env: str = "development"
-    app_version: str = "0.1.0-alpha.43.1"
+    app_version: str = "0.1.0-alpha.43.post1"
     database_url: str = "postgresql+asyncpg://pengucoach:pengucoach@localhost:5432/pengucoach"
     redis_url: str = "redis://localhost:6379/0"
     jwt_secret: str = "development-only-change-me"
@@ -26,6 +26,23 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
 
 
+    @staticmethod
+    def _display_version(value: str) -> str:
+        # Python package metadata must follow PEP 440. Maintenance fixes for an
+        # alpha release therefore use e.g. 0.1.0-alpha.43.post1 internally, while
+        # the product keeps the friendlier v0.1.0-alpha.43.1 label in the UI.
+        raw = str(value).strip()
+        match = re.fullmatch(r"(\d+\.\d+\.\d+)-alpha\.(\d+)\.post(\d+)", raw)
+        if match:
+            return f"{match.group(1)}-alpha.{match.group(2)}.{match.group(3)}"
+        match = re.fullmatch(r"(\d+\.\d+\.\d+)a(\d+)\.post(\d+)", raw)
+        if match:
+            return f"{match.group(1)}-alpha.{match.group(2)}.{match.group(3)}"
+        match = re.fullmatch(r"(\d+\.\d+\.\d+)a(\d+)", raw)
+        if match:
+            return f"{match.group(1)}-alpha.{match.group(2)}"
+        return raw
+
     @property
     def resolved_app_version(self) -> str:
         # Prefer the checked-out source version. This makes the first update from
@@ -39,15 +56,14 @@ class Settings(BaseSettings):
         for candidate in candidates:
             try:
                 if candidate.is_file():
-                    return str(tomllib.loads(candidate.read_text())["project"]["version"])
+                    value = str(tomllib.loads(candidate.read_text())["project"]["version"])
+                    return self._display_version(value)
             except (OSError, KeyError, tomllib.TOMLDecodeError):
                 pass
         try:
-            value = package_version("pengucoach")
-            match = re.fullmatch(r"(\d+\.\d+\.\d+)a(\d+)", value)
-            return f"{match.group(1)}-alpha.{match.group(2)}" if match else value
+            return self._display_version(package_version("pengucoach"))
         except PackageNotFoundError:
-            return self.app_version
+            return self._display_version(self.app_version)
 
     @property
     def fit_dir(self) -> Path:

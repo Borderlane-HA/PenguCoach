@@ -65,7 +65,7 @@ export default function Training(){
     void Promise.all([
       api<AnyObj>(`/coach/capabilities?locale=${lang}`),
       api<AnyObj[]>("/coach/training-plans?limit=30"),
-      api<AnyObj>("/jobs/active?job_type=training_plan").catch(()=>({active:false})),
+      api<AnyObj>("/jobs/active?job_type=training_plan").catch(():AnyObj=>({active:false})),
     ]).then(([c,h,a])=>{
       setCaps(c);setHistory(h);const t=c.tasks?.training_plan??{};setModel(t.default_model_id??"");setTokens(t.max_output_tokens??4500);setCtx(t.context_window_tokens??8192);setPrompt(t.default_prompt??"");setQuality((t.quality_profile??"standard") as QualityId);
       if(h.length){setResult(h[0]);setPlanOpen(false)}

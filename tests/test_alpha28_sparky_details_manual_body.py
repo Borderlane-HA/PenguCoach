@@ -76,5 +76,5 @@ def test_alpha28_version_surface():
     py_version = re.search(r'version = \"([^\"]+)\"', pyproject).group(1)
     web_version = re.search(r'\"version\": \"([^\"]+)\"', package).group(1)
     assert py_version == web_version
-    assert re.fullmatch(r'0\.1\.0-alpha\.\d+', py_version)
+    assert re.fullmatch(r'0\.1\.0-alpha\.\d+(?:\.post\d+)?', py_version)
 

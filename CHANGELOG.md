@@ -8,6 +8,8 @@
 - Prevents accidental duplicate plan generation server-side: if the same user already has a recent running training-plan job, the create endpoint returns that existing job instead of queueing another one. Cancelled jobs are marked in the existing job table so they are not falsely restored after a reload.
 - Changes the Training assistant's first action while generation is active from **Create a new plan** to **Plan is already being generated**; selecting it opens the running job details rather than starting a second plan.
 - Keeps the running-job banner compact and adds dedicated phone layouts for status metadata and actions.
+- Uses a PEP 440-valid internal Python package version (`0.1.0-alpha.43.post1`) for the Alpha.43.1 maintenance release while keeping the user-facing release label `v0.1.0-alpha.43.1`; this fixes `pip install .[dev]`/wheel metadata validation in CI.
+- Fixes the Training page active-job lookup typing so the Next.js production type check accepts `task_id`, `summary` and `progress` after the no-active-job fallback.
 
 ## v0.1.0-alpha.43 — Guided Training Planner
 
