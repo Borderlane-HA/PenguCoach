@@ -7,11 +7,13 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from pengucoach.auth.dependencies import safety_confirmed_user
-from pengucoach.db.models import Activity, BodyMeasurement, DailyHealth, HrvDaily, SleepSession, User
+from pengucoach.db.models import Activity, ActivityMetric, BodyMeasurement, DailyHealth, HrvDaily, SleepSession, User
 from pengucoach.db.session import get_db
 
 from pengucoach.common.dates import user_today, day_start as local_day_start
 from pengucoach.health.provenance import body_snapshot, source, metric_source
+from pengucoach.health.development import training_development, imported_vo2_history, estimate_vo2_history, vo2_display_payload
+from pengucoach.garmin.zones import training_zone_snapshot
 
 router = APIRouter(prefix="/health", tags=["health"])
 
@@ -133,6 +135,26 @@ def _vo2_history(rows: list) -> dict:
     return series
 
 
+async def _vo2_payload(db: AsyncSession, user: User, start_date: date | None = None) -> dict[str, Any]:
+    activity_stmt = select(Activity).where(Activity.user_id == user.id, Activity.started_at.is_not(None))
+    health_stmt = select(DailyHealth).where(DailyHealth.user_id == user.id)
+    if start_date is not None:
+        activity_stmt = activity_stmt.where(Activity.started_at >= local_day_start(start_date, user))
+        health_stmt = health_stmt.where(DailyHealth.date >= start_date - timedelta(days=28))
+    activities = list((await db.scalars(activity_stmt.order_by(Activity.started_at))).all())
+    health_context = list((await db.scalars(health_stmt.order_by(DailyHealth.date))).all())
+    health_display = [row for row in health_context if start_date is None or row.date >= start_date]
+    bodies = await _body_rows(db, user.id)
+    metrics: dict[Any, ActivityMetric] = {}
+    if activities:
+        metric_rows = list((await db.scalars(select(ActivityMetric).where(ActivityMetric.activity_id.in_([a.id for a in activities])))).all())
+        metrics = {row.activity_id: row for row in metric_rows}
+    zones = await training_zone_snapshot(db, user.id)
+    imported = imported_vo2_history(activities, health_display, user)
+    estimated = estimate_vo2_history(activities, health_context, bodies, metrics, zones, user)
+    return vo2_display_payload(imported, estimated)
+
+
 @router.get("/today")
 async def today(user: User = Depends(safety_confirmed_user), db: AsyncSession = Depends(get_db)):
     row = await db.scalar(select(DailyHealth).where(DailyHealth.user_id == user.id, DailyHealth.date == user_today(user)))
@@ -140,23 +162,22 @@ async def today(user: User = Depends(safety_confirmed_user), db: AsyncSession = 
     hrv = await db.scalar(select(HrvDaily).where(HrvDaily.user_id == user.id, HrvDaily.date == user_today(user)))
     body = _body_latest(await _body_rows(db, user.id))
 
-    vo2 = _vo2_history(await _vo2_rows(db, user.id))
-    latest_running = vo2["running"][-1]["value"] if vo2["running"] else None
-    latest_cycling = vo2["cycling"][-1]["value"] if vo2["cycling"] else None
+    vo2 = await _vo2_payload(db, user, user_today(user) - timedelta(days=179))
 
     result = _health(row) if row else {"date": user_today(user).isoformat(), "sources": {}}
     result["available"] = any((row, sleep, hrv))
     result["body"] = body
     result["vo2_measurements"] = {}
-    for sport, entries in vo2.items():
-        if entries:
-            current = entries[-1]
-            field = f"vo2max_{sport}"
-            # A same-day daily value is fresher than an older activity estimate.
-            if field not in result or result[field] is None or current["date"] >= result["date"]:
-                result[field] = current["value"]
-                result["sources"][field] = current["source"]
-                result["vo2_measurements"][sport] = current
+    for sport in ("running", "cycling"):
+        current = vo2.get("latest_meta", {}).get(sport)
+        if not current:
+            continue
+        field = f"vo2max_{sport}"
+        # Provider data already present on today's DailyHealth row always wins.
+        if result.get(field) is None:
+            result[field] = current["value"]
+            result["sources"][field] = current.get("source")
+            result["vo2_measurements"][sport] = current
     result["sleep"] = {
         "duration_seconds": sleep.duration_seconds,
         "score": sleep.sleep_score,
@@ -313,17 +334,18 @@ async def vo2_history(
     db: AsyncSession = Depends(get_db),
 ):
     start = None if all_data else user_today(user) - timedelta(days=days - 1)
-    series = _vo2_history(await _vo2_rows(db, user.id, start_date=start))
-    return {
-        **series,
-        "days": None if all_data else days,
-        "all": all_data,
-        "latest": {
-            "running": series["running"][-1]["value"] if series["running"] else None,
-            "cycling": series["cycling"][-1]["value"] if series["cycling"] else None,
-        },
-        "source": "activity_summary",
-    }
+    payload = await _vo2_payload(db, user, start)
+    return {**payload, "days": None if all_data else days, "all": all_data}
+
+
+@router.get("/development")
+async def development(
+    days: int = Query(default=30, ge=1, le=9132),
+    all_data: bool = Query(default=False, alias="all"),
+    user: User = Depends(safety_confirmed_user),
+    db: AsyncSession = Depends(get_db),
+):
+    return await training_development(db, user, days=days, all_data=all_data)
 
 
 @router.get("/sources")

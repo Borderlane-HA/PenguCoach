@@ -39,7 +39,7 @@ export default function Coach(){
  async function changeQuality(value:QualityId,suggested:number){setQuality(value);setTokens(Math.max(128,Math.min(modelOutMax,suggested)));if(!caps)return;const tasks=caps.tasks??{};try{await api("/settings/ai-preferences",{method:"PUT",body:JSON.stringify({coach_chat:value,activity_analysis:tasks.activity_analysis?.quality_profile??"standard",training_plan:tasks.training_plan?.quality_profile??"standard",monthly_budget_eur:caps.monthly_budget_eur??null})})}catch(e){setError(String(e))}}
  async function remember(content:string){const value=window.prompt(bi(lang,"Was soll dauerhaft gespeichert werden? Prüfe und bearbeite den Merksatz.","What should be saved? Review and edit the memory."),content.slice(0,1000));if(!value?.trim())return;try{await api("/coach/memories",{method:"POST",body:JSON.stringify({content:value})});setNotice(bi(lang,"Merksatz gespeichert. Unter „Dein Coach kennt dich“ bearbeitbar.","Memory saved. Editable under ‘Your coach knows you’."));window.dispatchEvent(new Event("coach-memory-updated"))}catch(e){setError(String(e))}}
  function details(m:M){
-  const meta=m.metadata||{},u=meta.usage||{},used=meta.evidence||{},inv=used.inventory||{},weather=used.weather||null,readiness=used.readiness||null,trainingLoad=used.training_load||null;
+  const meta=m.metadata||{},u=meta.usage||{},used=meta.evidence||{},inv=used.inventory||{},weather=used.weather||null,readiness=used.readiness||null,trainingLoad=used.training_load||null,trainingDevelopment=used.training_development||null;
   const dataBits=[inv.activity_count!=null?`${inv.activity_count} ${bi(lang,"Aktivitäten","activities")}`:null,inv.health_days!=null?`${inv.health_days} ${bi(lang,"Tageswerte","daily records")}`:null].filter(Boolean);
   const chips=[
    inv.activity_count>0?`✓ ${bi(lang,"Training","Training")}`:null,
@@ -48,6 +48,7 @@ export default function Coach(){
    inv.health_days>0?`✓ ${bi(lang,"Erholung","Recovery")}`:null,
    readiness?`✓ Readiness${readiness.score!=null?` ${readiness.score}`:""}`:null,
    trainingLoad?`✓ ${bi(lang,"Belastung","Load")}${trainingLoad.trend?` · ${trainingLoad.trend}`:""}`:null,
+   trainingDevelopment?`✓ ${bi(lang,"Entwicklung","Development")}${trainingDevelopment.fitness_trend?` · ${trainingDevelopment.fitness_trend}`:""}`:null,
    used.upcoming_sessions>0?`✓ ${bi(lang,"Plan","Plan")}`:null,
    used.personal_context?`✓ ${bi(lang,"Profil","Profile")}`:null,
    used.training_zones?`✓ ${bi(lang,"Zonen","Zones")}`:null,

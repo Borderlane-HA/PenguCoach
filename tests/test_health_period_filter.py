@@ -12,8 +12,9 @@ def test_health_vo2_history_accepts_same_period_filter_as_health_range():
 def test_health_page_applies_selected_period_to_every_chart_family():
     page = Path("apps/web/app/health/page.tsx").read_text()
     assert 'api<any>(`/health/range${suffix}`)' in page
-    assert 'api<Vo2Data>(`/health/vo2-history${suffix}`)' in page
-    assert 'Laufen & Radfahren","Running & cycling")} · {periodLabel}' in page
+    assert 'api<any>(`/health/development${suffix}`)' in page
+    assert 'dev?.vo2_display' in page
+    assert 'HealthDevelopment' in page
     assert 'gesamter Verlauf' not in page
 
 

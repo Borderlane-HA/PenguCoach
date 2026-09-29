@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.1.0-alpha.45 — Health Development
+
+- Rebuilt the Health page around progressive disclosure with professional interactive SVG charts, proper axes, hover/touch tooltips, responsive layouts and theme-aware styling.
+- Added **Training & Development** tabs for Overview, Endurance, Load and Recovery instead of adding another overloaded dashboard.
+- Added 3-month and 6-month Health periods plus adaptive day/week/month aggregation.
+- Added training-volume stacks by sport, sport mix, training-load trends, HRV/resting-HR recovery trends and a compact “What changed?” comparison.
+- Added running efficiency (pace at comparable average HR) and cycling efficiency (power at comparable average HR) without mathematically pretending dissimilar sessions are identical.
+- Added a conservative VO₂max fallback. Imported Garmin/Sparky/other provider VO₂ always wins. Running estimates require suitable duration, HR and relatively flat sessions; cycling estimates require measured power, body mass and HR and never use cycling speed alone.
+- VO₂ estimates use ACSM oxygen-cost equations and HR-reserve → VO₂-reserve extrapolation, are median-smoothed over recent estimates, include confidence metadata and are always labelled **estimated** rather than measured.
+- SparkyFitness custom-metric ingestion now recognizes future VO₂/Cardio Fitness/Aerobic Capacity categories and stores them as provider VO₂ data if Sparky exposes them.
+- The AI Coach receives a compact training-development evidence block and exposes “Development” in its used-data details.
+- Existing secondary HRV/sleep/steps/body charts were moved behind a details section and upgraded from simple sparklines to the same professional chart system.
+- No database migration is required for Alpha.45.
+
 ## v0.1.0-alpha.44 — Training Intelligence
 
 - Changes new releases from MIT to **PolyForm Noncommercial License 1.0.0**. The repository and in-app About page state that commercial use, resale, paid hosting/SaaS and commercial integration require separate permission; earlier MIT releases keep the rights granted with those releases.

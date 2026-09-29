@@ -166,14 +166,14 @@ für eine Aussage nicht ausreicht. Bevor du behauptest, dass Aktivitäten, Gesun
 prüfe data_inventory sowie die zugehörigen Kontextlisten und Zusammenfassungen; melde niemals "keine Daten", wenn
 Inventar oder Summaries Datensätze ausweisen. Nutze Garmin-Trainingszonen aus training_zones, wenn die Frage Intensität,
 Puls oder Leistung betrifft. Wenn die Frage keinen Trainings-/Gesundheitskontext benötigt, antworte direkt und ignoriere
-irrelevante Trainingsdaten. Falls personal_coaching.readiness vorhanden ist, nenne ihn nur als PenguCoach-Trainingsschätzung und nutze bei Bedarf die gelieferten Faktoren zur Begründung; erfinde keinen eigenen Bereitschaftsscore. Falls weather_forecast vorhanden ist, darfst du dieses Open-Meteo-Snapshot für kurzfristige Trainingsentscheidungen oder direkte Wetterfragen verwenden. Behaupte dann nicht, keinen Wetterzugriff zu haben. Nutze ausschließlich die gelieferten aktuellen Werte und expliziten Forecast-Daten, kennzeichne Vorhersagen als unsicher und erfinde kein Wetter für andere Tage. Antworte ausschließlich auf Deutsch."""
+irrelevante Trainingsdaten. Falls personal_coaching.readiness vorhanden ist, nenne ihn nur als PenguCoach-Trainingsschätzung und nutze bei Bedarf die gelieferten Faktoren zur Begründung; erfinde keinen eigenen Bereitschaftsscore. Falls personal_coaching.training_development vorhanden ist, darfst du diese berechneten Trends für Fragen zur Fitnessentwicklung verwenden. Kennzeichne PenguCoach-VO₂max-Schätzwerte ausdrücklich als Schätzung und nicht als Messung. Falls weather_forecast vorhanden ist, darfst du dieses Open-Meteo-Snapshot für kurzfristige Trainingsentscheidungen oder direkte Wetterfragen verwenden. Behaupte dann nicht, keinen Wetterzugriff zu haben. Nutze ausschließlich die gelieferten aktuellen Werte und expliziten Forecast-Daten, kennzeichne Vorhersagen als unsicher und erfinde kein Wetter für andere Tage. Antworte ausschließlich auf Deutsch."""
 
 COACH_CHAT_PROMPT_EN = """Answer the user's question from the supplied context and its declared sources.
 Use concrete values when relevant, distinguish measured facts from interpretation, and state when the available data is
 insufficient. Before claiming that activities, health, sleep or HRV data are absent, inspect data_inventory and the relevant
 context arrays/summaries; never report "no data" when the inventory or summaries show records. Use Garmin training zones
 from training_zones when the question concerns intensity, heart rate or power. If the question does not require
-training/wellness context, answer directly and ignore irrelevant training data. If personal_coaching.readiness is present, refer to it only as PenguCoach's training estimate and use its supplied factors when useful; do not invent a second readiness score. If weather_forecast is present, you may use that Open-Meteo snapshot for short-range training decisions or direct weather questions. Do not claim that you lack weather access when the snapshot is supplied. Use only the supplied current values and explicit forecast dates, treat forecasts as uncertain, and never invent weather for other dates. Reply exclusively in English."""
+training/wellness context, answer directly and ignore irrelevant training data. If personal_coaching.readiness is present, refer to it only as PenguCoach's training estimate and use its supplied factors when useful; do not invent a second readiness score. If personal_coaching.training_development is present, you may use those computed trends for fitness-development questions. Explicitly label PenguCoach VO2 max fallback values as estimates, not measurements. If weather_forecast is present, you may use that Open-Meteo snapshot for short-range training decisions or direct weather questions. Do not claim that you lack weather access when the snapshot is supplied. Use only the supplied current values and explicit forecast dates, treat forecasts as uncertain, and never invent weather for other dates. Reply exclusively in English."""
 
 # Compatibility exports used by older tests/integrations.
 DEEP_ACTIVITY_PROMPT = DEEP_ACTIVITY_PROMPT_EN
@@ -919,6 +919,7 @@ def context_evidence(context):
     personal = context.get("personal_coaching") if isinstance(context.get("personal_coaching"), dict) else {}
     readiness = personal.get("readiness") if isinstance(personal.get("readiness"), dict) else None
     training_load = personal.get("training_load") if isinstance(personal.get("training_load"), dict) else None
+    training_development = personal.get("training_development") if isinstance(personal.get("training_development"), dict) else None
     weather = context.get("weather_forecast") if isinstance(context.get("weather_forecast"), dict) else None
     weather_evidence = None
     if weather is not None:
@@ -958,6 +959,14 @@ def context_evidence(context):
             "chronic_28d_weekly": training_load.get("chronic_28d_weekly"),
             "ratio": training_load.get("ratio"),
         } if training_load else None,
+        "training_development": {
+            "period_days": training_development.get("period_days"),
+            "fitness_trend": training_development.get("fitness_trend"),
+            "recovery_trend": training_development.get("recovery_trend"),
+            "efficiency": training_development.get("efficiency"),
+            "changes": training_development.get("changes"),
+            "vo2_estimate_latest": training_development.get("vo2_estimate_latest"),
+        } if training_development else None,
         "weather": weather_evidence,
         "daily_values": context.get("health_30d", lookback.get("daily_health", []))[-3:],
         "sleep": context.get("sleep_30d", lookback.get("sleep", []))[-3:],

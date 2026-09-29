@@ -11,6 +11,7 @@ from pengucoach.db.models import Activity, ActivityFeedback, AiRun, CoachCheckin
 from pengucoach.training_plan.structured import TrainingPlanDocument
 from pengucoach.coach.readiness import compute_readiness
 from pengucoach.coach.training_intelligence import training_load_summary
+from pengucoach.health.development import development_summary_for_coach
 
 
 def activity_day(activity, user):
@@ -114,6 +115,10 @@ async def add_personal_context(db, user, context, payload, conversation=None):
             personal["readiness"] = compute_readiness(_readiness_context(context), personal.get("today_checkin") or {}, personal.get("recent_feedback") or [], today=user_today(user))
         if enabled and selection.get("training", True):
             personal["training_load"] = await training_load_summary(db, user)
+        if enabled and (selection.get("training", True) or selection.get("recovery", True)):
+            # Compact 90-day development evidence lets the coach answer questions
+            # such as “am I getting fitter?” without sending chart-sized arrays.
+            personal["training_development"] = await development_summary_for_coach(db, user, days=90)
         context["personal_coaching"] = personal
     if conversation and conversation.summary:
         context["conversation_summary"] = conversation.summary

@@ -1,5 +1,5 @@
 export function sourceLabel(source?:string,lang="de"){
-  const names:Record<string,string>={garmin:"Garmin",sparkyfitness:"SparkyFitness",manual:lang==="de"?"Manuell":"Manual",manual_body:lang==="de"?"Manuell":"Manual",manual_upload:lang==="de"?"Dateiimport":"File import",pengucoach:lang==="de"?"PenguCoach · berechnet":"PenguCoach · calculated",withings:lang==="de"?"Withings · Archiv":"Withings · archive",unknown:lang==="de"?"Quelle unbekannt":"Unknown source"};
+  const names:Record<string,string>={garmin:"Garmin",sparkyfitness:"SparkyFitness",manual:lang==="de"?"Manuell":"Manual",manual_body:lang==="de"?"Manuell":"Manual",manual_upload:lang==="de"?"Dateiimport":"File import",pengucoach:lang==="de"?"PenguCoach · berechnet":"PenguCoach · calculated",pengucoach_estimate:lang==="de"?"PenguCoach · geschätzt":"PenguCoach · estimated",withings:lang==="de"?"Withings · Archiv":"Withings · archive",unknown:lang==="de"?"Quelle unbekannt":"Unknown source"};
   return source?source.split("+").map(x=>names[x]??x).join(" + "):"—";
 }
 export function measuredLabel(value?:string,lang="de"){

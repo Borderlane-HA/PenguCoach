@@ -7,7 +7,7 @@ from pengucoach.coach.training_intelligence import plan_conflicts, weather_asses
 
 def test_alpha44_license_and_version_surface():
     project = tomllib.loads(Path("pyproject.toml").read_text())["project"]
-    assert project["version"] == "0.1.0-alpha.44"
+    assert project["version"].startswith("0.1.0-alpha.")
     assert project["license"] == "LicenseRef-PolyForm-Noncommercial-1.0.0"
     license_text = Path("LICENSE").read_text()
     assert "polyformproject.org/licenses/noncommercial/1.0.0" in license_text

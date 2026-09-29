@@ -34,3 +34,7 @@ This roadmap keeps the Adaptive Coach direction explicit while the UI follows a 
 4. Every recommendation should be traceable to the data actually supplied to the model.
 5. Design and test desktop, tablet and phone flows together. Features must not disappear merely because the viewport is small.
 6. Do not turn Training into a second AI Studio. Model/token/prompt controls remain available but secondary to the coaching workflow.
+
+## Health Development (Alpha.45)
+
+The Health view now combines fitness, training load, efficiency and recovery with progressive disclosure and professional interactive charts. Provider VO₂ remains authoritative; PenguCoach may calculate a clearly-labelled fallback estimate only when provider data is absent. Longer-term work can add training-block annotations and richer correlations without turning the Health page into another configuration dashboard.

@@ -1032,15 +1032,21 @@ async def _merge_custom_metrics(
     categories: list[dict[str, Any]],
     start: date,
     end: date,
-) -> tuple[int, int]:
+) -> tuple[int, int, int]:
     hrv_count = 0
     rhr_count = 0
+    vo2_count = 0
     for category in categories:
         category_id = category.get("id")
         if not category_id:
             continue
         label = " ".join(str(category.get(k) or "") for k in ("name", "display_name", "measurement_type")).lower()
-        kind = "hrv" if ("hrv" in label or "heart rate variability" in label) else "rhr" if ("resting" in label and "heart" in label) else None
+        kind = (
+            "vo2" if ("vo2" in label or "vo₂" in label or "cardio fitness" in label or "aerobic capacity" in label)
+            else "hrv" if ("hrv" in label or "heart rate variability" in label)
+            else "rhr" if ("resting" in label and "heart" in label)
+            else None
+        )
         if not kind:
             continue
         entries: list[dict[str, Any]] = []
@@ -1081,8 +1087,15 @@ async def _merge_custom_metrics(
                     row = DailyHealth(user_id=user_id, date=day, raw={})
                     db.add(row)
                 row.raw = _source_tag(row.raw, item)
-                rhr_count += int(merge_metric(row, "resting_hr", int(round(value)), "sparkyfitness", observed_at))
-    return hrv_count, rhr_count
+                if kind == "vo2":
+                    # Apple Health cardio fitness is an estimate of VO2max from
+                    # outdoor walk/run/hike workouts. If SparkyFitness exposes it
+                    # as a custom metric now or later, preserve it as provider data.
+                    if 10 <= value <= 100:
+                        vo2_count += int(merge_metric(row, "vo2max_running", value, "sparkyfitness", observed_at))
+                else:
+                    rhr_count += int(merge_metric(row, "resting_hr", int(round(value)), "sparkyfitness", observed_at))
+    return hrv_count, rhr_count, vo2_count
 
 
 async def _merge_active_calories_metric(
@@ -1345,9 +1358,10 @@ async def sync_sparkyfitness(db: AsyncSession, user_id: uuid.UUID, *, progress=N
             categories = _list_payload(categories_payload)
             if isinstance(categories_payload, list):
                 categories = [x for x in categories_payload if isinstance(x, dict)]
-            hrv, rhr = await _merge_custom_metrics(db, client, user_id, categories, start, end)
+            hrv, rhr, vo2 = await _merge_custom_metrics(db, client, user_id, categories, start, end)
             summary["hrv_days_filled"] = hrv
             summary["resting_hr_days_filled"] = rhr
+            summary["vo2max_days_filled"] = vo2
         if conn.sync_daily_health:
             summary["hydration"] = await _sync_hydration(db, client, user_id, start, end)
         if conn.sync_sleep and capabilities.get("sleep"):

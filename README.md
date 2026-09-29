@@ -12,9 +12,10 @@ PenguCoach is designed as a local-first, multi-user platform that reads Garmin C
 
 ## Current alpha scope
 
-`v0.1.0-alpha.44` is the current end-to-end alpha baseline:
+`v0.1.0-alpha.45` is the current end-to-end alpha baseline:
 
 - **Training Intelligence:** deterministic 7/28-day training-load trends, weekly volume and sport mix; near-term Open-Meteo badges on outdoor plan sessions; deterministic plan-conflict detection; reviewed weather-based indoor alternatives; and a persistent AI Decision Log for accepted adaptive changes.
+- **Health Development:** professional interactive training/health charts, fitness and efficiency trends, sport-specific training volume, load-vs-recovery, 3/6-month views and a conservative VO₂max fallback when no provider value exists. Estimated VO₂ values are clearly labelled and never treated as clinical measurements. See [`docs/HEALTH_DEVELOPMENT.md`](docs/HEALTH_DEVELOPMENT.md).
 - **Coach Memory suggestions:** PenguCoach can propose a memory only after repeated explicit evidence such as confirmed indoor adaptations or repeated very-hard workout feedback. Suggestions are never saved without confirmation and can be dismissed.
 - **Noncommercial license from Alpha.44:** new releases use PolyForm Noncommercial 1.0.0. Personal and other permitted noncommercial use/modification/redistribution remain available; commercial use, resale, paid hosting/SaaS and commercial integration require separate permission. Earlier MIT releases keep their original rights.
 
@@ -25,7 +26,7 @@ PenguCoach is designed as a local-first, multi-user platform that reads Garmin C
 - **Guided Training Planner:** training-plan creation is a four-step Goal → Framework → Data → Review assistant. Existing plans, plan descriptions, calendars, weeks and sessions use progressive disclosure; AI model/token/prompt controls stay available under Advanced settings instead of dominating the normal workflow. The layout is responsive down to phone-sized screens.
 - **Chat reliability:** content-sized bubbles, visible local streaming, reasoning disabled for Ollama requests, accurate finish-reason checks and explicit empty-response errors.
 - **Unified data:** Today, Health, activity analysis, Coach and training planning use the same per-metric provenance and body snapshot. No Garmin connection is required. See [`docs/UNIFIED_DATA.md`](docs/UNIFIED_DATA.md).
-- **SparkyFitness read-only connection:** configurable self-hosted URL + encrypted API key, capability probing, multi-year/all-history manual sync plus a small configurable interval sync for today + yesterday. Sleep, daily/check-in data, HRV/resting-HR custom metrics, body/scale values and paginated workout history are imported. Compact history rows are enriched from SparkyFitness exercise-entry/provider details so HealthKit/Apple Health heart rate, speed, elevation, distance, duration and calories can reach the activity diary. Conservative duplicate matching merges the same Garmin/Sparky workout instead of double-counting it.
+- **SparkyFitness read-only connection:** configurable self-hosted URL + encrypted API key, capability probing, multi-year/all-history manual sync plus a small configurable interval sync for today + yesterday. Sleep, daily/check-in data, HRV/resting-HR custom metrics, body/scale values and paginated workout history are imported. If SparkyFitness exposes Apple Health Cardio Fitness/VO₂ as a custom metric, PenguCoach imports it as provider data instead of using its own fallback estimate. Compact history rows are enriched from SparkyFitness exercise-entry/provider details so HealthKit/Apple Health heart rate, speed, elevation, distance, duration and calories can reach the activity diary. Conservative duplicate matching merges the same Garmin/Sparky workout instead of double-counting it.
 
 
 - German and English web UI
@@ -51,7 +52,7 @@ PenguCoach is designed as a local-first, multi-user platform that reads Garmin C
 - deterministic FIT analytics: HR/pace/power/cadence drift, aerobic decoupling, pace consistency and data coverage
 - server-side paginated/searchable activity journal across the complete history plus detail view with FIT time series
 - manual activity import without Garmin: FIT, GPX, TCX and ZIP-contained FIT files are stored locally, normalized into the same activity history and analysed with the same deterministic pipeline
-- health overview and historical charts with Today / Last 7 days / This week / This month / This year / All filters; top health cards show averages of the available measurements in the selected period while missing days are not treated as zero
+- health overview and professional historical charts with Today / Last 7 days / This week / This month / Last 3 months / Last 6 months / This year / All filters; top health cards show averages of the available measurements in the selected period while missing days are not treated as zero
 - Ollama, OpenAI, Anthropic, IONOS AI Model Hub, Google Gemini, xAI/Grok and generic OpenAI-compatible provider management
 - optional per-model input/output token pricing plus system-wide AI usage/cost statistics for today, 7 days, 30 days, current year and all time; local models retain token statistics even without prices
 - per-function response profiles (**Very low / Low / Standard / High**) for Coach, activity analysis and training planning, with cost estimates before generation and actual token/cost snapshots after completion
