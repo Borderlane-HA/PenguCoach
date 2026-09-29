@@ -27,7 +27,7 @@ export default function Today(){
   const focusItems=[
     {label:bi(lang,"Schritte","Steps"),value:h?.steps!=null?h.steps.toLocaleString(lang==="de"?"de-DE":"en-US"):"—",note:bi(lang,"heute","today")},
     {label:bi(lang,"Schlaf","Sleep"),value:sleepHours!=null?`${sleepHours.toFixed(1)} h`:"—",note:h?.sleep?.score!=null?`${bi(lang,"Score","Score")} ${h.sleep.score}`:bi(lang,"letzte Nacht","last night")},
-    {label:bi(lang,"Readiness","Readiness"),value:h?.training_readiness!=null?String(h.training_readiness):"—",note:h?.training_readiness!=null?bi(lang,"Tagesstatus","day status"):bi(lang,"wird geladen","loading")}
+    {label:bi(lang,"Ruhepuls","Resting HR"),value:h?.resting_hr!=null?`${h.resting_hr}`:"—",note:h?.resting_hr!=null?"bpm":bi(lang,"keine Daten","no data")}
   ];
   const cards=[
     {label:bi(lang,"Schlaf","Sleep"),value:h?.sleep?.score?`${h.sleep.score}`:sleepHours?`${sleepHours.toFixed(1)} h`:"—",note:h?.sleep?`${sourceLabel(h.sleep.source,lang)}${h.sleep.score&&sleepHours?` · ${sleepHours.toFixed(1)} h` : ""}`:bi(lang,"Keine Daten","No data"),tone:"sleep"},
@@ -56,9 +56,7 @@ export default function Today(){
           <a className="text-link" href="/activities">{bi(lang,"Aktivitäten öffnen","Open activities")} →</a>
         </div>
       </div>
-      <div className="dashboard-hero-art today-hero-art">
-        <img src="/today-focus-hero.svg" alt=""/>
-        <div className="today-focus-card">
+      <div className="today-focus-card today-focus-card-hero">
           <div className="today-focus-head">
             <div>
               <span className="metric-label">{bi(lang,"Heute im Fokus","Today in focus")}</span>
@@ -68,7 +66,6 @@ export default function Today(){
           </div>
           <div className="today-focus-list">{focusItems.map(item=><div className="today-focus-item" key={item.label}><span>{item.label}</span><strong>{item.value}</strong><small>{item.note}</small></div>)}</div>
           <a className="text-link" href="/health">{bi(lang,"Gesundheit öffnen","Open health")} →</a>
-        </div>
       </div>
     </section>
 

@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.1.0-alpha.46.1 — Today UX Fix
+
+- Removed the decorative Today hero illustration and reduced the hero height.
+- Kept only a compact Today-in-focus card with practical daily values.
+- Fixed energy battery controls so icon, label and selected state remain visible across all light and dark themes without relying on hover.
+- Fixed soreness and available-time chips with theme-aware default, hover and active contrast.
+- Renamed **Time today** to **Available time today** and added short helper text explaining that it means realistic time available for training or movement.
+- Added helper text for Energy and Soreness and retained touch-friendly mobile layouts.
+
 ## v0.1.0-alpha.46 — Today Experience
 
 - Reworked the **Today** page to focus more clearly on the daily question: how you feel today and what realistically fits.
