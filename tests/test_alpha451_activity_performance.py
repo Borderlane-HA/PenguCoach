@@ -25,6 +25,9 @@ def test_activity_page_decouples_first_page_from_summary_stats_and_has_loading_f
     assert 'Aktivitäten werden geladen…' in ui
     assert 'Aktivitäten werden aktualisiert…' in ui
     assert 'ActivityListSkeleton' in ui
+    assert 'import {bi,useI18n,type Lang} from "../../lib/i18n";' in ui
+    assert 'function ActivityListSkeleton({lang}:{lang:Lang})' in ui
+    assert 'function ActivityListSkeleton({lang}:{lang:string})' not in ui
     assert 'controller.abort()' in ui
     assert '.activity-skeleton-row' in css
     assert '@media(max-width:480px)' in css

@@ -3,7 +3,7 @@
 import {useEffect,useRef,useState} from "react";
 import AppShell from "../../components/AppShell";
 import {API,api} from "../../lib/api";
-import {bi,useI18n} from "../../lib/i18n";
+import {bi,useI18n,type Lang} from "../../lib/i18n";
 
 type A={id:string;name?:string;sport_type?:string;started_at?:string;distance_m?:number;duration_seconds?:number;avg_hr?:number;training_load?:number;fit_status:string;source?:string;sources?:string[];source_detail?:string;original_filename?:string};
 type ImportResult={activity_id:string};
@@ -67,6 +67,6 @@ export default function Activities(){
 }
 
 
-function ActivityListSkeleton({lang}:{lang:string}){
+function ActivityListSkeleton({lang}:{lang:Lang}){
   return <div className="activity-loading-state" role="status" aria-live="polite"><div className="activity-loading-copy"><span className="activity-loader" aria-hidden="true"/><div><strong>{bi(lang,"Aktivitäten werden geladen…","Loading activities…")}</strong><small>{bi(lang,"Die ersten Einträge erscheinen, sobald sie verfügbar sind.","The first entries appear as soon as they are available.")}</small></div></div><div className="activity-skeleton-list" aria-hidden="true">{Array.from({length:7},(_,i)=><div className="activity-skeleton-row" key={i}><span className="activity-skeleton-icon"/><span className="activity-skeleton-main"><i/><i/></span><span className="activity-skeleton-stat"/><span className="activity-skeleton-stat"/><span className="activity-skeleton-stat"/></div>)}</div></div>
 }
