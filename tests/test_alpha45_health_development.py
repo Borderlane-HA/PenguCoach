@@ -11,7 +11,7 @@ from pengucoach.health.development import _vo2_from_hrr, estimate_summary, estim
 
 def test_alpha45_release_version():
     project=tomllib.loads(Path("pyproject.toml").read_text())["project"]
-    assert project["version"] == "0.1.0-alpha.45"
+    assert project["version"] == "0.1.0-alpha.45.post1"
     assert project["license"] == "LicenseRef-PolyForm-Noncommercial-1.0.0"
 
 def _user():

@@ -1,7 +1,7 @@
 import uuid
 from datetime import date, datetime
 
-from sqlalchemy import BigInteger, Boolean, Date, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy import BigInteger, Boolean, Date, DateTime, Float, ForeignKey, Index, Integer, String, Text, UniqueConstraint, func, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -252,7 +252,21 @@ class BodyMeasurement(Base):
 
 class Activity(Base):
     __tablename__ = "activities"
-    __table_args__ = (UniqueConstraint("user_id", "garmin_activity_id"),)
+    __table_args__ = (
+        UniqueConstraint("user_id", "garmin_activity_id"),
+        Index("ix_activities_user_started_at", "user_id", "started_at"),
+        Index("ix_activities_user_fit_status", "user_id", "fit_status"),
+        Index(
+            "ix_activities_user_manual_source",
+            "user_id",
+            postgresql_where=text("(raw ->> 'source') = 'manual_upload'"),
+        ),
+        Index(
+            "ix_activities_user_sparky_source",
+            "user_id",
+            postgresql_where=text("raw ? 'sparkyfitness'"),
+        ),
+    )
     id: Mapped[uuid.UUID] = uuid_pk()
     user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), index=True)
     garmin_activity_id: Mapped[int] = mapped_column(BigInteger, index=True)

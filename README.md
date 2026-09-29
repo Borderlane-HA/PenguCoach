@@ -12,7 +12,7 @@ PenguCoach is designed as a local-first, multi-user platform that reads Garmin C
 
 ## Current alpha scope
 
-`v0.1.0-alpha.45` is the current end-to-end alpha baseline:
+`v0.1.0-alpha.45.1` is the current end-to-end alpha baseline:
 
 - **Training Intelligence:** deterministic 7/28-day training-load trends, weekly volume and sport mix; near-term Open-Meteo badges on outdoor plan sessions; deterministic plan-conflict detection; reviewed weather-based indoor alternatives; and a persistent AI Decision Log for accepted adaptive changes.
 - **Health Development:** professional interactive training/health charts, fitness and efficiency trends, sport-specific training volume, load-vs-recovery, 3/6-month views and a conservative VO₂max fallback when no provider value exists. Estimated VO₂ values are clearly labelled and never treated as clinical measurements. See [`docs/HEALTH_DEVELOPMENT.md`](docs/HEALTH_DEVELOPMENT.md).
@@ -50,7 +50,7 @@ PenguCoach is designed as a local-first, multi-user platform that reads Garmin C
 - immutable original FIT download
 - FIT parsing and Parquet time-series storage
 - deterministic FIT analytics: HR/pace/power/cadence drift, aerobic decoupling, pace consistency and data coverage
-- server-side paginated/searchable activity journal across the complete history plus detail view with FIT time series
+- performance-oriented server-side activity journal: the first 25/50/100 rows load independently from source/status counters, PostgreSQL indexes accelerate the common user/date and source filters, summary counters are aggregated/cached separately, and responsive skeleton/loading states keep large 5,000+ activity histories visibly responsive; detail views retain FIT time series
 - manual activity import without Garmin: FIT, GPX, TCX and ZIP-contained FIT files are stored locally, normalized into the same activity history and analysed with the same deterministic pipeline
 - health overview and professional historical charts with Today / Last 7 days / This week / This month / Last 3 months / Last 6 months / This year / All filters; top health cards show averages of the available measurements in the selected period while missing days are not treated as zero
 - Ollama, OpenAI, Anthropic, IONOS AI Model Hub, Google Gemini, xAI/Grok and generic OpenAI-compatible provider management

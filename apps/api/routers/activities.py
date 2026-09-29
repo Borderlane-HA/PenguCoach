@@ -1,8 +1,9 @@
 import asyncio
+import time
 import uuid
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
-from sqlalchemy import String, cast, func, or_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from pengucoach.auth.dependencies import safety_confirmed_user
@@ -14,6 +15,54 @@ from pengucoach.imports.manual_activity import MAX_UPLOAD_BYTES, import_manual_a
 from worker.tasks.fit import analyze_fit
 
 router = APIRouter(prefix="/activities", tags=["activities"])
+
+_STATS_TTL_SECONDS = 30.0
+_stats_cache: dict[uuid.UUID, tuple[float, dict]] = {}
+
+
+def _manual_source_expr():
+    return Activity.raw["source"].astext == "manual_upload"
+
+
+def _sparky_source_expr():
+    # Sparky-only activities and Garmin activities enriched from SparkyFitness
+    # both carry the dedicated top-level JSONB key. This can use the partial
+    # PostgreSQL index created in migration 0013 instead of casting the full
+    # JSON payload to text.
+    return Activity.raw.has_key("sparkyfitness")  # noqa: W601 - SQLAlchemy JSONB operator
+
+
+async def _activity_stats(user_id: uuid.UUID, db: AsyncSession, *, use_cache: bool = True) -> dict:
+    now = time.monotonic()
+    cached = _stats_cache.get(user_id)
+    if use_cache and cached and now - cached[0] < _STATS_TTL_SECONDS:
+        return {**cached[1], "cached": True}
+
+    manual = _manual_source_expr()
+    sparky = _sparky_source_expr()
+    row = (await db.execute(
+        select(
+            func.count(Activity.id).label("total"),
+            func.count(Activity.id).filter(Activity.fit_status == "parsed").label("analyzed_total"),
+            func.count(Activity.id).filter(manual).label("manual_total"),
+            func.count(Activity.id).filter(Activity.garmin_activity_id > 0).label("garmin_total"),
+            func.count(Activity.id).filter(sparky).label("sparky_total"),
+            func.count(Activity.id).filter(and_(Activity.garmin_activity_id > 0, sparky)).label("merged_total"),
+        ).where(Activity.user_id == user_id)
+    )).one()
+    result = {
+        "total": int(row.total or 0),
+        "analyzed_total": int(row.analyzed_total or 0),
+        "manual_total": int(row.manual_total or 0),
+        "garmin_total": int(row.garmin_total or 0),
+        "sparky_total": int(row.sparky_total or 0),
+        "merged_total": int(row.merged_total or 0),
+        "cached": False,
+        "cache_ttl_seconds": int(_STATS_TTL_SECONDS),
+    }
+    _stats_cache[user_id] = (now, result)
+    return result
+
 
 
 def _activity_sources(x: Activity) -> list[str]:
@@ -73,6 +122,7 @@ async def list_activities(
     q: str | None = Query(default=None, max_length=120),
     sport: str | None = None,
     source: str | None = Query(default=None, pattern="^(garmin|sparkyfitness|manual)$"),
+    include_stats: bool = Query(default=True),
     user: User = Depends(safety_confirmed_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -80,32 +130,34 @@ async def list_activities(
 
     The legacy ``limit`` response remains a plain array for dashboard callers.
     Supplying ``page`` or ``per_page`` enables the paginated response used by
-    the activity journal. Search is performed server-side over the complete
-    activity history, not just the currently visible page.
+    the activity journal. Alpha.45.1 lets the journal opt out of expensive
+    summary statistics via ``include_stats=false`` and loads them independently
+    from ``/activities/stats``.
     """
     scope_filters = [Activity.user_id == user.id]
     if sport:
         scope_filters.append(Activity.sport_type == sport)
-    base_filters = list(scope_filters)
-    raw_text = cast(Activity.raw, String)
+    filtered = list(scope_filters)
     if source == "garmin":
         # Native Garmin IDs are positive. Activities enriched from SparkyFitness
         # remain part of the Garmin view as well.
-        base_filters.append(Activity.garmin_activity_id > 0)
+        filtered.append(Activity.garmin_activity_id > 0)
     elif source == "sparkyfitness":
-        base_filters.append(raw_text.ilike('%sparkyfitness%'))
+        filtered.append(_sparky_source_expr())
     elif source == "manual":
-        base_filters.append(raw_text.ilike('%manual_upload%'))
+        filtered.append(_manual_source_expr())
 
-    filtered = list(base_filters)
     term = (q or "").strip()
     if term:
         pattern = f"%{term}%"
+        # Search intentionally stays on concise indexed/structured fields. The
+        # previous full-JSON text conversion forced PostgreSQL to scan every payload
+        # payload on each keystroke, which became visible with large histories.
         filtered.append(or_(
             Activity.name.ilike(pattern),
             Activity.sport_type.ilike(pattern),
             Activity.subsport_type.ilike(pattern),
-            cast(Activity.raw, String).ilike(pattern),
+            Activity.raw["filename"].astext.ilike(pattern),
         ))
 
     paginated = page is not None or per_page is not None
@@ -117,48 +169,39 @@ async def list_activities(
 
     current_page = page or 1
     page_size = per_page or 50
-    total = int((await db.scalar(select(func.count(Activity.id)).where(*scope_filters))) or 0)
     filtered_total = int((await db.scalar(select(func.count(Activity.id)).where(*filtered))) or 0)
-    analyzed_total = int((await db.scalar(select(func.count(Activity.id)).where(
-        Activity.user_id == user.id, Activity.fit_status == "parsed"
-    ))) or 0)
-    # JSONB source metadata is intentionally queried through its string
-    # representation here so the same expression also works in lightweight
-    # test databases without PostgreSQL-specific JSON operators.
-    manual_total = int((await db.scalar(select(func.count(Activity.id)).where(
-        Activity.user_id == user.id, raw_text.ilike('%manual_upload%')
-    ))) or 0)
-    garmin_total = int((await db.scalar(select(func.count(Activity.id)).where(
-        Activity.user_id == user.id, Activity.garmin_activity_id > 0
-    ))) or 0)
-    sparky_total = int((await db.scalar(select(func.count(Activity.id)).where(
-        Activity.user_id == user.id, raw_text.ilike('%sparkyfitness%')
-    ))) or 0)
-    merged_total = int((await db.scalar(select(func.count(Activity.id)).where(
-        Activity.user_id == user.id, Activity.garmin_activity_id > 0, raw_text.ilike('%sparkyfitness%')
-    ))) or 0)
-
     pages = max(1, (filtered_total + page_size - 1) // page_size)
     current_page = min(current_page, pages)
     offset = (current_page - 1) * page_size
     rows = (await db.scalars(
         select(Activity).where(*filtered).order_by(Activity.started_at.desc()).offset(offset).limit(page_size)
     )).all()
-    return {
+    response = {
         "items": [_summary(x) for x in rows],
         "page": current_page,
         "per_page": page_size,
         "pages": pages,
-        "total": total,
         "filtered_total": filtered_total,
-        "analyzed_total": analyzed_total,
-        "manual_total": manual_total,
-        "garmin_total": garmin_total,
-        "sparky_total": sparky_total,
-        "merged_total": merged_total,
         "query": term,
         "source_filter": source,
     }
+    if include_stats:
+        response.update(await _activity_stats(user.id, db))
+    return response
+
+
+@router.get("/stats")
+async def activity_stats(
+    refresh: bool = Query(default=False),
+    user: User = Depends(safety_confirmed_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return activity source/status counters independently from the first page.
+
+    The counters use one aggregate SQL statement and a short process-local TTL
+    cache so revisiting the journal does not repeatedly scan the history.
+    """
+    return await _activity_stats(user.id, db, use_cache=not refresh)
 
 
 @router.post("/import")
@@ -187,6 +230,7 @@ async def import_activity(
             raise HTTPException(status_code=409, detail={"code": "ACTIVITY_ALREADY_IMPORTED", "activity_id": existing}) from exc
         status = 413 if code == "UPLOAD_TOO_LARGE" else 400
         raise HTTPException(status_code=status, detail=code) from exc
+    _stats_cache.pop(user.id, None)
     return {"activity_id": str(activity.id), "activity": _summary(activity)}
 
 

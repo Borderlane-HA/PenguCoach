@@ -28,7 +28,8 @@ def test_activity_journal_uses_real_server_side_pagination_and_search():
     assert "per_page: int | None" in api
     assert ".offset(offset).limit(page_size)" in api
     assert "filtered_total" in api
-    assert "cast(Activity.raw, String).ilike(pattern)" in api
+    assert 'Activity.raw["filename"].astext.ilike(pattern)' in api
+    assert "CAST(raw AS TEXT)" not in api
     assert 'per_page:String(perPage)' in ui
     assert 'value={25}' in ui and 'value={50}' in ui and 'value={100}' in ui
     assert "activity-pager" in ui

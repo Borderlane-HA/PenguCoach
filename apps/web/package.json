@@ -1,6 +1,6 @@
 {
   "name": "pengucoach-web",
-  "version": "0.1.0-alpha.45",
+  "version": "0.1.0-alpha.45.post1",
   "private": true,
   "scripts": {
     "dev": "next dev",

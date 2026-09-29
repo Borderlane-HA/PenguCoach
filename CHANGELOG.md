@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.1.0-alpha.45.1 — Activity Performance & Loading UX
+
+- Activity journal loads the first page independently from summary counters.
+- New `/activities/stats` endpoint calculates source/status totals in one aggregate query and caches them briefly.
+- Added activity indexes for user/date, FIT status and PostgreSQL partial source lookups.
+- Source filters no longer cast full JSONB payloads to text; normal search avoids scanning raw activity JSON.
+- Initial activity load now shows a responsive skeleton and explicit “Aktivitäten werden geladen …” state.
+- Page/filter changes keep the existing list visible while the next page is fetched.
+- Added request cancellation so stale search/page responses cannot overwrite newer results.
+
 ## v0.1.0-alpha.45 — Health Development
 
 - Rebuilt the Health page around progressive disclosure with professional interactive SVG charts, proper axes, hover/touch tooltips, responsive layouts and theme-aware styling.
