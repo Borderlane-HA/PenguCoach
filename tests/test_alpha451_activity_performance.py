@@ -7,10 +7,10 @@ import tomllib
 def test_alpha451_version_is_pep440_and_displays_as_maintenance_release():
     project = tomllib.loads(Path("pyproject.toml").read_text())
     package = json.loads(Path("apps/web/package.json").read_text())
-    assert project["project"]["version"] == "0.1.0-alpha.45.post1"
-    assert package["version"] == "0.1.0-alpha.45.post1"
+    assert project["project"]["version"] == "0.1.0-alpha.46"
+    assert package["version"] == "0.1.0-alpha.46"
     config = Path("pengucoach/common/config.py").read_text()
-    assert 'app_version: str = "0.1.0-alpha.45.post1"' in config
+    assert 'app_version: str = "0.1.0-alpha.46"' in config
     assert 'return f"{match.group(1)}-alpha.{match.group(2)}.{match.group(3)}"' in config
 
 

@@ -1,7 +1,7 @@
 "use client";
 
 import {useEffect,useMemo,useState} from "react";
-import {sourceLabel,measuredLabel,localDate} from "../../lib/sources";
+import {sourceLabel,measuredLabel} from "../../lib/sources";
 import DailyCompanion from "../../components/DailyCompanion";
 import SourceOverview from "../../components/SourceOverview";
 import AppShell from "../../components/AppShell";
@@ -21,11 +21,17 @@ export default function Today(){
   useEffect(()=>{api<H>("/health/today").then(setH);api<A[]>("/activities?limit=4").then(setActs);api<any>("/health/range?days=14").then(v=>setTrend(v.health??[]));api<any>("/coach/training-load").then(setLoad).catch(()=>setLoad(null))},[]);
   const date=useMemo(()=>new Intl.DateTimeFormat(lang==="de"?"de-DE":"en-US",{weekday:"long",day:"2-digit",month:"long"}).format(new Date()),[lang]);
   const sleepHours=h?.sleep?.duration_seconds?h.sleep.duration_seconds/3600:null;
-  const metricSource=(field:string)=>sourceLabel(h?.sources?.[field]);
+  const metricSource=(field:string)=>sourceLabel(h?.sources?.[field],lang);
   const bodySource=(field:string)=>[sourceLabel(h?.body?.sources?.[field],lang),measuredLabel(h?.body?.measured_at_by_metric?.[field],lang)].filter(Boolean).join(" · ");
+  const askPrompt=lang==="de"?"Was passt heute zu mir? Nutze meine ausgewählten Daten, meine Readiness und meinen aktuellen Check-in. Antworte kurz mit einer konkreten Empfehlung für heute.":"What suits me today? Use my selected data, readiness and current check-in. Give a short concrete recommendation for today.";
+  const focusItems=[
+    {label:bi(lang,"Schritte","Steps"),value:h?.steps!=null?h.steps.toLocaleString(lang==="de"?"de-DE":"en-US"):"—",note:bi(lang,"heute","today")},
+    {label:bi(lang,"Schlaf","Sleep"),value:sleepHours!=null?`${sleepHours.toFixed(1)} h`:"—",note:h?.sleep?.score!=null?`${bi(lang,"Score","Score")} ${h.sleep.score}`:bi(lang,"letzte Nacht","last night")},
+    {label:bi(lang,"Readiness","Readiness"),value:h?.training_readiness!=null?String(h.training_readiness):"—",note:h?.training_readiness!=null?bi(lang,"Tagesstatus","day status"):bi(lang,"wird geladen","loading")}
+  ];
   const cards=[
-    {label:bi(lang,"Schlaf","Sleep"),value:h?.sleep?.score?`${h.sleep.score}`:sleepHours?`${sleepHours.toFixed(1)} h`:"—",note:h?.sleep?`${sourceLabel(h.sleep.source)}${h.sleep.score&&sleepHours?` · ${sleepHours.toFixed(1)} h` : ""}`:bi(lang,"Keine Daten","No data"),tone:"sleep"},
-    {label:"HRV",value:h?.hrv?.overnight_average?`${h.hrv.overnight_average} ms`:"—",note:h?.hrv?`${sourceLabel(h.hrv.source)}${h.hrv.status?` · ${h.hrv.status}`:""}`:bi(lang,"Keine Daten","No data"),tone:"hrv"},
+    {label:bi(lang,"Schlaf","Sleep"),value:h?.sleep?.score?`${h.sleep.score}`:sleepHours?`${sleepHours.toFixed(1)} h`:"—",note:h?.sleep?`${sourceLabel(h.sleep.source,lang)}${h.sleep.score&&sleepHours?` · ${sleepHours.toFixed(1)} h` : ""}`:bi(lang,"Keine Daten","No data"),tone:"sleep"},
+    {label:"HRV",value:h?.hrv?.overnight_average?`${h.hrv.overnight_average} ms`:"—",note:h?.hrv?`${sourceLabel(h.hrv.source,lang)}${h.hrv.status?` · ${h.hrv.status}`:""}`:bi(lang,"Keine Daten","No data"),tone:"hrv"},
     {label:bi(lang,"Ruhepuls","Resting HR"),value:h?.resting_hr?`${h.resting_hr} bpm`:"—",note:h?.resting_hr?metricSource("resting_hr"):bi(lang,"Keine Daten","No data"),tone:"heart"},
     {label:bi(lang,"Schritte","Steps"),value:h?.steps!=null?h.steps.toLocaleString(lang==="de"?"de-DE":"en-US"):"—",note:h?.steps!=null?metricSource("steps"):bi(lang,"Heute","Today"),tone:"steps"},
     {label:bi(lang,"Body Battery · Tageshoch","Body Battery · daily high"),value:h?.body_battery_high??"—",note:h?.body_battery_high!=null?metricSource("body_battery_high"):bi(lang,"Keine Daten","No data"),tone:"battery"},
@@ -36,20 +42,32 @@ export default function Today(){
     {label:bi(lang,"Körperfett","Body fat"),value:h?.body?.body_fat_percent!=null?`${h.body.body_fat_percent.toFixed(1)} %`:"—",note:h?.body?.body_fat_percent!=null?bodySource("body_fat_percent"):bi(lang,"Letzte Messung","Latest measurement"),tone:"body"}
   ];
   const rhrSources=Array.from(new Set(trend.map(x=>x?.sources?.resting_hr).filter(Boolean))).map(x=>sourceLabel(x,lang)).join(" + ")||bi(lang,"Quelle unbekannt","Source unknown");
+
   return <AppShell>
     <SourceOverview/>
-    <section className="dashboard-hero">
+    <section className="dashboard-hero today-hero">
       <div className="dashboard-hero-copy">
         <span className="eyebrow">{date}</span>
         <h1>{bi(lang,"Dein Tag. Deine Balance.","Your day. Your balance.")}</h1>
-        <p>{bi(lang,"Dein Tag, deine Bewegung, deine Erholung. Alle verfügbaren Daten an einem Ort.","Your day, your movement, your recovery. All available data in one place.")}</p>
-        <div className="hero-actions"><a className="primary-link" href="/coach">✦ {bi(lang,"Coach fragen","Ask Coach")}</a><a className="soft-link" href="/activities">{bi(lang,"Aktivitäten öffnen","Open activities")} →</a></div>
+        <p>{bi(lang,"Heute zählt vor allem, wie es dir geht und was realistisch zu deinem Tag passt. PenguCoach bündelt Readiness, Bewegung und deinen kurzen Check-in an einem Ort.","What matters today is how you feel and what realistically fits your day. PenguCoach brings together readiness, movement and your short check-in in one place.")}</p>
+        <div className="hero-actions hero-actions-priority">
+          <a className="primary-link" href={`/coach?prompt=${encodeURIComponent(askPrompt)}`}>✦ {bi(lang,"Was passt heute zu mir?","What suits me today?")}</a>
+          <a className="soft-link" href="/coach">{bi(lang,"Coach frei fragen","Ask Coach freely")} →</a>
+          <a className="text-link" href="/activities">{bi(lang,"Aktivitäten öffnen","Open activities")} →</a>
+        </div>
       </div>
-      <div className="dashboard-hero-art">
-        <img src="/dashboard-wellness.svg" alt=""/>
-        <div className="wellness-panel floating">
-          <div className="wellness-ring"><span>{h?.training_readiness??(sleepHours!=null?sleepHours.toFixed(1):h?.steps??"—")}</span><small>{h?.training_readiness!=null?bi(lang,"Bereitschaft","Readiness"):sleepHours!=null?bi(lang,"Stunden Schlaf","Hours sleep"):bi(lang,"Schritte","Steps")}</small></div>
-          <div className="wellness-copy"><span className="metric-label">{bi(lang,"Heute im Fokus","Today at a glance")}</span><strong>{h?.available===true?bi(lang,"Gesundheitsdaten sind synchronisiert","Health data synced"):bi(lang,"Warte auf Gesundheitsdaten","Waiting for health data")}</strong><small>{bi(lang,"Tippe auf Gesundheit für den langfristigen Verlauf.","Open Health for longer-term trends.")}</small></div>
+      <div className="dashboard-hero-art today-hero-art">
+        <img src="/today-focus-hero.svg" alt=""/>
+        <div className="today-focus-card">
+          <div className="today-focus-head">
+            <div>
+              <span className="metric-label">{bi(lang,"Heute im Fokus","Today in focus")}</span>
+              <strong>{h?.available===true?bi(lang,"Tagesdaten bereit","Daily data ready"):bi(lang,"Synchronisierung läuft","Sync in progress")}</strong>
+            </div>
+            <span className={`sync-pill ${h?.available===true?"ok":"pending"}`}>{h?.available===true?bi(lang,"Synchronisiert","Synced"):bi(lang,"Wird geladen","Loading")}</span>
+          </div>
+          <div className="today-focus-list">{focusItems.map(item=><div className="today-focus-item" key={item.label}><span>{item.label}</span><strong>{item.value}</strong><small>{item.note}</small></div>)}</div>
+          <a className="text-link" href="/health">{bi(lang,"Gesundheit öffnen","Open health")} →</a>
         </div>
       </div>
     </section>

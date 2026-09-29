@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.1.0-alpha.46 — Today Experience
+
+- Reworked the **Today** page to focus more clearly on the daily question: how you feel today and what realistically fits.
+- Replaced the previous overloaded hero artwork with a calmer new illustration and a compact **Today in focus** card showing the most useful daily signals.
+- Prioritized Today actions more clearly around **What suits me today?**, direct Coach access and secondary navigation to Activities.
+- Refined the daily companion with a more explicit recommendation card and a cleaner action hierarchy.
+- Replaced the old energy mini-bars in the daily check-in with much clearer **battery-style energy choices**.
+- Replaced soreness dropdown selection with quick chip buttons and added quick-select buttons for available minutes today.
+- Improved mobile layout for the hero, focus card, check-in controls and Today actions so the page remains calm and tap-friendly on phones.
+
 ## v0.1.0-alpha.45.1 — Activity Performance & Loading UX
 
 - Activity journal loads the first page independently from summary counters.
