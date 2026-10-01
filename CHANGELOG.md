@@ -1,632 +1,149 @@
 # Changelog
 
-## v0.1.0-alpha.46.1 — Today UX Fix
+## 0.3.0
 
-- Removed the decorative Today hero illustration and reduced the hero height.
-- Kept only a compact Today-in-focus card with practical daily values.
-- Fixed energy battery controls so icon, label and selected state remain visible across all light and dark themes without relying on hover.
-- Fixed soreness and available-time chips with theme-aware default, hover and active contrast.
-- Renamed **Time today** to **Available time today** and added short helper text explaining that it means realistic time available for training or movement.
-- Added helper text for Energy and Soreness and retained touch-friendly mobile layouts.
+- Replaced the one-shot AI analysis screen with the persistent **PenguCost AI Agent**: per-user conversations, follow-up chat, history and editable Brain memory.
+- AI requests now run as persisted background jobs; leaving the AI page no longer loses the running state or completed result.
+- Added guided AI start modes for a general recurring-finance check or a concrete monthly savings target.
+- Strengthened the AI Agent prompt with exact selected-income/expense/delta context, protected essential entries, realistic savings contribution/cumulative-gap logic and structured JSON finance context.
+- Reworked the AI data selector into a searchable modal with expense/income filters and collapsible category groups for large datasets.
+- Extended personal JSON export/import and administrator full backup/restore with AI conversations, messages and Brain memory.
+- Added a modern local SVG PenguCost favicon.
+- Simplified the dashboard year menu to year numbers only while keeping the real current year as the default after login.
+- Hardened deterministic history/forecast projection to continue from the latest effective renewal cycle, use known price phases and contract dates, and default newly enabled automatic renewal to a 12-month period until changed explicitly.
+- Administrators can create a missing global category directly while creating/editing an entry.
+- Changed cloning into **Use as template**: opening a clone creates only an unsaved draft, clears identity/contract-specific fields and does not imply a relationship to the source entry. Closing the modal with X or Cancel never creates data.
+- Hardened AI ownership checks so selected IDs are always revalidated against the authenticated user before model calls.
 
-## v0.1.0-alpha.46 — Today Experience
+## 0.2.1
 
-- Reworked the **Today** page to focus more clearly on the daily question: how you feel today and what realistically fits.
-- Replaced the previous overloaded hero artwork with a calmer new illustration and a compact **Today in focus** card showing the most useful daily signals.
-- Prioritized Today actions more clearly around **What suits me today?**, direct Coach access and secondary navigation to Activities.
-- Refined the daily companion with a more explicit recommendation card and a cleaner action hierarchy.
-- Replaced the old energy mini-bars in the daily check-in with much clearer **battery-style energy choices**.
-- Replaced soreness dropdown selection with quick chip buttons and added quick-select buttons for available minutes today.
-- Improved mobile layout for the hero, focus card, check-in controls and Today actions so the page remains calm and tap-friendly on phones.
-
-## v0.1.0-alpha.45.1 — Activity Performance & Loading UX
-
-- Activity journal loads the first page independently from summary counters.
-- New `/activities/stats` endpoint calculates source/status totals in one aggregate query and caches them briefly.
-- Added activity indexes for user/date, FIT status and PostgreSQL partial source lookups.
-- Source filters no longer cast full JSONB payloads to text; normal search avoids scanning raw activity JSON.
-- Initial activity load now shows a responsive skeleton and explicit “Aktivitäten werden geladen …” state.
-- Page/filter changes keep the existing list visible while the next page is fetched.
-- Added request cancellation so stale search/page responses cannot overwrite newer results.
-
-## v0.1.0-alpha.45 — Health Development
-
-- Rebuilt the Health page around progressive disclosure with professional interactive SVG charts, proper axes, hover/touch tooltips, responsive layouts and theme-aware styling.
-- Added **Training & Development** tabs for Overview, Endurance, Load and Recovery instead of adding another overloaded dashboard.
-- Added 3-month and 6-month Health periods plus adaptive day/week/month aggregation.
-- Added training-volume stacks by sport, sport mix, training-load trends, HRV/resting-HR recovery trends and a compact “What changed?” comparison.
-- Added running efficiency (pace at comparable average HR) and cycling efficiency (power at comparable average HR) without mathematically pretending dissimilar sessions are identical.
-- Added a conservative VO₂max fallback. Imported Garmin/Sparky/other provider VO₂ always wins. Running estimates require suitable duration, HR and relatively flat sessions; cycling estimates require measured power, body mass and HR and never use cycling speed alone.
-- VO₂ estimates use ACSM oxygen-cost equations and HR-reserve → VO₂-reserve extrapolation, are median-smoothed over recent estimates, include confidence metadata and are always labelled **estimated** rather than measured.
-- SparkyFitness custom-metric ingestion now recognizes future VO₂/Cardio Fitness/Aerobic Capacity categories and stores them as provider VO₂ data if Sparky exposes them.
-- The AI Coach receives a compact training-development evidence block and exposes “Development” in its used-data details.
-- Existing secondary HRV/sleep/steps/body charts were moved behind a details section and upgraded from simple sparklines to the same professional chart system.
-- No database migration is required for Alpha.45.
-
-## v0.1.0-alpha.44 — Training Intelligence
-
-- Changes new releases from MIT to **PolyForm Noncommercial License 1.0.0**. The repository and in-app About page state that commercial use, resale, paid hosting/SaaS and commercial integration require separate permission; earlier MIT releases keep the rights granted with those releases.
-- Adds deterministic **Training Load & Trends v1**: 7-day acute load versus a 28-day weekly baseline, weekly volume, sport mix and understandable trend labels. Garmin `training_load` is used when coverage is sufficient; otherwise the UI explicitly falls back to training minutes rather than inventing a synthetic load score.
-- Adds **weather directly to planned outdoor sessions** with temperature/rain/wind summaries, risk badges and reviewed Indoor Alternative proposals for unfavorable forecast days. Weather failure never blocks the calendar.
-- Adds **Plan Conflict Detection v1** for saved training-day availability, unusually long sessions, high-volume double days, hard back-to-back days and collisions with other saved PenguCoach plan sessions, including an indicator when the other session is already exported to Garmin. Conflicts are advisory; no plan is changed automatically.
-- Adds a persistent **AI Decision Log v1**. Accepted adaptive changes store before/after session snapshots and structured Readiness/weather evidence.
-- Adds **Coach Memory Suggestions v1**. Suggestions require repeated explicit evidence and must be accepted by the user; dismissed suggestions stay hidden.
-- Adds a compact load card to Today, exposes load as transparent Coach answer evidence when it was supplied to the model, and adds an **About PenguCoach** settings page with the active license summary.
-- Adds Alembic migration `0012_training_intelligence` for the decision log.
+- Added an explicit dashboard year selector while keeping the current year as the default view.
+- Historical years appear automatically only when the signed-in user has relevant contract/price data for those years.
+- Added forecast targets for +1, +2 and +5 years.
+- Forecast calculations use known price phases, contract terms and automatic renewal periods instead of copying today's total unchanged.
+- Historical/forecast views calculate year totals and average monthly expense, income and delta for the selected year.
+- Category breakdowns and the interactive item selector now follow the selected dashboard year.
+- Upcoming dates switch from the current 60-day window to contract/cancellation dates inside the selected historical or forecast year.
+- The selected year is shown prominently in the dashboard and in the cash-flow chart subtitle.
 
 
-## v0.1.0-alpha.43.1 — Persistent training-job status
+## 0.2.0
 
-- Makes an in-progress training-plan generation permanently visible on the Training start view with live phase/chunk/token information plus Details and Cancel actions, so leaving or reloading the page no longer makes the work look lost.
-- Restores running training-plan jobs from the server, not only from browser `localStorage`. A second tab or another browser session for the same PenguCoach user can therefore see that generation is already in progress.
-- Tracks training-plan jobs in the existing `background_jobs` table and adds a user-scoped `/jobs/active?job_type=training_plan` lookup. No database migration is required.
-- Prevents accidental duplicate plan generation server-side: if the same user already has a recent running training-plan job, the create endpoint returns that existing job instead of queueing another one. Cancelled jobs are marked in the existing job table so they are not falsely restored after a reload.
-- Changes the Training assistant's first action while generation is active from **Create a new plan** to **Plan is already being generated**; selecting it opens the running job details rather than starting a second plan.
-- Keeps the running-job banner compact and adds dedicated phone layouts for status metadata and actions.
-- Uses a PEP 440-valid internal Python package version (`0.1.0-alpha.43.post1`) for the Alpha.43.1 maintenance release while keeping the user-facing release label `v0.1.0-alpha.43.1`; this fixes `pip install .[dev]`/wheel metadata validation in CI.
-- Fixes the Training page active-job lookup typing so the Next.js production type check accepts `task_id`, `summary` and `progress` after the no-active-job fallback.
-
-## v0.1.0-alpha.43 — Guided Training Planner
-
-- Reworks the Training page around progressive disclosure instead of one long configuration form. New plans are created in four focused steps: Goal, Framework, Data and Review.
-- Adds a compact Training assistant entry with three clear actions: create a plan, open the current plan, or review the plan with the Coach. Existing Coach Memory stays available in its own collapsed profile section.
-- Keeps every previously generated training plan collapsed whenever the Training page is opened. Plans are shown as compact cards with weeks, sessions, start date and model; the full plan opens only on explicit request.
-- Hides model/context/output/quality/prompt controls behind **Advanced AI settings**. Useful defaults remain visible as a compact review summary, while power-user control is preserved.
-- Makes plan details hierarchical: plan description, calendar and technical generation details are independently collapsed. Inside the calendar, every week starts collapsed and every workout continues to open individually.
-- Preserves all existing Garmin export, drag/drop, workout editing, adaptive-plan review, weather and context controls while reducing the amount of information shown at once.
-- Adds dedicated responsive behavior for the assistant actions, four-step planner, plan library, review cards and week hierarchy. On phones the planner becomes a touch-friendly 2×2 stepper and single-column action flow without removing advanced controls.
-- Adds `docs/ROADMAP.md` to keep the ten-part Adaptive Coach direction explicit while marking which capabilities are already shipped, partially shipped or intentionally deferred so future releases can extend the product without overloading individual screens.
-- No database migration is required.
-
-## v0.1.0-alpha.42 — Weather-aware Coach & usable model drawer
-
-- Extends the Open-Meteo connection from training-plan generation to the everyday Coach. Weather is fetched only for direct weather questions or near-term training decisions such as today/tomorrow, outdoor sport choices, named upcoming weekdays or short time-constrained Coach prompts. Retrospective training/health questions do not spend weather context.
-- Gives the Coach a bounded eight-day Open-Meteo snapshot with current conditions and explicit forecast dates. Fetch failures never fail the Coach request and the model is instructed not to invent weather or claim it has no weather access when a snapshot was supplied.
-- Adds a per-user **Use for relevant Coach questions** weather setting. Existing weather configurations inherit the enabled default while the whole weather integration remains opt-in. Only stored coordinates are sent to Open-Meteo.
-- Expands answer evidence with transparent context badges for training, sleep, HRV, recovery, Readiness, plan, profile, Garmin zones and weather. Weather evidence includes location, fetch time, current conditions and forecast horizon, or an explicit unavailable state.
-- Makes **Model & response** functional on desktop: it now collapses/expands the right AI-settings column, lets the chat use the full width and remembers the desktop choice locally. On smaller screens it continues to open/close the settings panel.
-- Preserves Coach weather and evidence during context compaction so large training histories cannot silently drop the short-range forecast.
-- No database migration is required.
-
-## v0.1.0-alpha.41 — Adaptive Coach foundation
-
-- Adds **Pengu Readiness v1**, a deterministic 0–100 training-readiness estimate built from available sleep, HRV, resting HR, stress, Body Battery/provider readiness, the daily check-in and recent workout feedback. Missing data is ignored; sparse data returns no false-precision score.
-- Shows every readiness factor with direction/impact and a data-confidence indicator. The score is explicitly a training estimate, not a medical assessment.
-- Extends Coach Memory v1 with dedicated training preferences and explicit avoidances while keeping all persistent memories user-owned, editable and deletable.
-- Extends activity feedback with optional post-workout discomfort notes in addition to perceived difficulty, RPE and free text.
-- Adds adaptive plan detection for recently missed sessions and today's recovery state. Yellow readiness proposes a reduced version, red readiness can propose an easy alternative, and discomfort proposes postponement.
-- Adds a reviewed **reduce** adaptation that keeps the original sport, lowers duration/volume and strips intensity targets for endurance/cardio work; strength volume is reduced by sets.
-- Adaptive changes remain preview-first and require explicit confirmation. Existing Garmin-export guards and calendar revision checks remain in force.
-- Supplies the deterministic readiness result to Coach/training-plan personal context when recovery context is enabled, so the LLM receives the same transparent state used by the UI.
-- No database migration is required; existing JSON-backed coach profile and activity-feedback records remain compatible.
-- Restores the Alpha.39 daily-briefing precedence: any explicit caution reason such as no available training time keeps the briefing in `easy` mode even when readiness has insufficient data for a yellow/red score.
-
-## v0.1.0-alpha.40 — Theme polish & weather-aware planning
-
-- Applies the cached per-user theme in the document head before first paint, removing the brief standard-theme flash when navigating between pages; theme changes are cached immediately and still persisted server-side.
-- Reworks dashboard/health metric colors to derive soft surfaces from the active theme, fixes the low-contrast Steps card in Nordic Night and harmonizes remaining light surfaces in dark themes.
-- Adds Alpine, Arctic, Espresso, Ember and Mono themes alongside the existing appearance presets.
-- Adds an optional Open-Meteo connection with location search, forecast preview and no required API key for the intended private/non-commercial setup. Only coordinates are sent to the weather provider; health and training data stay in PenguCoach.
-- Adds an explicit Monday plan-start date and optional weather context to AI training planning. Available forecast dates can influence outdoor session placement/intensity; PenguCoach never invents weather for dates outside the supplied forecast and continues without weather when the service is unavailable.
-- Carries the plan start into the generated plan/calendar metadata so weather dates, plan weeks and Garmin calendar mapping stay aligned.
+- Added recurring **income** alongside expenses using a backwards-compatible `entry_type` field. Existing entries migrate automatically as expenses.
+- Fixed overview selection so cancelled-but-still-running contracts remain in current totals until their effective contract end; only paused/ended entries are excluded.
+- Reworked the overview into expense, income and monthly-delta metrics.
+- Added an income-vs-expense 12-month chart with an explicit delta line.
+- Added separate category breakdowns for expenses and income.
+- Added expense/income grouping to the interactive dashboard selector.
+- Added type filtering and a type column to the Income & Expenses list.
+- Annual/quarterly entries are normalized into monthly equivalents in the recurring cash-flow chart, so yearly subscriptions remain visible every month.
+- AI analysis now receives only the current user's selected entries, including explicit income/expense types, separate totals and delta.
+- Reworked the AI system prompt for concrete, structured, decision-ready Markdown output without invented market prices.
+- Added richer AI result rendering with headings and bullet lists.
+- Removed the explanatory user-permission text below the AI analysis button.
 
 
-## v0.1.0-alpha.39 — Personal fitness companion
+## 0.1.9
 
-- Adds a user-owned profile, explicit editable memories, restored chat history and bounded extractive recaps.
-- Adds daily check-ins, transparent daily briefing, weekly comparisons, goals/milestones and per-activity feedback.
-- Persists calendars across devices; compares planned sessions to actual activities conservatively; previews and applies adjustments with revision checks and Garmin export guards.
-- Lets users review and save individual sessions from coach answers. Adds context presets and duplicate-activity review.
-- Gives Today and Coach a softer fitness-focused layout; fixes stretched first-message bubbles, mobile illustration clipping and narrow response-profile controls.
-- Sends `think: false` for Ollama chats, rejects blank/incomplete streams, prioritizes explicit completion reasons over token counts, and budgets instruction text and personal context.
-- Adds migration `0011_coach_companion`; retains existing imported data and keeps Withings retired.
+- Added per-user German/English language packs with a user-level language switch.
+- Added application version display below the signed-in user in the sidebar.
+- Added personal JSON export/import for expenses, price history, hidden accounts/categories, reminders, theme, language and saved AI-analysis prompt.
+- Added administrator full JSON export/import for all users, expenses, catalogs, settings and AI profiles; AI keys are exported in restorable form and the file must be treated as sensitive.
+- Added expense cloning from the Costs & Contracts table.
+- Removed example placeholders from the new-expense form.
+- Renamed notes to “Notes (for AI analysis)” / “Notizen (für KI-Analyse)” and explicitly instructs the AI to use this context when evaluating a cost.
+- Fixed dashboard selection so every active expense belonging to the current user is selected after a full refresh.
+- AI Analysis now has its own per-analysis cost selector, defaults to all active expenses for the current user and remains strictly user-isolated server-side.
+- Added persistent per-user AI prompt storage so it is included in user exports.
+- Updated Proxmox management examples to use absolute helper paths under `/usr/local/sbin`.
 
+## 0.1.8
 
-## 0.1.0-alpha.38 - 2026-09-27
+### Fixed
+- Fixed Proxmox/LXC backups failing with `Permission denied` when the application image runs as the unprivileged `pengucost` user.
+- Backup and restore utility containers now run as root only for filesystem/archive operations; the PenguCost application remains unprivileged.
+- Proxmox helper scripts invoke repository scripts through `bash`, so updates no longer depend on Git archive executable bits.
+- Installer output now uses absolute `/usr/local/sbin/pengucost-*` helper paths for reliable `pct exec` usage.
 
-- Unifies body snapshots and per-metric source handling across Today, Health and all AI contexts. Actual measurement time wins, including within one day; older imports and missing values cannot erase newer readings. BMI uses the effective weight and height. Undated profile values are explicit fallbacks.
-- Refreshes SparkyFitness corrections for health, body, sleep and HRV. Adds water-intake range reads with a bounded 28-day daily fallback for older servers; missing permission/endpoint does not block other imports.
-- Preserves source-specific activity metrics across Garmin refreshes and promotes an unambiguous SparkyFitness session when Garmin arrives later, keeping its local ID and stored analyses.
-- Fixes Today dropping sleep/HRV without a DailyHealth row, provider-default labels, historical activity analysis using future body values, invalid negative/non-finite provider readings, zero-value handling, Body Battery charge/delta interpretation and weekly HRV being reported as overnight HRV.
-- Adds a shared collapsible seven-category AI data selector with source/coverage preview: activities, sleep/HRV, recovery, daily movement, hydration, body metrics and zones. Both synchronous API and background worker honor the same selection.
-- Coach defaults to seven days, recognizes explicit 3/7/14/21/28-day requests and keeps context for short follow-up questions. A concise advice instruction applies even with saved custom task prompts.
-- Retires Withings routes, OAuth, credentials model, tasks, scheduler and navigation. Migration 0010 removes connection credentials; imported measurements remain labeled as historical Withings data. Inert compatibility files allow web-upload updates without manual file deletion.
-- Adds Warm Sand, Rose, Nordic Night and Aurora (nine themes total), harmonizes surfaces, adds mobile settings navigation and touch-based calendar rescheduling, hides irrelevant Garmin export controls when disconnected. Calendar draft edits remain browser-local.
-- Updates Next.js within the 15.5 line to 15.5.26 and includes a dependency lockfile.
-- Adds behavior tests covering isolated/mixed sources, measurement recency, AI category exclusion, hydration compatibility, metric quality and connector retirement.
+## 0.1.7
 
-## 0.1.0-alpha.37 - 2026-09-27
+- Enforced strict per-user ownership for expenses, dashboards, reminders and AI payloads. Administrators no longer see other users' cost data.
+- Global accounts and categories are managed by administrators and shared as templates with all users. Non-admin deletion now hides a template only for that user, with a restore option.
+- Added admin-managed AI profiles with provider presets for Ollama, OpenAI, Grok/xAI, Google Gemini, IONOS AI Model Hub, Claude/Anthropic and custom OpenAI-compatible endpoints.
+- Non-admin users can only select enabled AI profiles for analyses and cannot view or modify base URLs, API keys or model configuration.
+- Added native Anthropic Messages API support for Claude profiles while retaining OpenAI-compatible chat-completions for the other providers.
+- Made cancellation reminder lead time user-specific.
+- Fixed dashboard selection so all active expenses are selected initially and newly created expenses are automatically added without re-selecting previously excluded items.
+- Added safe migration of orphaned legacy expenses to the first administrator and migration of the former single AI configuration into a profile.
 
-- Fixes a Coach context-compaction regression that could discard the top-level `recent_activities`, health, sleep and HRV arrays whenever a 7/28-day context exceeded the Coach input budget. The model could then incorrectly claim there were no activities or recovery data even though PenguCoach had them.
-- Coach compaction now preserves 7/28-day training summaries, a compact data inventory, recent activities, the newest health/sleep/HRV rows, body profile and training zones. Chronological recovery arrays keep the newest values instead of the oldest values when shortened.
-- Adds an explicit Coach data inventory so the prompt can verify activity/health/sleep/HRV availability before reporting data as missing.
-- Fixes hidden conversation reuse: reloading the Coach no longer silently restores an old conversation ID while showing an empty “New conversation” screen. A visible **New** action now starts a genuinely fresh conversation.
-- Coach answer metadata now shows the number of activity, health, sleep and HRV records that were actually supplied, making context problems immediately visible.
-- Updates the source notice for direct Withings health/body data.
+## 0.1.6
 
-## 0.1.0-alpha.36 - 2026-09-23
+### Fixed
+- Added `frontend/src/vite-env.d.ts` with Vite/CSS declarations so `tsc -b` can resolve the global stylesheet side-effect import during Docker builds.
+- Updated project version references and installer tag example to 0.1.6.
 
-- Adds **Withings** as a first-class read-only connection using the official OAuth2/Public API flow. Client secret plus access/refresh tokens are encrypted at rest, OAuth state is validated and expiring, and rotated refresh tokens replace the previous token after refresh.
-- Imports Withings body/scale measurements (weight, height, body fat, muscle, bone and hydration/body-water where available), daily activity (steps/distance/calories) and sleep summaries. Blood pressure, pulse, SpO2 and other returned measure groups are retained in raw source records for future dedicated health cards without inventing unsupported dashboard values.
-- Adds manual Withings history sync plus configurable automatic sync from 15 minutes to 24 hours. Incremental body sync uses Withings `lastupdate`; recurring daily-activity/sleep refresh is intentionally limited to today + yesterday.
-- Adds deterministic source precedence for overlapping body metrics: the newest measurement date wins; on the same date the order is **Withings > Garmin > SparkyFitness > Manual**. Garmin daily/body sync also preserves direct Withings-owned fields.
-- Adds the Withings settings page, sidebar connection entry, test/sync controls, sync-domain toggles, local-data deletion and disconnect. Local deletion leaves the remote Withings account untouched.
-- Withings workout/activity import is deliberately deferred in this first version so Garmin/SparkyFitness remain the workout sources and duplicate sessions are not introduced.
-- Adds migration `0009_withings_connection` and scheduler/Celery support for automatic Withings synchronization.
+## 0.1.5
 
-## 0.1.0-alpha.35 - 2026-09-23
+### Fixed
+- Replaced the ambiguous ASCII art with a clearly readable `PENGUCOST` installer banner.
+- Fixed Proxmox VE 9 / Debian 13 installs where `docker.io` was installed with `--no-install-recommends`, leaving the separately packaged Docker CLI unavailable and causing `docker: command not found` during the image build.
+- Docker installation now keeps package recommendations enabled for cross-version Debian compatibility and explicitly verifies the Docker CLI before continuing.
+- Added a Docker Compose availability check before the PenguCost source is copied/built.
 
-- README refresh: adds a new wide PenguCoach hero banner at the top of the repository front page, combining Health, AI Coach and Training Planning/Calendar views in the same visual style as the PenguLab marketing header.
-- No backend or frontend runtime behavior changes; this is a repository presentation/documentation update only.
-
-## 0.1.0-alpha.34 - 2026-09-23
-
-- Fixes a stale Alpha.26 source-regression test that still expected the pre-Alpha.33 SparkyFitness full-history implementation detail. The backend behavior is unchanged: manual sync honors the configured history range (including All data), while automatic sync uses the Alpha.33 two-day incremental window.
-- Keeps the Alpha.33 SparkyFitness telemetry, timestamp and automatic-sync behavior unchanged; this release is a CI/test maintenance release only.
-
-## 0.1.0-alpha.33 - 2026-09-23
-
-- SparkyFitness activity details now surface wearable telemetry already stored by Sparky: maximum speed, ascent/descent and minimum/maximum elevation are normalized from nested `telemetry` / provider-detail payloads. Garmin remains authoritative when the same activity is merged from both sources.
-- Sparky-only activity detail now derives average pace from the available average speed when no FIT time series exists, so walking/running pace is no longer blank merely because the source is Apple Health/SparkyFitness.
-- Provider-detail enrichment considers descent, min/max elevation and max speed part of the required activity-quality set, so compact history rows are enriched when those values are still missing.
-- HealthKit `raw_data.startTime` now outranks Sparky relational midnight placeholders derived from `entry_date`, fixing the misleading `02:00` display when the original Apple workout timestamp is available.
-- Adds configurable SparkyFitness automatic sync (15 min to 24 h). Scheduled syncs are intentionally incremental and read only today + yesterday; manual “Sync now” continues to use the selected history range. The settings page shows the next automatic sync time.
-- Adds migration `0008_sparkyfitness_auto_sync` for the automatic-sync toggle, interval and next-run timestamp.
-
-## 0.1.0-alpha.32 - 2026-09-23
-
-- SparkyFitness activity quality: HealthKit **Active Calories** / Move-ring rows are treated as daily health instead of workouts, can fill the day's `active_calories` value without overwriting Garmin, and no longer appear in the activity diary. A normal Sparky activity sync also removes legacy synthetic `Active Calories` activities created by earlier alphas.
-- SparkyFitness timestamps now prefer the actual recording fields (`startTime`, `entry_timestamp`, `logged_at`, etc.) and HealthKit `raw_data` over Sparky `created_at`, fixing historical activities that appeared on their import date. `SourceRecord.observed_at` is populated where an exact measurement time is available.
-- HealthKit v3-style `raw_data`/`telemetry` is parsed, including duration objects, `totalEnergyBurned`, heart-rate, cadence, power and elevation summary fields.
-- Activity enrichment now requests provider details whenever useful workout metrics such as HR/elevation are still missing, not only when distance/duration/calories are missing.
-- Body/check-in imports retain exact measurement timestamps when Sparky supplies them and repair matching legacy midnight body rows instead of duplicating them.
-- SparkyFitness connection settings gain **Delete all SparkyFitness data**, which removes local Sparky imports/provenance while preserving Garmin/manual data, the remote SparkyFitness server and the configured connection for a clean re-sync.
-
-## 0.1.0-alpha.31 - 2026-09-23
-
-- Health summary cards now show the arithmetic mean of the available measurements inside the selected period instead of repeating the latest non-null value. Missing days stay missing and are not counted as zero.
-- Health period choices are now **Today**, **Last 7 days**, **This week**, **This month**, **This year** and **All**. Calendar periods run from their natural start date through today.
-- Summary notes show how many days/nights were included in each average and retain Garmin/SparkyFitness provenance. Hydration keeps the latest available target in the selected period.
-- Current body/profile cards remain latest-known values independent of the chart period and are now labelled **Current** to make that behavior explicit.
-- The older Garmin strength regression test now checks version alignment dynamically instead of pinning one exact alpha version, preventing false CI failures on the next release bump.
-
-## 0.1.0-alpha.30 - 2026-09-22
-
-- Training calendar: sessions that have not yet been exported can be moved by drag & drop before Garmin export.
-- Dropping onto an occupied day swaps both sessions; exported Garmin sessions stay locked.
-- Calendar position changes are stored as export-only drafts alongside the existing duration/step edits and do not modify the AI source plan.
-- Garmin preview/export now validates the complete edited calendar before selecting the requested sessions and rejects duplicate day slots.
-
-
-## 0.1.0-alpha.29 - 2026-09-22
-
-- Reworks Garmin strength export around the bundled Garmin exercise catalogue instead of growing a fragile hard-coded alias list.
-- Validates every strength exercise before export and shows its concrete Garmin mapping in the plan calendar.
-- Adds a searchable Garmin exercise picker for unresolved strength movements; user choices are persisted and reused for equal future exercise names.
-- Unknown strength movements no longer fail the complete workout: until mapped, PenguCoach uses Garmin's real `Total Body` catalogue entry as a visible generic fallback and records the original names in the workout description.
-- Adds migration `0007_garmin_exercise_mappings` for per-user strength mapping persistence.
-- Keeps manual Garmin workout edits and prior failed strength sessions retry-safe.
-- Makes the older version regression test future-proof so later alpha releases do not fail merely because the version advanced.
-
-## 0.1.0-alpha.28 - 2026-09-22
-
-- SparkyFitness activity sync now enriches compact history rows from `/exercise-entries/{id}` before materializing them, matching SparkyFitness' own preference for relational activity stats. HealthKit/Apple Health sessions can therefore carry their stored distance, duration, calories, heart rate, cadence, speed and elevation into PenguCoach instead of showing zero/empty summary cards.
-- Provider activity details are used as a bounded fallback only when core relational distance/duration/calorie data are still missing, avoiding two extra API requests for every historical session.
-- Existing Sparky-only activities are updated on the next sync, so previously imported rows can be repaired without deleting/reimporting them.
-- Health adds manual body/profile entry for weight, height, body-fat %, body-water %, muscle mass and bone mass. BMI is derived deterministically when weight and height are available.
-- Manual body metrics are source-labelled `Manual` and remain the current fallback per metric until a newer Garmin or SparkyFitness measurement for that metric arrives; AI Coach/training context automatically receives the same latest-value semantics.
-- Current body/profile cards no longer disappear merely because their latest measurement is older than the Health page's selected chart period; charts still respect the selected period.
-
-## 0.1.0-alpha.27 - 2026-09-22
-
-- Fix activity journal CI regression while preserving Alpha.26 source-aware activity search and pagination.
-- Restore the explicit full-text search expression for `Activity.raw`, keeping legacy/imported activity metadata searchable.
-
-## 0.1.0-alpha.26 - 2026-09-22
-
-- SparkyFitness training sessions are now materialized into the normal PenguCoach activity diary instead of remaining AI-only raw records.
-- Activity rows expose provenance badges and source filters for Garmin, SparkyFitness and manual imports; likely Garmin/Sparky duplicates are merged conservatively by sport, start time, duration and distance instead of being shown twice.
-- Sparky-only activities use the available SparkyFitness session summary without pretending an original FIT file exists; Garmin/FIT re-analysis is disabled for those rows.
-- Health summary cards now use the latest non-null value in the selected period rather than blindly reading the final date row, fixing cases where the sleep graph had data while the top sleep card showed an em dash.
-- Health cards display Garmin / SparkyFitness / combined provenance for the value they show.
-- SparkyFitness sync supports 2, 5 and 10 year windows plus **All data**. Long date-range endpoints are chunked into one-year windows while activity history keeps paginating until the requested range is complete.
-- Sleep sync prefers SparkyFitness `/sleep/details` and falls back to `/sleep`; parsing accepts additional v1.7.x camelCase/duration variants.
-- SparkyFitness settings show oldest/newest locally stored dates for training sessions, sleep and daily metrics and report newly materialized vs Garmin-merged activities after a sync.
-- Today and Health now expose daily steps plus body composition (weight, height, BMI, body-fat %, body-water %, muscle mass and bone mass) when Garmin/SparkyFitness provides the values.
-- Health provenance is tracked per metric, so one day can correctly show steps from SparkyFitness while resting HR or Body Battery remains Garmin-sourced.
-- Coach, activity analysis and training planning receive the latest available body profile/body-composition context, including its per-metric source; steps retain their own source as well.
-- Garmin account-profile refresh supplies height when available; SparkyFitness profile/check-in parsing accepts common v1.7.x body/scale field names and backfills provenance for older Sparky-imported values.
-- Adds Alembic migration `0006_body_profile_metrics` for optional height and bone-mass storage. Sparky-only activities continue to use stable negative synthetic IDs.
-
-## 0.1.0-alpha.25
-
-- Repair release for incomplete GitHub web uploads of alpha.24.
-- Re-ships the complete SparkyFitness read-only integration, frontend route, worker task, API router and Alembic migration.
-- Adds repository-surface regression checks for the SparkyFitness frontend and package paths.
-- No schema changes beyond the existing alpha.24 migration `0005_sparkyfitness_connection.py`.
-
-## 0.1.0-alpha.24 - 2026-09-22
-
-- Added **SparkyFitness v1.7.x** as a first-class read-only connection next to Garmin.
-- SparkyFitness base URL and API key are configured per PenguCoach user; the key is encrypted at rest and never returned by the API.
-- Added capability probing for workouts, sleep, check-ins, custom metrics and dashboard reads using SparkyFitness API-key authentication.
-- Added manual SparkyFitness sync for a configurable 7-366 day window. Existing Garmin health/sleep values are preserved; SparkyFitness fills missing general values and keeps raw provenance.
-- Apple Health / other SparkyFitness workout sessions are stored as a separate read-only source and made available to Coach and training-plan context with duplicate-source warnings.
-- Added HRV and resting-heart-rate discovery from SparkyFitness custom measurement categories plus body/check-in import.
-- Added Alembic migration `0005_sparkyfitness_connection`.
-
-## 0.1.0-alpha.23 - 2026-09-22
-
-### Added
-- AI Studio can store optional input/output prices per model in EUR per 1 million tokens. Completed AI runs snapshot the active price and provider-reported token usage, so later price edits do not rewrite historical costs.
-- system-wide AI usage dashboard with Today / last 7 days / last 30 days / current year / all-time views, per-model and per-task token/cost totals, optional monthly budget progress, average tokens/request and measured output throughput for newly timed runs.
-- response profiles **Very low / Low / Standard / High** for Coach, activity analysis and training planning. Standard preserves the previous behavior; lower profiles shorten prose/output budgets, while training plans keep all requested sessions and structured Garmin steps.
-- pre-run cost estimates on Coach, Training and activity AI analysis when model pricing is configured; actual cost and quality profile are stored/shown after completion.
-- dedicated Garmin **activities-only catalogue completion** job that paginates the complete activity catalogue, shows the current local activity count and latest scan metadata, queues missing FIT work, and avoids re-fetching years of wellness/day data.
+## 0.1.4
 
 ### Changed
-- training-plan segmented generation accounts for every completed attempt/retry in the stored usage/cost total rather than only the final successful segment.
-- Coach requests are persisted as AI runs as well, allowing their token usage to appear in AI Studio statistics from Alpha.23 onward.
-- AI Studio usage is aggregated across the PenguCoach instance for administrators, matching shared provider/API-key costs.
-
-### Notes
-- historical runs without a saved price snapshot remain token-counted but intentionally unpriced; hard-aborted provider requests may not expose authoritative usage and can therefore differ from the provider invoice.
-
-## 0.1.0-alpha.22 - 2026-09-22
-
-### Fixed
-- fixes the Next.js/TypeScript production build failure in `TrainingPlanCalendar.tsx` where the edited session clone was inferred as `{ steps: AnyObj[] }` and therefore rejected assignment to `duration_min`; the clone is now explicitly typed as the generic session object before step-derived duration is applied.
-- adds a regression assertion so the pre-Garmin step editor keeps the explicit object type required by strict TypeScript builds.
-
-## 0.1.0-alpha.21 - 2026-09-22
-
-- Activities now use server-side pagination/search across the complete history with 25/50/100 rows per page, total/match counts and page navigation.
-- Training calendar sessions can be edited before Garmin export: total duration, notes, individual timed/distance steps, targets/zones, repeat counts and strength exercise parameters.
-- Workout steps/exercises can be removed before export; edits are stored locally per plan and never mutate the original AI-generated plan.
-- Garmin preview/export validates and applies the edited session payload while keeping session id, sport and calendar placement immutable.
-
-## 0.1.0-alpha.20 - 2026-09-22
-
-### Garmin workout export
-
-- Strength export now resolves common localized/German AI exercise labels to Garmin's canonical exercise catalogue (for example Kniebeugen→Squat, Liegestütz→Push-up, Ausfallschritte→Lunge, Plank/Planke, Kreuzheben→Deadlift, Rudern→Row, Beinpressen→Leg Press, Bankdrücken→Bench Press, Wadenheben→Calf Raise). Existing saved alpha.19 plans can therefore be retried without regeneration.
-- Human annotations and alternatives such as `Kreuzheben (oder ähnliches)` or `Bankdrücken oder Liegestütz` are sanitized before Garmin exercise resolution; exact catalogue names still take precedence and unsafe fuzzy matching is deliberately avoided.
-- Garmin sport types Mobility, Yoga, Pilates, HIIT and Cardio are now exported through the generic Garmin workout endpoint using a timed main step when the plan has no finer-grained steps.
-- Calendar export errors are rendered more readably and the calendar gains icons for mobility/yoga/Pilates/HIIT/cardio.
-- Future AI plans are instructed to use simple canonical Garmin exercise names and to keep timed step totals consistent with the declared session duration.
-
-## 0.1.0-alpha.19 - 2026-09-22
-
-### Changed
-- Ollama training-plan generation now disables model thinking for the structured JSON phase and uses Ollama's provider-enforced JSON schema output, preserving the output budget for the actual Garmin-ready plan instead of reasoning tokens
-- segmented plans use a larger compact per-segment allowance and retry an incomplete/invalid segment once with the full user-selected **Max. Antwort** budget
-- the Training UI clarifies that **Max. Antwort** is a per-AI-call / per-plan-segment ceiling
-
-### Fixed
-- fixes the Training `8000` default being rejected by browser number-input validation (`step=128` made only values such as 7936/8064 valid); arbitrary integer token budgets are accepted again
-- fixes `TRAINING_PLAN_SEGMENT_TRUNCATED:1-2` caused by the former 2,290-token compact allowance for an eight-session segment and a retry that still stopped below the configured 8,000-token budget
-- validates/parses a segment before treating an exact token-cap finish as failure, so a complete JSON plan is accepted even if the provider reports a length stop at the boundary
-- retries structurally invalid compact segments as well as explicitly truncated ones and shows a readable Training error instead of a raw RuntimeError if both attempts fail
-
-## 0.1.0-alpha.18 - 2026-09-22
-
-### Added
-- first-class AI Studio presets for IONOS AI Model Hub, Google Gemini and xAI/Grok, while retaining generic OpenAI-compatible endpoints
-- hard-stop cancellation for stuck Garmin historical-import jobs; the exact Celery task is tracked server-side/revoked, with Celery inspection as a fallback for pre-upgrade jobs and stale Redis account locks are cleared safely for a fresh resume
-- per-Garmin-domain request timeout protection so one unresponsive upstream call cannot leave a multi-year history import frozen indefinitely
-- automatic segmented generation for large structured training plans; week chunks are validated individually and merged into one Garmin-ready plan
-
-### Changed
-- task-level AI output/context budgets are defaults rather than hidden UI ceilings; explicit task values may exceed the former 8,000-token training-plan default up to the configured model/provider/context limits
-- Training exposes the selected model's configured context/output limits instead of clamping Max. Antwort to the task default
-- large plans with more than 12 sessions show chunk progress (part x/y) while generating and retry only a truncated segment with a larger compact budget
-- Garmin History `Cancel` is now an immediate hard stop; `Pause` remains cooperative and preserves resume-safe markers
-
-### Fixed
-- fixes historical imports remaining visually/runtimely stuck after a worker restart or an upstream Garmin call that never returns
-- fixes the old cancellation flow remaining forever on “wird abgebrochen” when the worker could not reach its next cooperative cancellation checkpoint
-- reduces 8-week / multi-session structured plans exhausting a single 8,000-token JSON response even when only a small recent context window was selected
-
-## 0.1.0-alpha.17 - 2026-09-22
-
-### Added
-- selectable training-plan context windows of 3, 7, 14, 21 or 28 days, defaulting to 7 days
-- per-plan context-category selection for Training/FIT analytics, Garmin zones, sleep/HRV, recovery/stress signals and optional steps/hydration
-- live approximate output-token progress for streamed Ollama Coach, activity-analysis and training-plan jobs; final Ollama token counts remain authoritative
-- cancellation controls for Coach requests, per-activity AI analyses and training-plan generation, with cooperative worker cancellation and no persisted AI result after cancellation
-- Coach cancellation restores the submitted text so it can be edited and resent
-
-### Changed
-- Ollama `/api/chat` generation now uses streaming instead of waiting for one complete response; the local read timeout is a between-chunk/first-token safeguard rather than a five-minute total generation ceiling
-- training-plan context contains only the selected time window instead of always combining hidden 7-day and 28-day context
-- training-plan activity context now includes available PenguCoach FIT analytics alongside Garmin activity facts
-- plan metadata stores the selected context window and context categories for later review
-- historical release/change-list documents were removed from `docs/`; release history is maintained in this root changelog, while current feature documentation keeps stable filenames
-
-### Fixed
-- fixes long local Ollama plans failing after roughly ten minutes when the former 300-second non-streaming HTTP wait timed out and the automatic retry hit the same timeout again
-- failed AI background jobs now expose an exception type/details instead of collapsing empty timeout messages to a generic `AI job failed` where possible
-
-## 0.1.0-alpha.16 - 2026-09-22
-
-### Added
-- training-plan management for current and legacy plans, including local deletion even when a plan predates the structured Garmin-calendar format
-- a three-way delete flow for Garmin-exported plans: remove from Garmin + PenguCoach, remove only from PenguCoach, or cancel
-- Garmin cleanup jobs that unschedule PenguCoach-created calendar entries before deleting their Garmin workout templates; failed cleanup keeps the local ledger so it can be retried
-- deletion of persisted per-activity AI analyses from Activity Detail
-- pause and cancel controls for long Garmin historical imports; completed data is preserved and restart remains resume-safe
-- an optimized historical-import mode (default) that keeps full detail for the latest 90 days and uses a smaller core endpoint set for older days
-
-### Changed
-- historical imports created by alpha.15 remain reusable: existing `history_day_complete` markers are recognized and skipped by the optimized importer
-- old-day optimized imports retain daily summary, sleep, HRV, stress, Body Battery, max metrics/VO2 and body data while avoiding several expensive detail endpoints
-- the training-plan LLM receives its exact effective hard output-token budget, estimated session count and a per-session compactness target before generation
-- structured-plan instructions now prioritize completing every requested week/session and closing valid JSON before spending tokens on prose or repeated defaults
-- transient HTTP interruptions during training-plan generation are retried once automatically
-- the sidebar application version is left-aligned with the account/logout controls
-- training-plan history can display/manage up to 30 stored plans; activity-analysis history can display/manage up to 20 stored analyses
-
-### Fixed
-- prevents compact historical imports from clearing richer full-detail fields when those endpoints were intentionally omitted
-- makes pause/cancel checks survive temporary Redis-control read failures without aborting the Garmin import
-
-## 0.1.0-alpha.15 - 2026-09-22
-
-### Fixed
-- fixes the Next.js production-build type error in `TrainingPlanCalendar.tsx` by using the shared `Lang` union type instead of a generic string
-- keeps the required `0004_garmin_workout_export.py` Alembic migration in the full release and documents it as a required upload for upgrades from alpha.13
-- updates stale application-version fallbacks so API/version reporting remains consistent with the checked-out release
-
-### Added
-- shows the authoritative running PenguCoach version in the dashboard sidebar directly below Sign out / Abmelden
-- exposes `app_version` from `/auth/me`, sourced from the backend's resolved release version instead of duplicating a frontend-only constant
-
-## 0.1.0-alpha.14 - 2026-09-21
-
-Training calendar / Garmin workout export release:
-
-- stores newly generated AI training plans as a validated structured plan document in addition to deterministic human-readable Markdown
-- adds a week-by-week calendar view with expandable session details, start-date mapping, required/optional selection and supported/unsupported export states
-- adds explicit **Training & Calendar** Garmin settings; workout export is disabled by default while normal Garmin health/activity/FIT synchronization remains read-only
-- adds a separate narrow `GarminWorkoutGateway` instead of relaxing the existing read-only gateway
-- exports supported running, cycling, swimming, walking, hiking and strength sessions as individual typed Garmin workouts and schedules them on the selected dates
-- supports Garmin heart-rate and power-zone targets in structured endurance workout steps and repeat blocks
-- uses the Garmin exercise catalogue for structured strength sessions
-- adds a per-user export ledger that prevents duplicate exports of the same plan session on the same date and records safe per-session errors
-- cleans up an uploaded workout template if calendar scheduling fails, avoiding known orphan templates from partial exports
-- runs multi-session Garmin exports in the background with reload-safe job polling and progress
-- preserves older prose-only training plans; they remain readable but clearly show that calendar export requires a newly generated structured plan
-- adds a final browser confirmation before any selected workouts are written to Garmin
-- adds regression coverage for structured-plan validation/rendering/date mapping and for the default-off/narrow-write design
-
-## 0.1.0-alpha.13 - 2026-09-21
-
-### Added
-- Garmin heart-rate and power-zone synchronization using the read-only Garmin gateway.
-- Versioned local storage for Garmin zone profiles and a `/garmin/zones` status endpoint.
-- Garmin training-zone status cards in AI Coach and Training Planning.
-- Sport-aware Garmin zone context for Coach Chat, activity analysis and training-plan generation.
-- Local FIT time-in-zone calculation using Garmin-provided heart-rate/power boundaries.
-
-### Changed
-- Deep activity-analysis prompts now use Garmin zones and PenguCoach/FIT time-in-zone when available.
-- Training-plan prompts can prescribe intensities using the user's configured Garmin zones instead of estimated zones.
-- Garmin zone refresh runs with normal synchronization and at the start of historical imports without blocking the main sync if the optional zone endpoint is temporarily unavailable.
-
-### Fixed
-- iOS/iPadOS number validation for AI maximum-response fields. Values such as 2,500, 3,500 and 8,000 tokens are now accepted because response-token inputs use unit steps instead of an incompatible 100/250 step offset from the 128-token minimum.
-
-## 0.1.0-alpha.12 - 2026-09-21
-
-Large Garmin history / resumable import release:
-
-- replaces day-by-day activity discovery with true offset pagination over Garmin's activity catalogue, continuing until Garmin returns no further page instead of trusting a possibly capped activity count
-- imports the complete activity catalogue **before** the slower daily wellness backfill, so hundreds or thousands of activities appear without waiting for years of sleep/HRV/stress requests
-- supports date-bounded history imports and **All available data** with a 25-year safety horizon while deriving the wellness start from the oldest activity actually discovered
-- batch-upserts each Garmin activity page with one database lookup, eliminating the historical N+1 query pattern
-- persists per-day historical completion markers for older wellness days, making interrupted/rate-limited imports safe to restart without re-requesting every completed day
-- automatically retries Garmin rate limits with bounded exponential backoff and records a resume-safe rate-limited result if Garmin continues throttling
-- uses one per-account Garmin lock so the normal scheduler cannot compete with a long historical import
-- exposes live Celery history progress in the Garmin page: activity pages/count, wellness day progress, skipped completed days and FIT queue progress; progress survives a browser reload
-- queues even very large historical FIT backlogs directly in Redis while FIT workers consume them at a controlled 30/min rate; per-account/per-activity locks, Garmin rate-limit retries and an already-parsed check prevent bursts and duplicate work
-- raises Coach/Activity/Training request ceilings to match AI Studio's configurable 65,536 output / 1,048,576 context settings
-- protects the current activity during AI context compression and automatically reduces only the effective output budget when a too-small context window would otherwise squeeze the activity data out
-- adds a clear Cloud-AI privacy banner in AI Studio with an explicit enable action, and a useful Privacy link instead of an empty model selector when cloud models are configured but not permitted
-- warns directly while configuring any external/Cloud AI provider that health and training data remains blocked until explicit privacy consent is enabled, with one-click enable and Privacy actions
-- makes the Health period selector authoritative for every chart family: VO₂ max running/cycling now follows the same 7/30/90 day, 1 year, 5 year or All data window as HRV, resting HR, sleep and stress; coverage counts follow the same range
-
-## 0.1.0-alpha.11 - 2026-09-21
-
-Manual activity import / non-Garmin activity release:
-
-- adds a prominent **Training importieren / Import activity** action to the Activities page
-- imports FIT, GPX, TCX and ZIP files containing FIT data without requiring a Garmin account
-- stores uploaded activity files locally, creates Parquet time series and runs the existing deterministic activity analytics
-- automatically detects activity name/sport where possible, with optional name and sport overrides in the upload dialog
-- rejects duplicate imports using the canonical activity-file SHA-256 and limits uploads to 50 MB
-- labels manual activities explicitly in the activity history and adapts source/AI wording so imported files are not presented as Garmin data
-- makes manually imported activities available to Coach, activity AI analysis and training-plan context together with Garmin activities
-- restores the sign-out button in the desktop sidebar and responsive top bar while preserving the newer default app icon/theme/avatar behavior
-- adds parser tests for GPX and TCX imports
-
-## 0.1.0-alpha.10
-
-- Fixed fresh Proxmox LXC installs: an empty database is now bootstrapped from the current reviewed schema and Alembic is stamped at head instead of replaying historical migrations against dynamic metadata.
-- Fresh-install recovery also works when an interrupted attempt left only a stale `alembic_version` table.
-- Added post-bootstrap schema verification for core tables and `activities.vo2max`.
-- Made the historical `0002_ai_runs` migration idempotent and added a clear baseline error to `0003_activity_vo2max`.
-- Switched early installer locale handling to Debian's built-in `C.UTF-8`, removing the noisy locale bootstrap warnings on minimal Debian 13 containers.
-- Added regression tests for the fresh database bootstrap path.
-
-## 0.1.0-alpha.9 - 2026-09-21
-
-Full-history Garmin / sport-specific VO2 release:
-
-- adds **Alle verfügbaren Daten / All available data** to Garmin history import instead of stopping at the previous 5-year UI choice
-- discovers the account-specific history start efficiently from Garmin's activity count + oldest activity page, then backfills daily/training/activity domains from that date
-- reuses one authenticated Garmin client during long history imports to reduce repeated SSO work and rate-limit pressure
-- keeps a conservative 25-year safety horizon, which still covers Garmin Connect's practical lifetime, and extends the long-history worker lock to 72 hours
-- adds a 10-year explicit history option alongside the automatic all-data scope
-- normalizes Garmin activity `vO2MaxValue` into an indexed activity field and backfills existing activities from their retained raw Garmin summary during migration
-- adds separate latest **VO2 max Running** and **VO2 max Cycling** values on the Today dashboard without changing the metric-card grid
-- adds a new full-width Health **VO2 max history** chart with distinct Running and Cycling series over all imported activity history
-- adds 5-year and **All data** range choices to the general Health trends page
-- exposes activity VO2 max to the activity API and AI training context as an official Garmin summary metric
-- adds `GET /health/vo2-history` for sport-specific long-term VO2 series
-
-## 0.1.0-alpha.8 - 2026-09-21
-
-UI polish / live Garmin sync / branding release:
-
-- adds a built-in PenguCoach SVG app icon as the default sidebar/login/setup brand mark instead of the plain `P` placeholder
-- registers the PenguCoach icon as the browser favicon
-- keeps per-user custom app-icon uploads as an override of the default sidebar branding
-- turns the Coach and Training Planning top area into one balanced full-width header frame and aligns the active-model panel with the heading/content geometry
-- makes manual Garmin synchronization follow the real Celery task until completion instead of only showing that enqueueing succeeded
-- keeps the Garmin Sync button disabled while the worker is actually running and resumes polling after a page reload through a stored task id
-- automatically refreshes Garmin last/next-sync timestamps when the job finishes and removes the running notice once complete
-- replaces the cramped Garmin automation grid with separate **Schedule** and **Activity data** panels and fixes the toggle text/layout overlap
-- renames the confusing AI Studio `routes set` KPI to **fixed models**, with an explanatory tooltip for automatic model selection
-- fixes provider action layout so Discover/Add/Delete controls stay compact and readable; destructive actions are explicitly labelled instead of using an unclear stretched `×`
-- keeps model Edit/Delete actions compact
-- re-verifies that the deployment updater performs backup + deterministic `origin/<channel>` alignment without an overwrite confirmation or local-source-change abort
-- adds `docs/UI_POLISH_ALPHA8.md`
-
-## 0.1.0-alpha.7 - 2026-09-21
-
-Personalization / Garmin simplicity / AI-provider management release:
-
-- adds per-user appearance themes: **Mint Light**, **Midnight Health**, **Ocean**, **Forest** and **Lavender**
-- adds local PNG/JPEG/WebP upload for a user profile picture and a custom PenguCoach sidebar app icon
-- stores uploaded appearance assets under `/var/lib/pengucoach/user-assets/<user-id>/`, so existing backups include them automatically
-- adds a local dashboard wellness/training SVG illustration with no external dependency
-- simplifies Garmin settings around one everyday **Synchronize** action; historical backfill is moved into a clearly separated expandable initial-setup/history section
-- keeps historical import available without presenting it as a second routine synchronization action
-- adds AI model **edit**, enable/disable and **delete** controls in AI Studio
-- adds deletion of complete AI providers and discovery of models from already-saved providers
-- updates Anthropic/Claude integration to use the current `GET /v1/models` API and imports model display name, maximum input context and maximum output tokens when available
-- keeps Anthropic Messages API on the documented `anthropic-version: 2023-06-01` header and intentionally omits `temperature` for Claude requests to remain compatible with newer Claude models that reject non-default sampling parameters
-- increases configurable task ceilings to 65,536 output tokens and 1,048,576 context tokens while keeping recommended presets
-- raises recommended defaults for deep Activity Analysis and Training Planning to 16K context / 8K output; Coach Chat remains 8K / 2.5K
-- persists provider-reported maximum output tokens on discovered models and clamps generated output to the provider capability when known
-- changes `pengucoach-update` to treat `/opt/pengucoach` as a deployment checkout: after backup it automatically replaces local source changes with `origin/<channel>` instead of aborting
-- preserves ignored runtime dependencies such as `.venv` and `node_modules` while removing untracked source/build leftovers
-- adds `docs/UI_PERSONALIZATION_ALPHA7.md`
-
-## 0.1.0-alpha.6 - 2026-09-21
-
-Bright Health UI / readability release:
-
-- adds four explicit Activity AI context scopes: **Nur dieses Training**, **Dieser Tag**, **3 Tage** and **7 Tage** (with English equivalents)
-- **Dieser Tag** includes available Garmin wellness/recovery values for the activity date, including hydration, sleep, HRV, resting HR, stress, Body Battery, Training Readiness and steps when present
-- fixes 3-/7-day recovery windows to be true inclusive calendar-day windows instead of loading one extra date
-- deep-analysis prompts now adapt to the selected context scope and no longer demand unavailable 3-/7-day sections
-- introduces a cohesive light health-and-training design system with mint/teal accents, softer borders, restrained shadows and improved typography
-- replaces the dense desktop top navigation with a persistent grouped sidebar and compact contextual header
-- adds a responsive five-destination mobile navigation dock for Today, Health, Activities, Training and AI Coach
-- redesigns the login experience into a clearer local-first health/product introduction and focused sign-in surface
-- rebuilds the Today dashboard with a calmer health hero, readiness/Body Battery focus panel, semantic metric cards, recent activity list and larger 14-day trend surface
-- rebuilds the Health page with a clearer period selector, consistent health metric cards, larger trend cards and explicit data-coverage summary
-- modernizes the Activities history with search, FIT-analysis counters, sport-aware badges, clearer distance/duration/HR hierarchy and responsive list rows
-- refreshes Activity Detail v2, Coach, AI Studio, forms, tables, chips and status elements without changing the underlying Garmin/FIT/AI data contracts
-- deliberately keeps the interface light even when the operating system requests dark mode to preserve the new bright health visual language
-- adds `docs/UI_REFRESH_ALPHA6.md` documenting the visual system and responsive behavior
-
-## 0.1.0-alpha.5 - 2026-09-21
-
-Modern AI Studio / long-running local-model release:
-
-- redesigns the AI administration into a focused **AI Studio** with task tabs for Coach Chat, Activity Analysis and Training Planning
-- adds separate German and English default prompts; the active UI language is sent with every AI job and selects the matching prompt automatically
-- adds a configurable **context window** per task (default 8192 tokens) and passes it to Ollama as `num_ctx`
-- separates context-window size from maximum response tokens (`num_predict` for Ollama)
-- raises sensible local-first defaults to 2500 response tokens for Coach Chat, 3500 for Activity Analysis and 4500 for Training Plans
-- visualizes input/output token budgets and offers 4K/8K/16K/32K context presets in AI Studio
-- records provider stop reasons and detects responses that hit the output-token ceiling
-- shows a clear **response truncated** warning instead of silently presenting incomplete analyses
-- moves Coach Chat, Activity Analysis and Training Plan generation to Celery **background jobs** using the already-consumed maintenance queue for seamless alpha.4 upgrades
-- AI jobs survive page reloads; the UI stores active task IDs and resumes polling automatically
-- avoids browser/proxy 504s for slow local models because long generation no longer depends on one open browser request
-- increases the default LLM HTTP timeout to 300 seconds and updates existing alpha.4 environments from the old 120-second default
-- adds 300-second Nginx API proxy timeouts for compatibility with synchronous API clients
-- Coach context can be Auto, none, 7 days or 28 days; Auto skips Garmin/FIT context for unrelated questions such as general IT topics
-- activity AI UI is simplified into a compact modern control panel with model, lookback, context window and response budget
-- activity analysis history remains selectable and now shows model, context, token usage and stop reason
-- training planning uses the same background-job and context-window controls
-- improves AI markdown rendering including `####` and deeper headings
-- new installs use a 300-second AI timeout; local providers also enforce a minimum 300-second client timeout so alpha.4 installations work immediately after update
-
-## 0.1.0-alpha.4 - 2026-09-21
-
-AI analysis and training-planning release:
-
-- adds an **AI Analysis** action directly on every activity detail page
-- shows the effective default model/provider and lets the user choose another eligible configured model per request
-- adds 0/3/7-day lookback selection for activity analysis; the 7-day context also includes a deterministic 3-day summary
-- ships a predefined deep-training-analysis prompt and keeps it editable per request
-- adds centrally configurable task prompts for Coach Chat, Activity Analysis and Training Planning
-- adds per-task **maximum response token** limits and a bounded input-context budget to control cloud cost
-- maps token limits to OpenAI/OpenAI-compatible `max_tokens`, Anthropic `max_tokens` and Ollama `num_predict`
-- reports provider token usage when the backend returns it
-- introduces persisted `ai_runs` so activity analyses and generated training plans survive page reloads
-- adds an AI training-plan builder for muscle gain, cardio/endurance, hybrid, cycling, 5K/10K, half marathon, marathon, strength, general fitness, mobility and custom goals
-- training-plan generation accepts experience, weeks, days/week, typical session duration, equipment, constraints and a custom prompt
-- training-plan context includes deterministic 7- and 28-day Garmin/FIT load summaries plus available recovery data
-- activity AI context clearly separates official Garmin totals from PenguCoach-calculated FIT analytics
-- activity detail now prefers Garmin summary values for ascent/descent, elevation range, HR, speed, power and cadence when Garmin provides them; local FIT calculations remain analytical fallbacks
-- exposes Garmin elevation gain/loss and minimum HR in the curated activity-extra layer when available
-- adds model/provider names to the AI admin model list and task-specific primary/fallback routing
-- fixes helper bootstrap/update reliability by invoking the backup helper via absolute path
-- installs `/usr/bin` helper symlinks so `pct exec <CTID> -- pengucoach-update|status|backup` works without depending on `/usr/local/bin` being in LXC attach PATH
-- adds a repository `.gitignore` for Python/Next.js build artifacts
-
-## 0.1.0-alpha.3 - 2026-09-21
-
-Activity Detail v2 / analytics preparation release:
-
-- adds an interactive multi-series FIT explorer with overlay and synchronized stacked modes
-- heart rate, speed, elevation, power, cadence, grade and temperature can be toggled independently
-- shared pointer/crosshair readout shows exact values at the selected point
-- selectable analysis range for whole activity, first half, second half or custom range
-- adds richer deterministic activity statistics: min/avg/max HR, avg/max speed, pace, power, normalized power, cadence, elevation gain/loss, min/max elevation and smoothed grade
-- adds kilometre splits for running/cycling and 100 m splits for swimming
-- split rows include time, pace, speed, HR, power, cadence, ascent/descent and grade when available
-- captures FIT lap, strength-set and swim-length messages on re-analysis and renders sport-specific tables
-- adds channel data-coverage indicators so missing sensors are visible instead of silently becoming zero
-- exposes only a curated numeric subset of Garmin activity extras to the web UI instead of the full raw payload
-- updater now synchronizes `PENGUCOACH_APP_VERSION` automatically from `pyproject.toml` and restores the previous version on rollback
-- fresh installs derive the runtime version from `pyproject.toml` rather than a hard-coded installer value
-- adds deterministic tests for activity detail statistics, splits and normalized series
-
-## 0.1.0-alpha.2 - 2026-09-21
-
-Hardening release based on the first real Proxmox/Garmin installation:
-
-- fixed Python package discovery/build metadata for setuptools
-- fixed Garmin ORIGINAL FIT download enum for `garminconnect==0.3.16`
-- removed the conflicting `apps/web/lib/i18n.ts`; the React provider now resolves from `i18n.tsx`
-- fixed the Admin Users page effect/refresh flow for the production Next.js build
-- explicitly registers Garmin, FIT and scheduler Celery tasks
-- uses SQLAlchemy `NullPool` to avoid asyncpg connections being reused across Celery `asyncio.run()` event loops
-- creates Debian 13 LXC containers with `nesting=1`, fixing Redis/systemd user-namespace startup failures
-- configures `en_US.UTF-8` before PostgreSQL installation and creates the PenguCoach database explicitly as UTF-8
-- adds `pengucoach-db-utf8` to safely migrate early SQL_ASCII installations while retaining both a dump and the old database
-- explicitly reloads Nginx after writing the site configuration before `/healthz` validation
-- installs helper commands early during setup and refreshes them on updates
-- `pengucoach-status` now reports the active database encoding
-
-## 0.1.0-alpha.1 - 2026-09-21
-
-Initial public architecture build:
-
-- multi-user auth and mandatory login safety gate
-- German/English UI
-- Garmin MFA and encrypted token persistence
-- strict read-only Garmin gateway
-- scheduled Garmin health/activity synchronization
-- original FIT archive, Parquet time series and first deterministic metrics
-- Health, Activities, Garmin settings, Coach and Admin AI screens
-- Ollama/OpenAI/Anthropic/OpenAI-compatible provider layer
-- cloud AI health-data opt-in
-- PostgreSQL/Redis/Celery/Alembic
-- Proxmox LXC installer, updater, backup and status commands
+- Reworked the Proxmox VE installer to use the guided PenguLab/PenguCoach-style setup flow.
+- Added Quick Setup and Advanced Setup before any LXC is created.
+- Advanced mode now configures VMID, hostname, CPU, RAM, swap, disk, rootfs/template storage, bridge, DHCP/static IPv4, VLAN, web port and source channel.
+- PenguCost source is downloaded and validated before LXC creation, preventing the previous release-bundle 404 from leaving a half-installed container.
+- Proxmox deployment now builds the selected source inside the LXC and therefore no longer depends on a GitHub release asset being present.
+- Failed installations now offer automatic cleanup of the incomplete LXC.
+- Added in-LXC helpers: `pengucost-status`, `pengucost-backup`, `pengucost-restore` and `pengucost-update`.
+- Source-based updates create a backup before building/restarting PenguCost.
+- Normal runtime remains offline-capable after installation; Internet is only required for installation, updates and optional external AI endpoints.
+
+## 0.1.3
+- Added persistent reminder actions: Done, Remind later, and Contract cancelled.
+- Added snooze presets for 1/3/7/14/30 days with deadline capping.
+- Added two-step confirmation before marking a contract as cancelled.
+- Contract cancellation now freezes the current effective term, disables auto-renewal, records the cancellation date, and keeps costs active until term end.
+- Added per-reminder event keys so completed reminders can return correctly for later renewal cycles.
+- Current dashboard/AI totals now exclude effectively expired non-renewing contracts.
+- Added automatic in-place migration from 0.1.2 for cancellation acknowledgement and reminder state storage.
+
+## 0.1.2
+- Added configurable colors for all cost categories.
+- Category colors are now used in the dashboard donut chart and category badges.
+- Added configurable cancellation reminder lead time in Settings.
+- Added notification bell with reminder count and a contract reminder center.
+- Added separate reminder states for cancellation deadlines, imminent automatic renewals, and already renewed contracts.
+- Improved cancellation notice input with common presets plus a custom-day option.
+- Added automatic in-place migration from 0.1.1 for the new category color field.
+
+## 0.1.1
+
+- Added effective-dated price history; changing a subscription price no longer rewrites historical periods
+- Added support for scheduled future price changes
+- Added minimum contract term in months and automatic contract-end calculation
+- Added configurable auto-renewal periods in months
+- Added effective upcoming contract/cancellation dates for renewed contracts
+- Updated annual payment forecast to use the price valid on each payment date
+- Added in-place SQLite migration from 0.1.0 and automatic seeding of existing prices into history
+
+## 0.1.0
+
+Initial PenguCost foundation:
+- Recurring expense and contract management
+- Monthly/yearly normalization
+- Contract and cancellation dates
+- Account and category assignment
+- Interactive dashboard filtering
+- Annual payment forecast
+- Multi-user local authentication
+- Six themes
+- Optional OpenAI-compatible AI analysis
+- Docker deployment
+- Proxmox VE 8/9 installer
+- Offline release bundle workflow
+- Backup and restore scripts
