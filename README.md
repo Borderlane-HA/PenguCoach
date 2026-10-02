@@ -12,8 +12,9 @@ PenguCoach is designed as a local-first, multi-user platform that reads Garmin C
 
 ## Current alpha scope
 
-`v0.1.0-alpha.46.1` is the current end-to-end alpha baseline:
+`v0.1.0-alpha.47` is the current end-to-end alpha baseline:
 
+- **Plan Evolution:** smarter duration-aware activity matching with reviewed shifted-day candidates and persistent one-to-one assignments; missing imports remain pending. Saved plans offer reviewed short variants and a deterministic next-seven-days editor with per-day time budgets, weather, today's recovery, protected exports and transactional Decision Log entries. Today links directly to the plan and shows data freshness. See [`docs/PLAN_EVOLUTION.md`](docs/PLAN_EVOLUTION.md).
 - **Today Experience:** compact illustration-free Today hero, practical Today-in-focus card, clearer action hierarchy, refined daily recommendation flow and a theme-safe daily check-in with battery-style energy choices, soreness chips and clearly explained available-time quick selection.
 - **Training Intelligence:** deterministic 7/28-day training-load trends, weekly volume and sport mix; near-term Open-Meteo badges on outdoor plan sessions; deterministic plan-conflict detection; reviewed weather-based indoor alternatives; and a persistent AI Decision Log for accepted adaptive changes.
 - **Health Development:** professional interactive training/health charts, fitness and efficiency trends, sport-specific training volume, load-vs-recovery, 3/6-month views and a conservative VO₂max fallback when no provider value exists. Estimated VO₂ values are clearly labelled and never treated as clinical measurements. See [`docs/HEALTH_DEVELOPMENT.md`](docs/HEALTH_DEVELOPMENT.md).

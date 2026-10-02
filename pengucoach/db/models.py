@@ -460,6 +460,18 @@ class ActivityFeedback(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
 
+class PlanActivityMatch(Base):
+    __tablename__ = "plan_activity_matches"
+    __table_args__ = (UniqueConstraint("plan_run_id", "session_id"), UniqueConstraint("activity_id"),)
+    id: Mapped[uuid.UUID] = uuid_pk()
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    plan_run_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("ai_runs.id", ondelete="CASCADE"), index=True)
+    session_id: Mapped[str] = mapped_column(String(80))
+    activity_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("activities.id", ondelete="CASCADE"), nullable=True)
+    state: Mapped[str] = mapped_column(String(16), default="matched")
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
 class PlanSchedule(Base):
     __tablename__ = "plan_schedules"
     plan_run_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("ai_runs.id", ondelete="CASCADE"), primary_key=True)

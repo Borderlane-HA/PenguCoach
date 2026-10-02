@@ -182,7 +182,10 @@ def _is_hard_session(session: dict[str, Any]) -> bool:
     text = f"{session.get('name', '')} {session.get('notes', '')}".casefold()
     if any(term in text for term in ("interval", "tempo", "threshold", "schwelle", "vo2", "hiit", "race", "wettkampf")):
         return True
-    for step in session.get("steps") or []:
+    pending = list(session.get("steps") or [])
+    while pending:
+        step = pending.pop()
+        pending.extend(step.get("steps") or [])
         target = step.get("target") or {}
         if target.get("type") in {"heart_rate_zone", "power_zone"} and int(target.get("zone") or 0) >= 4:
             return True

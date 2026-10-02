@@ -23,7 +23,7 @@ def test_existing_plans_start_collapsed_and_are_explicitly_opened():
     assert "Beim Öffnen dieser Seite bleiben alle Pläne bewusst eingeklappt." in page
     assert "Plan öffnen" in page
     assert 'planOpen&&result' in page
-    assert '<details className="training-calendar-details">' in page
+    assert '<details className="training-calendar-details"' in page
     assert '<details className="training-plan-section">' in page
 
 

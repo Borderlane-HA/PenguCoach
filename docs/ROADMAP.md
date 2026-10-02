@@ -7,7 +7,7 @@ This roadmap keeps the Adaptive Coach direction explicit while the UI follows a 
 | Priority | Capability | Status in alpha.44 | Next meaningful step |
 | --- | --- | --- | --- |
 | 1 | Coach Memory v1 | **Shipped + suggestions v1** | Suggestions require repeated explicit evidence and user confirmation; never create hidden permanent rules. |
-| 2 | Adaptive training plans | **Foundation shipped** | Broaden adaptation triggers and plan-level rescheduling while keeping preview + explicit confirmation. |
+| 2 | Adaptive training plans | **Foundation shipped** | Broaden adaptation triggers and Alpha.47 ships a reviewed rolling seven-day adaptation and short variants; expand longer-term adaptation only with adequate data. |
 | 3 | Daily Readiness / traffic light | **Shipped (v1)** | Improve trend context and calibration without turning it into a medical score. |
 | 4 | Weather + training | **Shipped (v1)** | Forecast/risk is shown on near-term outdoor plan sessions; reviewed indoor alternatives are available when conditions are unfavorable. |
 | 5 | Coach chat with context | **Shipped (v1)** | Deepen plan-aware follow-ups and reuse the same structured decision context as adaptive planning. |
@@ -38,3 +38,7 @@ This roadmap keeps the Adaptive Coach direction explicit while the UI follows a 
 ## Health Development (Alpha.45)
 
 The Health view now combines fitness, training load, efficiency and recovery with progressive disclosure and professional interactive charts. Provider VO₂ remains authoritative; PenguCoach may calculate a clearly-labelled fallback estimate only when provider data is absent. Longer-term work can add training-block annotations and richer correlations without turning the Health page into another configuration dashboard.
+
+## Plan Evolution (Alpha.47)
+
+Reviewed rolling weeks, time-aware short variants, duration-aware plan matching, explicit one-to-one activity assignments and source freshness are shipped. See [PLAN_EVOLUTION.md](PLAN_EVOLUTION.md). Long-term individualized recovery calibration remains future work.

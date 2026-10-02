@@ -424,3 +424,34 @@ button.choice-chip{color:var(--text)!important;background:var(--panel2);border:1
 @media(max-width:850px){.today-hero{grid-template-columns:1fr;gap:17px}.today-focus-card-hero{width:100%}.today-focus-card-hero .today-focus-list{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:640px){.today-hero{padding:19px 17px}.today-focus-card-hero{padding:13px}.today-focus-card-hero .today-focus-list{grid-template-columns:repeat(3,minmax(0,1fr))}.today-focus-card-hero .today-focus-head{flex-direction:row;align-items:center}.sync-pill{padding:5px 8px;font-size:.62rem}.energy-scale{grid-template-columns:repeat(3,minmax(0,1fr))}.energy-choice{min-height:82px;padding:9px 6px}.choice-chip-grid,.quick-time-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:400px){.today-focus-card-hero .today-focus-list{grid-template-columns:1fr 1fr}.energy-scale{grid-template-columns:repeat(2,minmax(0,1fr))}}
+/* Reviewed training changes: all colors follow the selected appearance theme. */
+.evolution-week,.evolution-short,.evolution-freshness{margin:14px 0;padding:14px;border:1px solid var(--border);border-radius:14px;background:var(--panel)}
+.evolution-week>summary,.evolution-short>summary,.evolution-freshness>summary{cursor:pointer;color:var(--text);font-weight:650;line-height:1.5}
+.evolution-week p,.evolution-short p,.evolution-freshness p{line-height:1.6}
+.evolution-availability{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px;margin:16px 0}
+.evolution-availability label{min-width:0;display:grid;gap:8px;font-size:.8rem}
+.evolution-availability input{width:100%;min-width:0;padding:10px 8px}
+.evolution-before-after{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.evolution-session{display:grid;align-content:start;gap:7px;min-width:0;padding:12px;border:1px solid var(--border);border-radius:12px;background:var(--panel2);color:var(--text)}
+.evolution-session strong{overflow-wrap:anywhere}
+.evolution-session ul,.evolution-week-item ul{padding-left:20px;margin:6px 0;line-height:1.6;font-size:.82rem}
+.evolution-session small,.evolution-session>span{color:var(--muted)}
+.evolution-week-item{margin:12px 0;padding:12px;border:1px solid var(--border);border-radius:12px;background:var(--panel)}
+.evolution-week-item.changed{border-color:var(--accent)}
+.evolution-summary{display:flex;gap:12px;justify-content:space-between;flex-wrap:wrap}
+.evolution-warning{padding:12px;border-radius:10px;background:color-mix(in srgb,var(--warn) 12%,var(--panel));color:var(--text);border:1px solid var(--border)}
+.evolution-minutes{display:grid;gap:5px;max-width:120px;font-size:.78rem}
+.evolution-candidates>div{display:flex;gap:12px;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border)}
+.evolution-candidates>div>span{display:grid;gap:5px;min-width:0}
+.evolution-candidates a{overflow-wrap:anywhere}
+.evolution-candidates small{color:var(--muted)}
+.plan-comparison-list>div.evolution-match-row{display:flex;align-items:stretch;flex-direction:column;gap:8px}
+.evolution-match-row>details{width:100%}
+.evolution-match-row>button{align-self:flex-start}
+.evolution-short .companion-actions{align-items:end;flex-wrap:wrap}
+.evolution-short button.selected{box-shadow:inset 0 0 0 2px var(--accent)}
+.evolution-freshness .evidence-row{display:flex;flex-wrap:wrap;gap:8px;justify-content:space-between;padding:10px 0}
+.today-plan-actions{display:grid;gap:10px;margin:14px 0}
+@media(max-width:900px){.evolution-availability{grid-template-columns:repeat(4,minmax(0,1fr))}}
+@media(max-width:600px){.evolution-availability{grid-template-columns:repeat(2,minmax(0,1fr))}.evolution-before-after{grid-template-columns:minmax(0,1fr)}.evolution-week,.evolution-short,.evolution-freshness{padding:12px}.evolution-candidates>div{align-items:flex-start;flex-wrap:wrap}.evolution-session ul{font-size:.8rem}}
+@media(max-width:600px){.training-plan-detail{padding:0}.training-calendar-details{margin:10px 6px}.training-calendar-wrap{padding:10px 8px}.plan-companion>.companion-details-body{padding:10px 8px}.plan-companion .evolution-week,.plan-companion .evolution-short,.plan-companion .evolution-freshness{padding:10px 8px}}

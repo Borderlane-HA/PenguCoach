@@ -382,14 +382,9 @@ async def comparison(run_id: uuid.UUID, user: User = Depends(safety_confirmed_us
     if not schedule:
         return {"items": [], "needs_schedule": True}
     sessions = scheduled_sessions(run, schedule)
-    start, end = min(s["date"] for s in sessions), max(s["date"] for s in sessions)
-    activities = (await db.scalars(select(Activity).where(Activity.user_id == user.id, Activity.started_at >= day_start(date.fromisoformat(start), user), Activity.started_at < day_start(date.fromisoformat(end) + timedelta(days=1), user)))).all()
-    items = compare_sessions(sessions, activities, user)
-    for item in items:
-        if item["activity_id"]:
-            a = next(a for a in activities if str(a.id) == item["activity_id"])
-            feedback = await db.get(ActivityFeedback, a.id)
-            item.update(avg_hr=a.avg_hr, training_load=a.training_load, aerobic_effect=a.aerobic_training_effect, feedback=feedback.data if feedback else None)
+    from pengucoach.coach.plan_evolution import comparison_data
+    comparison_result = await comparison_data(db, user, run, schedule)
+    items = comparison_result["items"]
     brief = await briefing(db, user)
     readiness = brief.get("readiness") or {}
     suggestions = []
@@ -419,7 +414,7 @@ async def comparison(run_id: uuid.UUID, user: User = Depends(safety_confirmed_us
     suggestions = sorted(dedup.values(), key=lambda x: (-x["priority"], x["session_id"]))
     logs = list((await db.scalars(select(CoachDecisionLog).where(CoachDecisionLog.user_id == user.id, CoachDecisionLog.plan_run_id == run_id).order_by(CoachDecisionLog.created_at.desc()).limit(20))).all())
     decision_log = [{"id": str(row.id), "session_id": row.session_id, "action": row.action, "before": row.before, "after": row.after, "reasons": row.reasons, "created_at": row.created_at} for row in logs]
-    return {"items": items, "revision": schedule.revision, "date": brief.get("date"), "readiness": readiness, "adaptive_suggestions": suggestions[:8], "conflicts": intelligence.get("conflicts", []), "session_intelligence": intelligence.get("sessions", {}), "weather": intelligence.get("weather", {}), "training_load": intelligence.get("load", {}), "decision_log": decision_log}
+    return {"items": items, "freshness": comparison_result["freshness"], "revision": schedule.revision, "date": brief.get("date"), "readiness": readiness, "adaptive_suggestions": suggestions[:8], "conflicts": intelligence.get("conflicts", []), "session_intelligence": intelligence.get("sessions", {}), "weather": intelligence.get("weather", {}), "training_load": intelligence.get("load", {}), "decision_log": decision_log}
 
 
 @router.get("/plans/{run_id}/intelligence")

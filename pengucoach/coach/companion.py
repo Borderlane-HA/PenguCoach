@@ -87,9 +87,12 @@ async def personal_context(db, user, *, training=True, recovery=True, days=7):
             if run:
                 all_sessions = scheduled_sessions(run, schedule)
                 recent_sessions = [s for s in all_sessions if (user_today(user) - timedelta(days=max(0, days - 1))).isoformat() <= s["date"] <= user_today(user).isoformat()]
-                recent_activities = list((await db.scalars(select(Activity).where(Activity.user_id == user.id, Activity.started_at >= day_start(user_today(user) - timedelta(days=max(0, days - 1)), user), Activity.started_at <= datetime.now(timezone.utc)))).all()) if recent_sessions else []
-                comparisons.extend(compare_sessions(recent_sessions, recent_activities, user))
-                upcoming.extend([{**s, "plan_id": str(run.id)} for s in all_sessions if user_today(user).isoformat() <= s["date"] <= (user_today(user) + timedelta(days=7)).isoformat()])
+                from pengucoach.coach.plan_evolution import comparison_data
+                compared = await comparison_data(db, user, run, schedule)
+                recent_ids = {s["id"] for s in recent_sessions}
+                completed_ids = {s["id"] for s in compared["items"] if s["status"] == "matched"}
+                comparisons.extend({k:v for k,v in s.items() if k not in {"candidates", "candidate_ids", "recorded_laps"}} for s in compared["items"] if s["id"] in recent_ids)
+                upcoming.extend([{**s, "plan_id": str(run.id), "schedule_revision": schedule.revision} for s in all_sessions if s["id"] not in completed_ids and user_today(user).isoformat() <= s["date"] <= (user_today(user) + timedelta(days=7)).isoformat()])
         result["recent_plan_comparison"] = comparisons[-12:]
         result["upcoming_sessions"] = sorted(upcoming, key=lambda s: s["date"])[:10]
     return result

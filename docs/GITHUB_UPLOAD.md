@@ -73,3 +73,14 @@ A push automatically starts `.github/workflows/ci.yml`. Check the repository's *
 ## Incremental web-update packages
 
 For an existing installation, `github-web-update` ZIPs contain only changed/new repository files, directly at the archive root. Extract and upload those files into the root of the existing GitHub repository. The full release ZIP instead contains a `PenguCoach/` directory. Retired connector files are harmless compatibility stubs so an incremental web upload does not require deleting files. Run the normal updater after uploading, and restart every worker/scheduler along with the API and web app.
+
+## Alpha.46.1 → Alpha.47 web update
+
+The delta ZIP contains only new/changed repository files. Extract it and upload
+**every included directory**, especially `apps`, `pengucoach`, `db`, `docs` and
+`tests`, plus the included root files. Preserve the directory hierarchy. Uploading
+only frontend files leaves the new API and migration unavailable.
+
+Run the normal deployment update after committing all files. Alpha.47 includes
+Alembic migration `0014_plan_evolution`. See [PLAN_EVOLUTION.md](PLAN_EVOLUTION.md)
+for feature entry points and Docker update commands.

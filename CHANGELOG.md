@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.1.0-alpha.47 — Plan Evolution
+
+- Adds duration-aware same-day plan matching and reviewed candidates on shifted days; persistent assignments remain one-to-one across plans.
+- Adds user-confirmed not-completed markers and reset/correction actions. Missing imports remain Matching pending, without automatic catch-up.
+- Shows planned/actual dates, duration, available average HR/power, planned target zones and recorded FIT laps without claiming interval/zone adherence from averages.
+- Adds reviewed short variants preserving preparation, recovery and interval targets where feasible; strength reduces sets without shortening rests.
+- Adds a deterministic next-seven-days editor for existing saved plans, with daily time budgets, training weekdays, today-only recovery, completed workouts, other plans, weather and Garmin export protection.
+- Saves week changes and decision records atomically with revision/fingerprint checks.
+- Adds Today shortcuts, check-in-time presets, source freshness and shared Coach/UI matching context.
+- Adds migration 0014_plan_evolution and aligns release/version surfaces.
+
+
 ## v0.1.0-alpha.46.1 — Today UX Fix
 
 - Removed the decorative Today hero illustration and reduced the hero height.
