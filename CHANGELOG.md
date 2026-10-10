@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.1.0-alpha.49 — Visual Readiness
+
+- Replaced the text-heavy readiness card with a three-lamp traffic light, a short action and the existing score. Green, amber and red remain consistent in every theme; unassessed readiness stays neutral.
+- Strain factors appear as compact chips. Data confidence and point contributions are available in the collapsed explanation.
+- Removed technical wording and the duplicate recommendation box from the daily companion. Readiness calculation is unchanged.
+- Responsive layout with named status, visible symbols and screen-reader labels.
+
 ## v0.1.0-alpha.48 — Activity Route Explorer
 
 - Adds an OpenStreetMap route synchronized with recorded workout samples, true time/distance axes, mouse, touch slider and keyboard selection.

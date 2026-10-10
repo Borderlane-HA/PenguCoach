@@ -76,7 +76,8 @@ def test_readiness_ui_and_transparent_method_are_visible():
     daily = text("apps/web/components/DailyCompanion.tsx")
     companion = text("pengucoach/coach/companion.py")
     css = text("apps/web/app/globals.css")
-    assert "Pengu Readiness" in daily
+    assert "ReadinessIndicator" in daily
+    assert "Pengu Readiness" in text("apps/web/components/ReadinessIndicator.tsx")
     assert "compute_readiness" in companion
     assert "deterministic readiness v1" in companion
     assert ".readiness-card" in css
