@@ -5,7 +5,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from typing import Literal
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -13,6 +13,7 @@ from pengucoach.auth.dependencies import safety_confirmed_user
 from pengucoach.common.config import settings
 from pengucoach.db.models import User, UserPreference
 from pengucoach.db.session import get_db
+from pengucoach.coach.today import TODAY_CARDS, today_preferences
 
 router = APIRouter(prefix="/settings", tags=["settings"])
 
@@ -232,3 +233,34 @@ async def app_icon(user: User = Depends(safety_confirmed_user), db: AsyncSession
 @router.delete("/app-icon")
 async def delete_app_icon(user: User = Depends(safety_confirmed_user), db: AsyncSession = Depends(get_db)):
     return await _delete_image("app-icon", user, db)
+
+
+class TodaySettingsIn(BaseModel):
+    order: list[Literal['preparation','weather','reflection','progress','load','metrics','trend','activities']] = Field(default_factory=lambda: ['preparation','weather','reflection','progress','load','metrics','trend','activities'], max_length=8)
+    hidden: list[Literal['preparation','weather','reflection','progress','load','metrics','trend','activities']] = Field(default_factory=list, max_length=8)
+    pinned_metrics: list[Literal['steps','sleep','resting_hr','hrv','stress','hydration','body_battery_high','weight']] = Field(default_factory=lambda: ['steps','sleep','resting_hr'], min_length=1, max_length=4)
+    preferred_start_hour: int = Field(default=7, ge=0, le=23)
+    preferred_end_hour: int = Field(default=21, ge=1, le=24)
+
+    @model_validator(mode='after')
+    def validate_layout(self):
+        if self.preferred_end_hour <= self.preferred_start_hour:
+            raise ValueError('TIME_WINDOW_END_MUST_FOLLOW_START')
+        for values in [self.order, self.hidden, self.pinned_metrics]:
+            if len(values) != len(set(values)):
+                raise ValueError('DUPLICATE_TODAY_ITEMS')
+        self.order += [k for k in TODAY_CARDS if k not in self.order]
+        return self
+
+
+@router.get('/today')
+async def get_today_settings(user: User = Depends(safety_confirmed_user), db: AsyncSession = Depends(get_db)):
+    return today_preferences(await db.get(UserPreference, user.id))
+
+
+@router.put('/today')
+async def save_today_settings(payload: TodaySettingsIn, user: User = Depends(safety_confirmed_user), db: AsyncSession = Depends(get_db)):
+    pref = await _pref(db, user)
+    pref.dashboard_config = {**(pref.dashboard_config or {}), 'today': payload.model_dump()}
+    await db.commit()
+    return today_preferences(pref)

@@ -2,7 +2,7 @@
 import copy
 import uuid
 from datetime import date, datetime, timedelta, timezone
-from typing import Literal
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field, model_validator
@@ -50,6 +50,7 @@ class CheckinIn(BaseModel):
     soreness: int | None = Field(default=None, ge=1, le=5)
     minutes: int | None = Field(default=None, ge=0, le=480)
     discomfort: str = Field(default="", max_length=500)
+    soreness_regions: dict[Literal["legs", "back", "shoulders", "arms", "core"], Annotated[int, Field(ge=1, le=5)]] = Field(default_factory=dict)
 
 
 class FeedbackIn(BaseModel):
@@ -207,6 +208,12 @@ async def delete_feedback(activity_id: uuid.UUID, user: User = Depends(safety_co
 @router.get("/briefing")
 async def get_briefing(user: User = Depends(safety_confirmed_user), db: AsyncSession = Depends(get_db)):
     return await briefing(db, user)
+
+
+@router.get("/readiness")
+async def get_readiness(user: User = Depends(safety_confirmed_user), db: AsyncSession = Depends(get_db)):
+    from pengucoach.coach.today import readiness_snapshot
+    return await readiness_snapshot(db, user)
 
 
 @router.get("/training-load")

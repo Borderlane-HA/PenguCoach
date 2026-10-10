@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import copy
+import uuid
 from datetime import date, datetime, timedelta, timezone
 
 from sqlalchemy import select
@@ -85,6 +86,7 @@ async def personal_context(db, user, *, training=True, recovery=True, days=7):
         schedules = list((await db.scalars(select(PlanSchedule).where(PlanSchedule.user_id == user.id).order_by(PlanSchedule.updated_at.desc()).limit(5))).all())
         upcoming = []
         comparisons = []
+        today_comparisons = []
         for schedule in schedules:
             run = await db.get(AiRun, schedule.plan_run_id)
             if run:
@@ -92,11 +94,13 @@ async def personal_context(db, user, *, training=True, recovery=True, days=7):
                 recent_sessions = [s for s in all_sessions if (user_today(user) - timedelta(days=max(0, days - 1))).isoformat() <= s["date"] <= user_today(user).isoformat()]
                 from pengucoach.coach.plan_evolution import comparison_data
                 compared = await comparison_data(db, user, run, schedule)
+                today_comparisons.extend({**{k:v for k,v in s.items() if k not in {"candidates", "candidate_ids", "recorded_laps"}},"plan_id":str(run.id)} for s in compared["items"] if s["date"] == user_today(user).isoformat())
                 recent_ids = {s["id"] for s in recent_sessions}
                 completed_ids = {s["id"] for s in compared["items"] if s["status"] == "matched"}
                 comparisons.extend({k:v for k,v in s.items() if k not in {"candidates", "candidate_ids", "recorded_laps"}} for s in compared["items"] if s["id"] in recent_ids)
                 upcoming.extend([{**s, "plan_id": str(run.id), "schedule_revision": schedule.revision} for s in all_sessions if s["id"] not in completed_ids and user_today(user).isoformat() <= s["date"] <= (user_today(user) + timedelta(days=7)).isoformat()])
         result["recent_plan_comparison"] = comparisons[-12:]
+        result["today_plan_comparison"] = today_comparisons[:30]
         result["upcoming_sessions"] = [{**s, "experience_hints": matching_experiences(confirmed_experiences, s)} for s in sorted(upcoming, key=lambda s: s["date"])[:10]]
     return result
 
@@ -132,50 +136,26 @@ async def add_personal_context(db, user, context, payload, conversation=None):
 
 
 async def briefing(db, user):
-    from pengucoach.coach.context import build_coach_context
-    today = user_today(user)
-    context = await build_coach_context(db, user, 28)
+    from pengucoach.coach.today import readiness_snapshot, day_phase
+    from pengucoach.db.models import FitFile
+    snapshot = await readiness_snapshot(db, user)
     personal = await personal_context(db, user)
-    checkin_row = await db.scalar(select(CoachCheckin).where(CoachCheckin.user_id == user.id, CoachCheckin.date == today))
-    checkin = checkin_row.data if checkin_row else {}
-    activities = list((await db.scalars(select(Activity).where(Activity.user_id == user.id, Activity.started_at >= day_start(today - timedelta(days=13), user), Activity.started_at <= datetime.now(timezone.utc)).order_by(Activity.started_at))).all())
-    current = [a for a in activities if activity_day(a, user) >= today - timedelta(days=6)]
-    previous = [a for a in activities if activity_day(a, user) < today - timedelta(days=6)]
-    def stats(rows):
-        return {"sessions": len(rows), "minutes": round(sum(a.duration_seconds or 0 for a in rows) / 60), "distance_km": round(sum(a.distance_m or 0 for a in rows) / 1000, 1), "active_days": len({activity_day(a, user) for a in rows})}
-    reasons = []
-    recent_feedback = (await db.execute(select(ActivityFeedback, Activity).join(Activity, Activity.id == ActivityFeedback.activity_id).where(ActivityFeedback.user_id == user.id, Activity.started_at >= day_start(today - timedelta(days=2), user), Activity.started_at <= datetime.now(timezone.utc)))).all()
-    recent_feedback_data = [{"activity": a.name, "date": activity_day(a, user).isoformat(), **{k:v for k,v in (f.data or {}).items() if k in {"feeling", "exertion", "discomfort", "comment"}}} for f, a in recent_feedback]
-    if any(f.get("feeling") == "hard" or (f.get("exertion") or 0) >= 9 for f in recent_feedback_data):
-        reasons.append("hard_feedback")
-    if any(str(f.get("discomfort") or "").strip() for f in recent_feedback_data):
-        reasons.append("feedback_discomfort")
-    if checkin.get("energy") is not None and checkin["energy"] <= 2:
-        reasons.append("low_energy")
-    if checkin.get("soreness") is not None and checkin["soreness"] >= 4:
-        reasons.append("soreness")
-    if checkin.get("discomfort"):
-        reasons.append("discomfort")
-    if checkin.get("minutes") == 0:
-        reasons.append("no_time")
-    active_days = {activity_day(a, user) for a in current}
-    consecutive_active_days = 0
-    for i in range(1, 8):
-        if today - timedelta(days=i) in active_days:
-            consecutive_active_days += 1
-        else:
-            break
-    if consecutive_active_days >= 3:
-        reasons.append("three_active_days")
-    sleep = next((s for s in context.get("sleep_30d", []) if str(s["date"]) == today.isoformat()), None)
-    if sleep and sleep.get("duration_s") is not None and sleep["duration_s"] < 6 * 3600:
-        reasons.append("short_sleep")
-    readiness = compute_readiness(context, checkin, recent_feedback_data, consecutive_active_days=consecutive_active_days, today=today)
-    mode = "check_discomfort" if "discomfort" in reasons else "easy" if reasons or readiness.get("status") in {"red", "yellow"} else "review_plan" if personal.get("upcoming_sessions") else "check_in"
-    evidence = []
-    for key, label, metric in [("sleep_30d", "sleep", "duration_s"), ("hrv_30d", "hrv", "overnight_ms"), ("health_30d", "resting_hr", "resting_hr_bpm"), ("health_30d", "hydration", "hydration_ml")]:
-        available = [r for r in context.get(key, []) if r.get(metric) is not None]
-        if available:
-            row = available[-1]
-            evidence.append({"metric": label, "value": row[metric], "date": str(row["date"]), "source": (row.get("sources") or {}).get(metric, row.get("source", "unknown")), "age_days": (today - date.fromisoformat(str(row["date"]))).days})
-    return {"date": today.isoformat(), "mode": mode, "reasons": reasons, "checkin": checkin, "profile": personal.get("profile", {}), "upcoming": personal.get("upcoming_sessions", []), "evidence": evidence, "readiness": readiness, "current_week": stats(current), "previous_week": stats(previous), "activity_count": len(current), "method": "PenguCoach deterministic readiness v1; missing records do not prove inactivity or recovery."}
+    today = snapshot['date']
+    upcoming = personal.get('upcoming_sessions', [])
+    mode = snapshot['mode']
+    if mode == 'check_in' and upcoming:
+        mode = 'review_plan'
+    comparisons = personal.get('today_plan_comparison', [])
+    ids = [a['id'] for a in snapshot['today_activities']]
+    feedback = (await db.scalars(select(ActivityFeedback).where(ActivityFeedback.user_id == user.id, ActivityFeedback.activity_id.in_([uuid.UUID(identifier) for identifier in ids])))).all() if ids else []
+    by_id = {str(f.activity_id): {k:v for k,v in (f.data or {}).items() if k in {'feeling','exertion','discomfort','comment'}} for f in feedback}
+    activities = [{**a,'feedback':by_id.get(a['id'],{})} for a in snapshot['today_activities']]
+    routes = (await db.execute(select(Activity.id,Activity.name,Activity.sport_type,Activity.started_at,FitFile.data_quality).join(FitFile,FitFile.activity_id==Activity.id).where(
+        Activity.user_id==user.id,FitFile.user_id==user.id,FitFile.status=='parsed',Activity.started_at<=datetime.now(timezone.utc)
+    ).order_by(Activity.started_at.desc()).limit(50))).all()
+    route_options = [{'id':str(a.id),'name':a.name or a.sport_type,'sport':sport_family(a.sport_type),'date':activity_day(a,user).isoformat()} for a in routes
+                     if isinstance(a.data_quality, dict) and isinstance(a.data_quality.get('coverage'), dict) and isinstance(a.data_quality['coverage'].get('gps'), (int,float)) and a.data_quality['coverage']['gps']>0][:20]
+    return {**snapshot,'mode':mode,'profile':personal.get('profile',{}),'upcoming':upcoming,
+            'today_activities':activities,'today_comparison':comparisons,'route_options':route_options,
+            'day_phase':day_phase(today,datetime.now(user_zone(user)).hour,upcoming,activities,comparisons,snapshot['checkin']),
+            'method':'PenguCoach deterministic readiness v1; missing records do not prove inactivity or recovery.'}

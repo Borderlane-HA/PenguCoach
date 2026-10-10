@@ -42,6 +42,12 @@ def _source(row: dict[str, Any], field: str) -> str:
     return str(sources.get(field) or row.get("source") or "unknown")
 
 
+def soreness_level(checkin):
+    values = [checkin.get('soreness'), *[v for v in (checkin.get('soreness_regions') or {}).values() if isinstance(v, int) and v >= 2]]
+    values = [v for v in values if isinstance(v, int) and not isinstance(v, bool) and 1 <= v <= 5]
+    return max(values) if values else None
+
+
 def compute_readiness(
     context: dict[str, Any],
     checkin: dict[str, Any],
@@ -172,7 +178,7 @@ def compute_readiness(
         impact = {1: -18, 2: -10, 3: 0, 4: 3, 5: 6}[int(energy)]
         add("energy", impact, int(energy), unit="/5", source="user", state="negative" if impact <= -10 else "warning" if impact < 0 else "positive" if impact > 0 else "neutral")
 
-    soreness = checkin.get("soreness")
+    soreness = soreness_level(checkin)
     if soreness is not None:
         impact = {1: 2, 2: 0, 3: -4, 4: -10, 5: -15}[int(soreness)]
         add("soreness", impact, int(soreness), unit="/5", source="user", state="negative" if impact <= -10 else "warning" if impact < 0 else "positive" if impact > 0 else "neutral")

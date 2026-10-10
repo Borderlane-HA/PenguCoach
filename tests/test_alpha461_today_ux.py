@@ -6,12 +6,12 @@ import tomllib
 def test_alpha461_versions_and_display_fallback():
     project = tomllib.loads(Path("pyproject.toml").read_text())
     package = json.loads(Path("apps/web/package.json").read_text())
-    assert project["project"]["version"] == "0.1.0-alpha.52"
-    assert package["version"] == "0.1.0-alpha.52"
+    assert project["project"]["version"] == "0.1.0-alpha.53"
+    assert package["version"] == "0.1.0-alpha.53"
     config = Path("pengucoach/common/config.py").read_text()
     about = Path("apps/web/app/settings/about/page.tsx").read_text()
-    assert 'app_version: str = "0.1.0-alpha.52"' in config
-    assert '0.1.0-alpha.52' in about
+    assert 'app_version: str = "0.1.0-alpha.53"' in config
+    assert '0.1.0-alpha.53' in about
 
 
 def test_today_hero_is_compact_and_has_no_decorative_artwork():

@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.0-alpha.53 — Your Today flow
+
+- Today switches between morning, preparation and reflection using the user’s local date, recorded completed activities and pending plans; stages can also be selected manually.
+- Larger symbolic readiness lamps, a score ring and compact data-confidence bars. A bounded local `/coach/readiness` request renders independently of plan comparisons and optional weather; failures remain neutral and retryable.
+- Workout preparation shows saved sections, HR/power zones, strength exercises, reviewed short variants and a direct entry into existing recorded-route briefings.
+- Optional hourly weather windows compare temperature, rain probability, wind and gusts within personal training hours. Missing coverage is not ranked; provider access remains opt-in.
+- Front/back body-area soreness check-in, a brief activity-linked daily reflection and a tomorrow calendar preview. Regional soreness contributes once to the existing readiness factor.
+- Per-user card order/visibility, one to four pinned metrics and preferred training hours, saved in existing settings with no database migration or new dependencies.
+- Details: `docs/TODAY_FLOW.md`.
+
 ## 0.1.0-alpha.52 — Fast route passages
 
 - Route preparation now identifies sustained faster sections from recorded speed, GPS, distance and elapsed time, independently of elevation.

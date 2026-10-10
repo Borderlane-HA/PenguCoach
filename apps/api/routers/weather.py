@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import httpx
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -81,3 +83,24 @@ async def forecast(
     except Exception as exc:
         raise HTTPException(status_code=502, detail="WEATHER_FORECAST_UNAVAILABLE") from exc
     return {**data, "location": config.get("location_name") or ""}
+
+
+@router.get('/windows')
+async def today_weather_windows(minutes: int = Query(45, ge=5, le=480), user: User = Depends(safety_confirmed_user), db: AsyncSession = Depends(get_db)):
+    from datetime import datetime, timezone
+    from pengucoach.common.dates import user_zone
+    from pengucoach.coach.today import today_preferences
+    from pengucoach.weather.today import fetch_hours, weather_windows
+    pref = await db.get(UserPreference, user.id)
+    config, preferences = weather_config(pref), today_preferences(pref)
+    if not config.get('enabled') or config.get('latitude') is None or config.get('longitude') is None:
+        return {'available':False,'reason':'not_configured','windows':[]}
+    try:
+        data = await fetch_hours(float(config['latitude']),float(config['longitude']),str(user_zone(user)))
+        windows = weather_windows(data['rows'], now=datetime.now(timezone.utc), zone=user_zone(user),minutes=minutes,
+                                  start_hour=preferences['preferred_start_hour'],end_hour=preferences['preferred_end_hour'])
+    except (httpx.HTTPError, ValueError, TypeError, KeyError, OverflowError):
+        return {'available':False,'reason':'unavailable','windows':[]}
+    return {**{k:v for k,v in data.items() if k!='rows'},'available':True,'location':config.get('location_name') or '',
+            'timezone':str(user_zone(user)),'minutes':minutes,'windows':windows,'hourly_resolution':True,
+            'preferred_start_hour':preferences['preferred_start_hour'],'preferred_end_hour':preferences['preferred_end_hour']}
