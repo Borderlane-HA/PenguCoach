@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.1.0-alpha.50 — Training & Personal Progress
+
+- Added recorded-sample goal review for linked plan sessions: nested repeats, timed/distance steps, time-weighted below/in/above-target distributions, coverage and adjustable recording alignment. Missing sensors, times or sport-specific zones stay unassessed. Full recording is used for review; the interactive chart remains downsampled.
+- Added an on-demand GPS route comparison for whole routes or the selected analysis range. Ordered shape, endpoints and recorded distances must match; only same-sport, user-owned recordings are considered. Available time, HR, watts and speed are compared, with lower-HR-at-similar-speed highlights.
+- Added synchronized route/chart replay with pause, speed, restart and jumps from planned steps or to the steepest recorded point. Street-level views remain consent-based and update at the paused replay position.
+- Added 7/28/90-day readiness and recorded-training history, day-level sleep/energy and sleep/feedback associations with evidence, and bounded 90-day / completed-week milestones.
+- Simplified Today: one contextual main action, collapsed readings and explanations, and actionable empty states. No automatic plan edits or AI calls.
+- New authenticated read-only endpoints require no database migration. Details and limitations: `docs/TRAINING_INSIGHTS.md`.
+
 ## v0.1.0-alpha.49 — Visual Readiness
 
 - Replaced the text-heavy readiness card with a three-lamp traffic light, a short action and the existing score. Green, amber and red remain consistent in every theme; unassessed readiness stays neutral.

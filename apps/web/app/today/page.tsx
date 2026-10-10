@@ -2,6 +2,7 @@
 
 import {useEffect,useMemo,useState} from "react";
 import {sourceLabel,measuredLabel} from "../../lib/sources";
+import PersonalProgress from "../../components/PersonalProgress";
 import DailyCompanion from "../../components/DailyCompanion";
 import SourceOverview from "../../components/SourceOverview";
 import AppShell from "../../components/AppShell";
@@ -23,7 +24,7 @@ export default function Today(){
   const sleepHours=h?.sleep?.duration_seconds?h.sleep.duration_seconds/3600:null;
   const metricSource=(field:string)=>sourceLabel(h?.sources?.[field],lang);
   const bodySource=(field:string)=>[sourceLabel(h?.body?.sources?.[field],lang),measuredLabel(h?.body?.measured_at_by_metric?.[field],lang)].filter(Boolean).join(" · ");
-  const askPrompt=lang==="de"?"Was passt heute zu mir? Nutze meine ausgewählten Daten, meine Readiness und meinen aktuellen Check-in. Antworte kurz mit einer konkreten Empfehlung für heute.":"What suits me today? Use my selected data, readiness and current check-in. Give a short concrete recommendation for today.";
+
   const focusItems=[
     {label:bi(lang,"Schritte","Steps"),value:h?.steps!=null?h.steps.toLocaleString(lang==="de"?"de-DE":"en-US"):"—",note:bi(lang,"heute","today")},
     {label:bi(lang,"Schlaf","Sleep"),value:sleepHours!=null?`${sleepHours.toFixed(1)} h`:"—",note:h?.sleep?.score!=null?`${bi(lang,"Score","Score")} ${h.sleep.score}`:bi(lang,"letzte Nacht","last night")},
@@ -49,20 +50,15 @@ export default function Today(){
       <div className="dashboard-hero-copy">
         <span className="eyebrow">{date}</span>
         <h1>{bi(lang,"Dein Tag. Deine Balance.","Your day. Your balance.")}</h1>
-        <p>{bi(lang,"Heute zählt vor allem, wie es dir geht und was realistisch zu deinem Tag passt. PenguCoach bündelt Readiness, Bewegung und deinen kurzen Check-in an einem Ort.","What matters today is how you feel and what realistically fits your day. PenguCoach brings together readiness, movement and your short check-in in one place.")}</p>
-        <div className="hero-actions hero-actions-priority">
-          <a className="primary-link" href={`/coach?prompt=${encodeURIComponent(askPrompt)}`}>✦ {bi(lang,"Was passt heute zu mir?","What suits me today?")}</a>
-          <a className="soft-link" href="/coach">{bi(lang,"Coach frei fragen","Ask Coach freely")} →</a>
-          <a className="text-link" href="/activities">{bi(lang,"Aktivitäten öffnen","Open activities")} →</a>
-        </div>
+        <a className="text-link" href="/activities">{bi(lang,"Aktivitäten öffnen","Open activities")} →</a>
       </div>
       <div className="today-focus-card today-focus-card-hero">
           <div className="today-focus-head">
             <div>
               <span className="metric-label">{bi(lang,"Heute im Fokus","Today in focus")}</span>
-              <strong>{h?.available===true?bi(lang,"Tagesdaten bereit","Daily data ready"):bi(lang,"Synchronisierung läuft","Sync in progress")}</strong>
+              <strong>{h?.available===true?bi(lang,"Tagesdaten bereit","Daily data ready"):h?bi(lang,"Tagesdaten fehlen","Daily data missing"):bi(lang,"Wird geladen …","Loading …")}</strong>
             </div>
-            <span className={`sync-pill ${h?.available===true?"ok":"pending"}`}>{h?.available===true?bi(lang,"Synchronisiert","Synced"):bi(lang,"Wird geladen","Loading")}</span>
+            <span className={`sync-pill ${h?.available===true?"ok":"pending"}`}>{h?.available===true?bi(lang,"Synchronisiert","Synced"):h?bi(lang,"Noch offen","Not available yet"):bi(lang,"Wird geladen","Loading")}</span>
           </div>
           <div className="today-focus-list">{focusItems.map(item=><div className="today-focus-item" key={item.label}><span>{item.label}</span><strong>{item.value}</strong><small>{item.note}</small></div>)}</div>
           <a className="text-link" href="/health">{bi(lang,"Gesundheit öffnen","Open health")} →</a>
@@ -70,8 +66,9 @@ export default function Today(){
     </section>
 
     <DailyCompanion/>
+    <PersonalProgress lang={lang}/>
     {load&&<section className={`card today-load-card load-${load.status||"unknown"}`}><div><span className="eyebrow">TRAINING LOAD</span><h2>{load.trend==="strongly_rising"?bi(lang,"Belastung steigt stark","Load rising strongly"):load.trend==="rising"?bi(lang,"Belastung steigt leicht","Load rising slightly"):load.trend==="falling"?bi(lang,"Belastung sinkt","Load falling"):bi(lang,"Belastung stabil","Load stable")}</h2><p className="muted">{load.basis==="garmin_training_load"?bi(lang,"Garmin Training Load · 7 Tage gegenüber deinem 28-Tage-Wochenmittel","Garmin Training Load · 7 days versus your 28-day weekly average"):bi(lang,"Trainingsminuten · 7 Tage gegenüber deinem 28-Tage-Wochenmittel","Training minutes · 7 days versus your 28-day weekly average")}</p></div><div className="today-load-metrics"><span><small>{bi(lang,"7 Tage","7 days")}</small><strong>{load.acute_7d}</strong></span><span><small>{bi(lang,"28-Tage-Mittel","28d average")}</small><strong>{load.chronic_28d_weekly}</strong></span><span><small>{bi(lang,"Volumen","Volume")}</small><strong>{load.minutes_7d} min</strong></span></div>{Array.isArray(load.sport_mix)&&load.sport_mix.length>0&&<div className="today-sport-mix">{load.sport_mix.slice(0,4).map((x:any)=><span key={x.sport}>{x.sport} <b>{x.percent}%</b></span>)}</div>}</section>}
-    <section className="health-metric-grid">{cards.filter(c=>!["battery","ready"].includes(c.tone)||c.value!=="—").map(c=><div className={`health-metric-card tone-${c.tone}`} key={c.label}><div className="health-metric-top"><span className="health-metric-dot"/><span className="metric-label">{c.label}</span></div><div className="metric-value">{String(c.value)}</div><div className="kpi-note">{c.note}</div></div>)}<div className="health-metric-card tone-vo2 vo2-dual-card"><div className="health-metric-top"><span className="health-metric-dot"/><span className="metric-label">VO₂max</span></div><div className="vo2-dual-values"><div><small>{bi(lang,"Laufen","Running")}</small><strong>{h?.vo2max_running??"—"}</strong></div><div><small>{bi(lang,"Rad","Cycling")}</small><strong>{h?.vo2max_cycling??"—"}</strong></div></div><div className="kpi-note">ml/kg/min · {Array.from(new Set([h?.sources?.vo2max_running,h?.sources?.vo2max_cycling].filter(Boolean))).map(s=>sourceLabel(s,lang)).join(" + ")||"—"}</div></div></section>
+    <details className="card today-metric-details"><summary>{bi(lang,"Deine Messwerte","Your readings")}</summary><section className="health-metric-grid">{cards.filter(c=>!["battery","ready"].includes(c.tone)||c.value!=="—").map(c=><div className={`health-metric-card tone-${c.tone}`} key={c.label}><div className="health-metric-top"><span className="health-metric-dot"/><span className="metric-label">{c.label}</span></div><div className="metric-value">{String(c.value)}</div><div className="kpi-note">{c.note}</div></div>)}<div className="health-metric-card tone-vo2 vo2-dual-card"><div className="health-metric-top"><span className="health-metric-dot"/><span className="metric-label">VO₂max</span></div><div className="vo2-dual-values"><div><small>{bi(lang,"Laufen","Running")}</small><strong>{h?.vo2max_running??"—"}</strong></div><div><small>{bi(lang,"Rad","Cycling")}</small><strong>{h?.vo2max_cycling??"—"}</strong></div></div><div className="kpi-note">ml/kg/min · {Array.from(new Set([h?.sources?.vo2max_running,h?.sources?.vo2max_cycling].filter(Boolean))).map(s=>sourceLabel(s,lang)).join(" + ")||"—"}</div></div></section></details>
 
     <section className="dashboard-main-grid">
       <div className="card trend-card"><div className="section-heading"><div><span className="eyebrow">{bi(lang,"Trend","Trend")}</span><h2>{bi(lang,"Ruhepuls · 14 Tage","Resting HR · 14 days")}</h2></div><a className="text-link" href="/health">{bi(lang,"Gesundheit","Health")} →</a></div><div className="trend-visual"><SparkLine values={trend.map(x=>x.resting_hr)}/></div><div className="trend-footer"><span><i className="legend-dot"/>{rhrSources}</span><small>{bi(lang,"Mehr Metriken und Zeiträume in Gesundheit","More metrics and periods in Health")}</small></div></div>

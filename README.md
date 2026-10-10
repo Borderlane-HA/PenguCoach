@@ -12,8 +12,9 @@ PenguCoach is designed as a local-first, multi-user platform that reads Garmin C
 
 ## Current alpha scope
 
-`v0.1.0-alpha.49` is the current end-to-end alpha baseline:
+`v0.1.0-alpha.50` is the current end-to-end alpha baseline:
 
+- **Training & Progress:** recorded-sample goal review with time-weighted intervals and adjustable alignment; GPS-verified whole-route or selected-section comparison; synchronized replay; historical readiness, observed sleep/check-in patterns and personal milestones. Today prioritizes one contextual action. See [`docs/TRAINING_INSIGHTS.md`](docs/TRAINING_INSIGHTS.md).
 - **Visual Readiness:** three clear traffic-light lamps, a short training action and compact strain chips. Detailed explanations and data confidence are available on demand; sparse data stays neutral.
 - **Activity Route Explorer:** synchronized OpenStreetMap route and workout charts, time/distance axes, touch/keyboard position selection, metric-colored tracks and optional Google Street View / Apple Look Around after explicit consent. Each user manages their own encrypted credentials under **Settings → Maps & street view**. See [`docs/ACTIVITY_ROUTE_EXPLORER.md`](docs/ACTIVITY_ROUTE_EXPLORER.md).
 - **Plan Evolution:** smarter duration-aware activity matching with reviewed shifted-day candidates and persistent one-to-one assignments; missing imports remain pending. Saved plans offer reviewed short variants and a deterministic next-seven-days editor with per-day time budgets, weather, today's recovery, protected exports and transactional Decision Log entries. Today links directly to the plan and shows data freshness. See [`docs/PLAN_EVOLUTION.md`](docs/PLAN_EVOLUTION.md).

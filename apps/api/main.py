@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from apps.api.routers import activities, companion, admin_ai, admin_users, auth, coach, garmin, garmin_workouts, health, jobs, setup, sparkyfitness, settings as user_settings, weather
 from pengucoach.common.config import settings
-from apps.api.routers import maps, plan_evolution
+from apps.api.routers import maps, plan_evolution, insights
 
 
 @asynccontextmanager
@@ -19,6 +19,7 @@ app.add_middleware(CORSMiddleware, allow_origins=[settings.frontend_origin], all
 for router in (setup.router, auth.router, garmin.router, garmin_workouts.router, sparkyfitness.router, health.router, activities.router, jobs.router, coach.router, companion.router, user_settings.router, weather.router, admin_ai.router, admin_users.router): app.include_router(router, prefix="/api/v1")
 app.include_router(plan_evolution.router, prefix="/api/v1")
 app.include_router(maps.router, prefix="/api/v1")
+app.include_router(insights.router, prefix="/api/v1")
 
 
 @app.get("/health")
