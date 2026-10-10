@@ -80,7 +80,8 @@ def _elapsed_seconds(df: pd.DataFrame) -> pd.Series:
     if len(valid):
         first = valid.iloc[0]
         return (ts - first).dt.total_seconds()
-    return pd.Series(np.arange(len(df), dtype=float), index=df.index)
+    # Routes without timestamps have no measured time axis.
+    return pd.Series(np.nan, index=df.index, dtype=float)
 
 
 def _altitude(df: pd.DataFrame) -> pd.Series:
@@ -102,7 +103,9 @@ def _grade(distance: pd.Series, altitude: pd.Series) -> pd.Series:
     da = smooth_alt.diff()
     grade = (da / dd.where(dd.abs() >= 2.0)) * 100.0
     grade = grade.replace([np.inf, -np.inf], np.nan).clip(-35, 35)
-    return grade.rolling(9, center=True, min_periods=1).median()
+    return grade.rolling(9, center=True, min_periods=1).median().where(
+        distance.notna() & altitude.notna() & (distance.diff() >= 2.0)
+    )
 
 
 def _elevation_gain_loss(altitude: pd.Series) -> tuple[float | None, float | None]:
@@ -288,7 +291,7 @@ def serialize_series(df: pd.DataFrame, limit: int = 5000) -> list[dict[str, Any]
         "timestamp", "elapsed_s", "distance", "distance_km", "heart_rate",
         "enhanced_speed", "speed", "speed_kmh", "pace_s_per_km", "power",
         "cadence", "enhanced_altitude", "altitude", "altitude_m", "grade_pct",
-        "position_lat", "position_long", "temperature", "respiration_rate",
+        "position_lat", "position_long", "track_segment", "temperature", "respiration_rate",
         "vertical_oscillation", "stance_time", "vertical_ratio", "step_length",
     ]
     columns = [c for c in wanted if c in enriched.columns]

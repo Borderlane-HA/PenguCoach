@@ -1,74 +1,115 @@
 "use client";
 
-import {useEffect,useMemo,useRef,useState} from "react";
+import {useCallback,useEffect,useMemo,useState} from "react";
+import ActivityRouteMap from "./ActivityRouteMap";
+import ActivityPanorama from "./ActivityPanorama";
+import {api} from "../lib/api";
+import {AxisMode,extent,finite,linePath,makeAxis,MapSettings,METRICS,Metric,metricLabel,nearestIndex,routeSegments,Sample,timeLabel} from "../lib/activityExplorer";
 
-type Sample=Record<string,any>;
-type MetricKey="heart_rate"|"speed_kmh"|"altitude_m"|"power"|"cadence"|"grade_pct"|"temperature";
-type MetricDef={key:MetricKey;de:string;en:string;unit:string;color:string;digits:number};
-
-const METRICS:MetricDef[]=[
-  {key:"heart_rate",de:"Herzfrequenz",en:"Heart rate",unit:"bpm",color:"#d94b4b",digits:0},
-  {key:"speed_kmh",de:"Geschwindigkeit",en:"Speed",unit:"km/h",color:"#3578c8",digits:1},
-  {key:"altitude_m",de:"Höhe",en:"Elevation",unit:"m",color:"#9b7a3b",digits:0},
-  {key:"power",de:"Leistung",en:"Power",unit:"W",color:"#7b61c9",digits:0},
-  {key:"cadence",de:"Kadenz",en:"Cadence",unit:"rpm",color:"#2d8f7b",digits:0},
-  {key:"grade_pct",de:"Steigung",en:"Grade",unit:"%",color:"#d77a2f",digits:1},
-  {key:"temperature",de:"Temperatur",en:"Temperature",unit:"°C",color:"#6a7b87",digits:1},
-];
-
-function finite(v:any){const n=Number(v);return Number.isFinite(n)?n:null}
-function fmt(v:any,d=1){const n=finite(v);return n==null?"—":n.toFixed(d)}
-function time(v:any){const n=finite(v);if(n==null)return"—";const s=Math.max(0,Math.round(n));const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),r=s%60;return h?`${h}:${String(m).padStart(2,"0")}:${String(r).padStart(2,"0")}`:`${m}:${String(r).padStart(2,"0")}`}
-function pace(v:any){const s=finite(v);if(s==null||s<=0)return"—";const m=Math.floor(s/60),r=Math.round(s%60);return `${m}:${String(r).padStart(2,"0")} min/km`}
-function hasMetric(data:Sample[],key:MetricKey){return data.some(x=>finite(x[key])!=null)}
-function extent(data:Sample[],key:MetricKey){const a=data.map(x=>finite(x[key])).filter((v):v is number=>v!=null);if(!a.length)return[0,1] as const;let lo=Math.min(...a),hi=Math.max(...a);if(lo===hi){lo-=1;hi+=1}const p=(hi-lo)*.08;return[lo-p,hi+p] as const}
-function linePath(data:Sample[],key:MetricKey,w:number,h:number,pad:number){const[lo,hi]=extent(data,key);let started=false,path="";data.forEach((row,i)=>{const v=finite(row[key]);if(v==null){started=false;return}const x=pad+(i/Math.max(1,data.length-1))*(w-pad*2);const y=pad+((hi-v)/(hi-lo))*(h-pad*2);path+=`${started?" L":"M"}${x.toFixed(1)} ${y.toFixed(1)}`;started=true});return path}
+const W=1200,H=330,P=44;
+const DEFAULTS=["heart_rate","speed_kmh","altitude_m","power"];
+const TICKS=[0,.25,.5,.75,1];
 
 export default function ActivityExplorer({data,lang}:{data:Sample[];lang:string}){
-  const available=useMemo(()=>METRICS.filter(m=>hasMetric(data,m.key)),[data]);
-  const initial=useMemo(()=>available.filter(m=>["heart_rate","speed_kmh","altitude_m","power"].includes(m.key)).map(m=>m.key),[available]);
-  const[selected,setSelected]=useState<MetricKey[]>(initial.length?initial:available.slice(0,3).map(m=>m.key));
-  useEffect(()=>{if(!selected.length&&available.length)setSelected(initial.length?initial:available.slice(0,3).map(m=>m.key))},[available,initial,selected.length]);
-  const[mode,setMode]=useState<"overlay"|"stacked">("overlay");
-  const[xMode,setXMode]=useState<"time"|"distance">("time");
-  const[from,setFrom]=useState(0),[to,setTo]=useState(100),[cursor,setCursor]=useState<number|null>(null);
-  const svgRef=useRef<SVGSVGElement|null>(null);
   const de=lang!=="en";
-  const filtered=useMemo(()=>{if(!data.length)return[];const a=Math.floor((Math.min(from,to)/100)*(data.length-1));const b=Math.ceil((Math.max(from,to)/100)*(data.length-1));return data.slice(a,b+1)},[data,from,to]);
+  const available=useMemo(()=>METRICS.filter(m=>data.some(row=>finite(row[m.key])!=null)),[data]);
+  const initial=useMemo(()=>{const keys=available.filter(m=>DEFAULTS.includes(m.key));return (keys.length?keys:available.slice(0,3)).map(m=>m.key)},[available]);
+  const [selected,setSelected]=useState<string[]>([]),[mode,setMode]=useState<"overlay"|"stacked">("overlay"),[xMode,setXMode]=useState<AxisMode>("time");
+  const [from,setFrom]=useState(0),[to,setTo]=useState(100),[cursor,setCursor]=useState<number|null>(0),[pinned,setPinned]=useState(false);
+  const [settings,setSettings]=useState<MapSettings|null>(null),[settingsFailed,setSettingsFailed]=useState(false);
+  const [colorKey,setColorKey]=useState(""),[googleActive,setGoogleActive]=useState(false);
+  async function loadSettings(){try{setSettings(await api<MapSettings>("/settings/maps",{cache:"no-store"}));setSettingsFailed(false)}catch{setSettingsFailed(true)}}
+  useEffect(()=>{void loadSettings()},[]);
+  useEffect(()=>{setSelected(previous=>{const valid=previous.filter(k=>available.some(m=>m.key===k));return valid.length?valid:initial})},[available,initial]);
+  useEffect(()=>{setCursor(0);setPinned(false);setFrom(0);setTo(100);if(makeAxis(data,"time").kind==="points"&&makeAxis(data,"distance").kind!=="points")setXMode("distance")},[data]);
+  const fullAxis=useMemo(()=>makeAxis(data,xMode),[data,xMode]);
+  const filtered=useMemo(()=>{
+    const lo=Math.min(from,to)/100,hi=Math.max(from,to)/100;
+    return data.filter((_,i)=>fullAxis.positions[i]>=lo&&fullAxis.positions[i]<=hi);
+  },[data,fullAxis,from,to]);
+  const axis=useMemo(()=>makeAxis(filtered,xMode),[filtered,xMode]);
+  const route=useMemo(()=>routeSegments(filtered),[filtered]);
+  const routePoints=useMemo(()=>route.flat(),[route]);
+  const current=cursor==null?null:Math.max(0,Math.min(filtered.length-1,cursor));
+  const point=current==null?null:filtered[current];
+  const routePoint=useMemo(()=>routePoints.find(p=>p.index===current)??null,[routePoints,current]);
   const active=available.filter(m=>selected.includes(m.key));
-  const point=cursor==null?null:filtered[Math.max(0,Math.min(filtered.length-1,cursor))];
-  const W=1200,H=330,P=44;
-  function toggle(k:MetricKey){setSelected(v=>v.includes(k)?(v.length>1?v.filter(x=>x!==k):v):[...v,k])}
-  function pointer(e:React.PointerEvent<SVGSVGElement>){const r=e.currentTarget.getBoundingClientRect();const pct=Math.max(0,Math.min(1,(e.clientX-r.left)/r.width));setCursor(Math.round(pct*Math.max(0,filtered.length-1)))}
-  function xLabel(row:Sample|undefined){if(!row)return"—";return xMode==="distance"&&finite(row.distance_km)!=null?`${fmt(row.distance_km,2)} km`:time(row.elapsed_s)}
-  function axisLabelAt(frac:number){if(!filtered.length)return"";const row=filtered[Math.round(frac*(filtered.length-1))];return xLabel(row)}
+  const colorMetric=available.find(m=>m.key===colorKey)??null;
+  const readout=point?available.filter(m=>finite(point[m.key])!=null):[];
+  const hasTime=makeAxis(data,"time").kind==="time", hasDistance=makeAxis(data,"distance").kind==="distance";
+  const pick=useCallback((index:number)=>{setCursor(index);setPinned(true)},[]);
+  function toggle(key:string){setSelected(previous=>previous.includes(key)?(previous.length>1?previous.filter(k=>k!==key):previous):[...previous,key])}
+  function pointerIndex(event:React.PointerEvent<SVGSVGElement>|React.MouseEvent<SVGSVGElement>){
+    const matrix=event.currentTarget.getScreenCTM();if(!matrix)return 0;
+    const local=new DOMPoint(event.clientX,event.clientY).matrixTransform(matrix.inverse());
+    const pad=mode==="stacked"?30:P;
+    return nearestIndex(axis.positions,(local.x-pad)/(W-pad*2));
+  }
+  function move(event:React.PointerEvent<SVGSVGElement>){if(!pinned)setCursor(pointerIndex(event))}
+  function axisLabel(index:number){
+    const row=filtered[index];if(!row)return "—";
+    if(axis.kind==="time")return timeLabel(row.elapsed_s);
+    if(axis.kind==="distance")return `${finite(row.distance_km)?.toFixed(2)} km`;
+    return `${de?"Punkt":"Point"} ${index+1}`;
+  }
+  function keySelect(event:React.KeyboardEvent){
+    if(!filtered.length)return;const index=current??0;
+    if(["ArrowLeft","ArrowRight","Home","End"].includes(event.key)){
+      event.preventDefault();pick(event.key==="Home"?0:event.key==="End"?filtered.length-1:Math.max(0,Math.min(filtered.length-1,index+(event.key==="ArrowLeft"?-1:1))));
+    }else if(event.key==="Enter"){event.preventDefault();setPinned(value=>!value)}
+  }
+  function changeRange(value:number,start:boolean){if(start)setFrom(value);else setTo(value);setCursor(0);setPinned(false)}
+  const interaction={onPointerMove:move,onPointerDown:(event:React.PointerEvent<SVGSVGElement>)=>{if(event.pointerType!=="mouse")pick(pointerIndex(event))},onClick:(event:React.MouseEvent<SVGSVGElement>)=>pick(pointerIndex(event)),onKeyDown:keySelect,tabIndex:0};
+  function tickLabel(fraction:number){
+    if(!filtered.length)return "";
+    const value=axis.values[0]+fraction*(axis.values.at(-1)!-axis.values[0]);
+    return axis.kind==="time"?timeLabel(value):axis.kind==="distance"?`${value.toFixed(2)} km`:axisLabel(nearestIndex(axis.positions,fraction));
+  }
 
-  if(!data.length)return <div className="activity-chart-empty">{de?"Keine FIT-Zeitreihe verfügbar.":"No FIT time series available."}</div>;
+  if(!data.length)return <div className="activity-chart-empty">{de?"Keine aufgezeichnete Zeitreihe oder Strecke verfügbar.":"No recorded time series or route available."}</div>;
   return <div className="activity-explorer">
     <div className="chart-toolbar">
-      <div className="chart-chip-row" aria-label={de?"Messwerte":"Metrics"}>{available.map(m=><button type="button" key={m.key} className={`chart-chip ${selected.includes(m.key)?"active":""}`} onClick={()=>toggle(m.key)}><span className="chart-dot" style={{background:m.color}}/>{de?m.de:m.en}</button>)}</div>
+      <div className="chart-chip-row" aria-label={de?"Messwerte":"Metrics"}>{available.map(metric=><button type="button" key={metric.key} className={`chart-chip ${selected.includes(metric.key)?"active":""}`} aria-pressed={selected.includes(metric.key)} onClick={()=>toggle(metric.key)}><span className="chart-dot" style={{background:metric.color}}/>{de?metric.de:metric.en}</button>)}</div>
       <div className="chart-segmented"><button type="button" className={mode==="overlay"?"active":""} onClick={()=>setMode("overlay")}>{de?"Überlagert":"Overlay"}</button><button type="button" className={mode==="stacked"?"active":""} onClick={()=>setMode("stacked")}>{de?"Untereinander":"Stacked"}</button></div>
-      <div className="chart-segmented"><button type="button" className={xMode==="time"?"active":""} onClick={()=>setXMode("time")}>{de?"Zeit":"Time"}</button><button type="button" className={xMode==="distance"?"active":""} onClick={()=>setXMode("distance")}>{de?"Distanz":"Distance"}</button></div>
+      <div className="chart-segmented"><button type="button" disabled={!hasTime} className={xMode==="time"?"active":""} onClick={()=>setXMode("time")}>{de?"Zeit":"Time"}</button><button type="button" disabled={!hasDistance} className={xMode==="distance"?"active":""} onClick={()=>setXMode("distance")}>{de?"Distanz":"Distance"}</button></div>
     </div>
 
-    {mode==="overlay"?<div className="chart-stage">
-      <svg ref={svgRef} className="activity-svg" viewBox={`0 0 ${W} ${H}`} role="img" aria-label={de?"Überlagertes Aktivitätsdiagramm":"Overlaid activity chart"} onPointerMove={pointer} onPointerLeave={()=>setCursor(null)}>
-        {[0,.25,.5,.75,1].map(t=><line key={`g${t}`} x1={P+t*(W-P*2)} y1={P} x2={P+t*(W-P*2)} y2={H-P} className="chart-grid"/>)}
-        {[0,.25,.5,.75,1].map(t=><line key={`h${t}`} x1={P} y1={P+t*(H-P*2)} x2={W-P} y2={P+t*(H-P*2)} className="chart-grid"/>)}
-        {active.map(m=><path key={m.key} d={linePath(filtered,m.key,W,H,P)} fill="none" stroke={m.color} strokeWidth="3" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke"/>) }
-        {cursor!=null&&<line x1={P+(cursor/Math.max(1,filtered.length-1))*(W-P*2)} y1={P} x2={P+(cursor/Math.max(1,filtered.length-1))*(W-P*2)} y2={H-P} className="chart-cursor"/>}
-        {[0,.25,.5,.75,1].map(t=><text key={`x${t}`} x={P+t*(W-P*2)} y={H-10} textAnchor={t===0?"start":t===1?"end":"middle"} className="chart-axis-label">{axisLabelAt(t)}</text>)}
+    {routePoints.length>0&&<section className="route-explorer-panel">
+      <div className="between"><div><strong>{de?"Deine aufgezeichnete Strecke":"Your recorded route"}</strong><small className="panorama-subtitle">{de?"Diagramm bewegen oder eine Stelle auf der Strecke anklicken":"Move over the chart or click a point on the route"}</small></div><a className="text-link" href="/settings/maps">{de?"Karten-Einstellungen":"Map settings"}</a></div>
+      <div className={`route-view-grid ${googleActive?"google-open":""}`}><div className="route-map-area">
+      {settingsFailed?<div className="map-state"><p>{de?"Karten-Einstellungen konnten nicht geladen werden.":"Could not load map settings."}</p><button type="button" className="ghost compact" onClick={loadSettings}>{de?"Erneut laden":"Retry"}</button></div>:!settings?<div className="map-state">{de?"Karten-Einstellungen werden geladen…":"Loading map settings…"}</div>:googleActive?<div className="map-state">{de?"Nach dem Schließen der Straßenansicht erscheint die Streckenkarte wieder.":"Close street-level view to return to the route map."}</div>:settings.map_enabled?<>
+        <div className="route-map-controls"><label>{de?"Streckenfarbe":"Route color"}<select value={colorKey} onChange={e=>setColorKey(e.target.value)}><option value="">{de?"Einheitlich":"Single color"}</option>{available.map(metric=><option value={metric.key} key={metric.key}>{de?metric.de:metric.en}</option>)}</select></label><span className="muted">{routePoints.length.toLocaleString(de?"de-DE":"en-GB")} {de?"GPS-Punkte":"GPS points"}{route.length>1?` · ${route.length} ${de?"Abschnitte":"segments"}`:""}</span></div>
+        <ActivityRouteMap data={filtered} index={current} colorMetric={colorMetric} onSelect={pick} de={de}/>
+      </>:<div className="map-state">{de?"Die Streckenkarte ist in deinen Einstellungen deaktiviert.":"The route map is disabled in your settings."}</div>}
+      </div><ActivityPanorama settings={settings} point={routePoint} points={routePoints} de={de} onGoogleActive={setGoogleActive}/></div>
+    </section>}
+
+    {available.length>0&&(mode==="overlay"?<div className="chart-stage">
+      <svg className="activity-svg" viewBox={`0 0 ${W} ${H}`} role="img" aria-label={de?"Aktivitätsdiagramm. Pfeiltasten wählen eine Stelle, Enter fixiert oder löst die Auswahl.":"Activity chart. Arrow keys select a point; Enter locks or unlocks the selection."} {...interaction}>
+        {TICKS.map(fraction=><line key={`g${fraction}`} x1={P+fraction*(W-P*2)} y1={P} x2={P+fraction*(W-P*2)} y2={H-P} className="chart-grid"/>)}
+        {TICKS.map(fraction=><line key={`h${fraction}`} x1={P} y1={P+fraction*(H-P*2)} x2={W-P} y2={P+fraction*(H-P*2)} className="chart-grid"/>)}
+        {active.map(metric=><path key={metric.key} d={linePath(filtered,metric,axis.positions,W,H,P)} fill="none" stroke={metric.color} strokeWidth="3" strokeLinejoin="round" vectorEffect="non-scaling-stroke"/>)}
+        {current!=null&&<line x1={P+(axis.positions[current]??0)*(W-P*2)} y1={P} x2={P+(axis.positions[current]??0)*(W-P*2)} y2={H-P} className="chart-cursor"/>}
+        {TICKS.map(fraction=><text key={`x${fraction}`} x={P+fraction*(W-P*2)} y={H-10} textAnchor={fraction===0?"start":fraction===1?"end":"middle"} className="chart-axis-label">{tickLabel(fraction)}</text>)}
       </svg>
-      <div className="chart-scale-note">{de?"Jede Kurve nutzt im Überlagerungsmodus ihre eigene Skala; der Tooltip zeigt die Originalwerte.":"Each line uses its own scale in overlay mode; the tooltip shows original values."}</div>
-    </div>:<div className="stacked-charts">{active.map(m=><MiniPanel key={m.key} metric={m} data={filtered} cursor={cursor} onPointer={pct=>setCursor(Math.round(pct*Math.max(0,filtered.length-1)))} de={de}/>)}</div>}
+      <div className="chart-scale-note">{de?"Jede Kurve nutzt ihre eigene Skala. Die Werte unten zeigen die ausgewählte Stelle; Datenlücken bleiben offen.":"Each line has its own scale. Values below describe the selected point; missing data leaves gaps."}</div>
+    </div>:<div className="stacked-charts">{active.map(metric=><MiniPanel key={metric.key} metric={metric} data={filtered} positions={axis.positions} cursor={current} interaction={interaction} de={de}/>)}</div>)}
 
-    <div className="chart-readout" aria-live="polite"><div><span>{de?"Position":"Position"}</span><strong>{point?xLabel(point):de?"Mit Maus/Finger ins Diagramm":"Move pointer over chart"}</strong></div>{active.map(m=><div key={m.key}><span>{de?m.de:m.en}</span><strong>{point?`${fmt(point[m.key],m.digits)} ${m.unit}`:"—"}</strong></div>)}{point&&finite(point.pace_s_per_km)!=null&&<div><span>Pace</span><strong>{pace(point.pace_s_per_km)}</strong></div>}</div>
-
-    <div className="range-panel"><div className="between"><strong>{de?"Analysebereich":"Analysis range"}</strong><span className="muted">{Math.min(from,to)}–{Math.max(from,to)} %</span></div><div className="dual-range"><input aria-label={de?"Start des Analysebereichs":"Analysis range start"} type="range" min="0" max="100" value={from} onChange={e=>setFrom(Number(e.target.value))}/><input aria-label={de?"Ende des Analysebereichs":"Analysis range end"} type="range" min="0" max="100" value={to} onChange={e=>setTo(Number(e.target.value))}/></div><div className="range-actions"><button type="button" className="ghost compact" onClick={()=>{setFrom(0);setTo(100)}}>{de?"Gesamt":"All"}</button><button type="button" className="ghost compact" onClick={()=>{setFrom(0);setTo(50)}}>{de?"1. Hälfte":"First half"}</button><button type="button" className="ghost compact" onClick={()=>{setFrom(50);setTo(100)}}>{de?"2. Hälfte":"Second half"}</button></div></div>
-  </div>
+    <div className="route-point-controls"><div><strong>{point?axisLabel(current??0):de?"Keine Punkte im Analysebereich":"No points in analysis range"}</strong><small>{de?"Klick fixiert die Auswahl. Der Regler funktioniert auch per Finger.":"Click to lock the selection. The slider also works with touch."}</small></div><button type="button" className="ghost compact" onClick={()=>setPinned(!pinned)} disabled={!point} aria-pressed={pinned}>{pinned?(de?"Auswahl lösen":"Unlock selection"):(de?"Auswahl fixieren":"Lock selection")}</button></div>
+    <input className="activity-position-slider" type="range" aria-label={de?"Position im Training":"Workout position"} min="0" max={Math.max(0,filtered.length-1)} step="1" value={current??0} disabled={filtered.length<2} onChange={event=>pick(Number(event.target.value))} aria-valuetext={axisLabel(current??0)}/>
+    <div className="chart-readout" aria-label={de?"Messwerte an der ausgewählten Stelle":"Measurements at the selected point"}>
+      {point&&finite(point.elapsed_s)!=null&&<div><span>{de?"Zeit":"Time"}</span><strong>{timeLabel(point.elapsed_s)}</strong></div>}
+      {point&&finite(point.distance_km)!=null&&<div><span>{de?"Distanz":"Distance"}</span><strong>{finite(point.distance_km)!.toFixed(2)} km</strong></div>}
+      {readout.map(metric=><div key={metric.key}><span>{de?metric.de:metric.en}</span><strong>{metricLabel(metric,point![metric.key])}</strong></div>)}
+    </div>
+    {point&&routePoints.length>0&&!routePoint&&<p className="map-status">{de?"An dieser Stelle fehlen GPS-Koordinaten; der Kartenmarker und die Straßenansicht sind deshalb nicht verfügbar.":"This point has no GPS coordinates; its map marker and street-level view are unavailable."}</p>}
+    {available.some(m=>m.key==="grade_pct")&&<small className="chart-scale-note">{de?"Steigung wird geglättet aus Höhe und Distanz berechnet und ist eine Näherung.":"Grade is estimated from smoothed elevation and distance."}</small>}
+    {axis.kind==="points"&&<small className="chart-scale-note">{de?"Ohne vollständige Zeit- oder Distanzwerte zeigt die Achse Aufzeichnungspunkte.":"Without complete time or distance values the axis displays recorded points."}</small>}
+    <div className="range-panel"><div className="between"><strong>{de?"Analysebereich":"Analysis range"}</strong><span className="muted">{Math.min(from,to)}–{Math.max(from,to)} %</span></div><div className="dual-range"><input aria-label={de?"Start des Analysebereichs":"Analysis range start"} type="range" min="0" max="100" value={from} onChange={e=>changeRange(Number(e.target.value),true)}/><input aria-label={de?"Ende des Analysebereichs":"Analysis range end"} type="range" min="0" max="100" value={to} onChange={e=>changeRange(Number(e.target.value),false)}/></div><div className="range-actions"><button type="button" className="ghost compact" onClick={()=>{setFrom(0);setTo(100);setCursor(0)}}>{de?"Gesamt":"All"}</button><button type="button" className="ghost compact" onClick={()=>{setFrom(0);setTo(50);setCursor(0)}}>{de?"1. Hälfte":"First half"}</button><button type="button" className="ghost compact" onClick={()=>{setFrom(50);setTo(100);setCursor(0)}}>{de?"2. Hälfte":"Second half"}</button></div></div>
+  </div>;
 }
 
-function MiniPanel({metric,data,cursor,onPointer,de}:{metric:MetricDef;data:Sample[];cursor:number|null;onPointer:(p:number)=>void;de:boolean}){
-  const W=1200,H=128,P=30;const[lo,hi]=extent(data,metric.key);
-  return <div className="mini-panel"><div className="mini-panel-title"><span className="chart-dot" style={{background:metric.color}}/><strong>{de?metric.de:metric.en}</strong><span>{fmt(lo,metric.digits)}–{fmt(hi,metric.digits)} {metric.unit}</span></div><svg className="activity-svg mini" viewBox={`0 0 ${W} ${H}`} onPointerMove={e=>{const r=e.currentTarget.getBoundingClientRect();onPointer(Math.max(0,Math.min(1,(e.clientX-r.left)/r.width)))}} onPointerLeave={()=>{}}><line x1={P} y1={H/2} x2={W-P} y2={H/2} className="chart-grid"/><path d={linePath(data,metric.key,W,H,P)} fill="none" stroke={metric.color} strokeWidth="2.5" vectorEffect="non-scaling-stroke"/>{cursor!=null&&<line x1={P+(cursor/Math.max(1,data.length-1))*(W-P*2)} y1={P/2} x2={P+(cursor/Math.max(1,data.length-1))*(W-P*2)} y2={H-P/2} className="chart-cursor"/>}</svg></div>
+function MiniPanel({metric,data,positions,cursor,interaction,de}:{metric:Metric;data:Sample[];positions:number[];cursor:number|null;interaction:Record<string,unknown>;de:boolean}){
+  const height=150,padding=30,[lo,hi]=extent(data,metric.key);
+  return <div className="mini-panel"><div className="mini-panel-title"><span className="chart-dot" style={{background:metric.color}}/><strong>{de?metric.de:metric.en}</strong><span>{metricLabel(metric,lo)}–{metricLabel(metric,hi)}</span></div><svg className="activity-svg mini" viewBox={`0 0 ${W} ${height}`} role="img" aria-label={de?metric.de:metric.en} {...interaction}><line x1={padding} y1={height/2} x2={W-padding} y2={height/2} className="chart-grid"/><path d={linePath(data,metric,positions,W,height,padding)} fill="none" stroke={metric.color} strokeWidth="2.5" vectorEffect="non-scaling-stroke"/>{cursor!=null&&<line x1={padding+(positions[cursor]??0)*(W-padding*2)} y1={padding/2} x2={padding+(positions[cursor]??0)*(W-padding*2)} y2={height-padding/2} className="chart-cursor"/>}</svg></div>;
 }

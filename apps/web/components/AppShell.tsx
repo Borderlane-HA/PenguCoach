@@ -7,7 +7,7 @@ import {bi,useI18n} from "../lib/i18n";
 
 type Me={username:string;role:string;locale:string;safety_required:boolean;app_version:string};
 type Appearance={theme:string;has_avatar:boolean;has_app_icon:boolean;avatar_version?:number;app_icon_version?:number};
-type IconName="today"|"health"|"activities"|"training"|"coach"|"garmin"|"sparky"|"weather"|"privacy"|"appearance"|"about"|"ai"|"users"|"logout";
+type IconName="today"|"health"|"activities"|"training"|"coach"|"garmin"|"sparky"|"weather"|"maps"|"privacy"|"appearance"|"about"|"ai"|"users"|"logout";
 
 function Icon({name}:{name:IconName}){
   const common={width:20,height:20,viewBox:"0 0 24 24",fill:"none",stroke:"currentColor",strokeWidth:1.8,strokeLinecap:"round" as const,strokeLinejoin:"round" as const,"aria-hidden":true};
@@ -19,6 +19,7 @@ function Icon({name}:{name:IconName}){
   if(name==="garmin")return <svg {...common}><rect x="7" y="4" width="10" height="16" rx="3"/><path d="M9 1h6M9 23h6M10 9l2-2 2 2M10 14h4"/></svg>;
   if(name==="sparky")return <svg {...common}><path d="M12 3 5 12h5l-1 9 7-10h-5l1-8Z"/></svg>;
   if(name==="weather")return <svg {...common}><path d="M7 18h10a4 4 0 0 0 .7-7.9A6 6 0 0 0 6.5 9.2 4.5 4.5 0 0 0 7 18Z"/><path d="M12 3v2M4.9 5.9l1.4 1.4M19.1 5.9l-1.4 1.4"/></svg>;
+  if(name==="maps")return <svg {...common}><path d="m3 6 6-3 6 3 6-3v15l-6 3-6-3-6 3V6ZM9 3v15M15 6v15"/></svg>;
   if(name==="privacy")return <svg {...common}><path d="M12 3 5 6v5c0 4.7 2.7 8.1 7 10 4.3-1.9 7-5.3 7-10V6l-7-3Z"/><path d="m9.5 12 1.6 1.6 3.4-3.6"/></svg>;
   if(name==="appearance")return <svg {...common}><circle cx="12" cy="12" r="9"/><path d="M12 3v18M3 12h18M6.2 6.2l11.6 11.6M17.8 6.2 6.2 17.8"/></svg>;
   if(name==="about")return <svg {...common}><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>;
@@ -46,6 +47,7 @@ export default function AppShell({children,title}:{children:React.ReactNode;titl
     {href:"/settings/garmin",icon:"garmin" as IconName,label:"Garmin"},
     {href:"/settings/sparkyfitness",icon:"sparky" as IconName,label:"SparkyFitness"},
     {href:"/settings/weather",icon:"weather" as IconName,label:bi(lang,"Wetter","Weather")},
+    {href:"/settings/maps",icon:"maps" as IconName,label:bi(lang,"Karten & Straßenansicht","Maps & street view")},
     {href:"/settings/appearance",icon:"appearance" as IconName,label:bi(lang,"Darstellung","Appearance")},
     {href:"/settings/privacy",icon:"privacy" as IconName,label:bi(lang,"Datenschutz","Privacy")},
     {href:"/settings/about",icon:"about" as IconName,label:bi(lang,"Über PenguCoach","About PenguCoach")},

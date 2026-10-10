@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.1.0-alpha.48 — Activity Route Explorer
+
+- Adds an OpenStreetMap route synchronized with recorded workout samples, true time/distance axes, mouse, touch slider and keyboard selection.
+- Adds optional route coloring by available measurement channels, start/finish markers and explicit GPS gaps/GPX segments.
+- Shows only available channels and measurements; null values are no longer converted to zero. Adds respiration and available running-dynamics channels.
+- Adds personal Maps & street view settings for every user, encrypted Google API key / Apple Maps token storage, replace/delete controls and no-store credential responses after explicit consent.
+- Adds Google Maps Embed Street View and an isolated Apple MapKit JS Look Around viewer, follow-chart controls, cancellation and provider error handling.
+- Temporarily replaces the OSM map while Google panoramas are active; the chart remains usable.
+- Fixes GPX distance derivation without timestamps and stops inventing a one-second time axis. Separates GPX track segments and labels calculated grade.
+- Uses existing user preferences; no new database migration is required.
+
 ## v0.1.0-alpha.47 — Plan Evolution
 
 - Adds duration-aware same-day plan matching and reviewed candidates on shifted days; persistent assignments remain one-to-one across plans.

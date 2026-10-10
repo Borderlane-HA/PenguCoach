@@ -86,10 +86,18 @@ def _haversine_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
 
 def _with_derived_distance_speed(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
     distance = 0.0
-    previous: tuple[float, float, datetime] | None = None
+    previous: tuple[float, float, datetime | None] | None = None
+    previous_segment = None
     for item in records:
+        segment = item.get("track_segment")
+        if segment != previous_segment:
+            previous = None
+        previous_segment = segment
         lat = _number(item.get("position_lat"))
         lon = _number(item.get("position_long"))
+        if lat is not None and lon is not None and (abs(lat) > 90 or abs(lon) > 180):
+            lat = lon = None
+            item["position_lat"] = item["position_long"] = None
         stamp = _parse_dt(item.get("timestamp"))
         explicit_distance = _number(item.get("distance"))
         if explicit_distance is not None:
@@ -97,12 +105,14 @@ def _with_derived_distance_speed(records: list[dict[str, Any]]) -> list[dict[str
         elif lat is not None and lon is not None and previous is not None:
             distance += _haversine_m(previous[0], previous[1], lat, lon)
         item["distance"] = distance
-        if _number(item.get("speed")) is None and previous is not None and lat is not None and lon is not None and stamp is not None:
+        if _number(item.get("speed")) is None and previous is not None and previous[2] is not None and lat is not None and lon is not None and stamp is not None:
             seconds = (stamp - previous[2]).total_seconds()
             if 0 < seconds <= 300:
                 item["speed"] = _haversine_m(previous[0], previous[1], lat, lon) / seconds
-        if lat is not None and lon is not None and stamp is not None:
+        if lat is not None and lon is not None:
             previous = (lat, lon, stamp)
+        else:
+            previous = None
     return records
 
 
@@ -123,9 +133,14 @@ def parse_gpx_bytes(raw: bytes) -> tuple[pd.DataFrame, dict[str, Any], str | Non
         sport = raw_type.replace(" ", "_") or "other"
 
     records: list[dict[str, Any]] = []
+    segments = {
+        id(point): index
+        for index, segment in enumerate(x for x in root.iter() if _local(x.tag) == "trkseg")
+        for point in segment if _local(point.tag) == "trkpt"
+    }
     for point in (x for x in root.iter() if _local(x.tag) == "trkpt"):
         lat = _number(point.attrib.get("lat")); lon = _number(point.attrib.get("lon"))
-        item: dict[str, Any] = {"position_lat": lat, "position_long": lon}
+        item: dict[str, Any] = {"position_lat": lat, "position_long": lon, "track_segment": segments.get(id(point), 0)}
         for child in point:
             tag = _local(child.tag)
             value = _text(child)
