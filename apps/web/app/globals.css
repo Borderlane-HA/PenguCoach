@@ -530,3 +530,22 @@ html[data-theme="dark"],html[data-theme="slate"],html[data-theme="aurora"],html[
 @media(max-width:400px){.body-checkin-grid{grid-template-columns:95px minmax(0,1fr);gap:8px}.body-levels{grid-template-columns:repeat(3,minmax(0,1fr))}.body-levels small{font-size:.6rem}.today-customization{padding:12px!important}.today-card-icon{width:30px;height:30px}.today-result-values{margin-left:0}.today-phases button>span{width:19px;height:19px}}
 
 .today-preparation .primary-link{color:var(--primary-ink)!important;background:var(--accent)!important}
+
+/* Shared disclosure affordance; the compact navigation menu keeps its own icon. */
+details:not(.mobile-more)>summary,button[aria-expanded]{position:relative;padding-right:52px!important;min-height:40px;cursor:pointer}
+details:not(.mobile-more)>summary{display:flex;align-items:center;gap:10px;list-style:none;border-radius:9px}
+details:not(.mobile-more)>summary::-webkit-details-marker{display:none}
+details:not(.mobile-more)>summary::marker{content:""}
+details:not(.mobile-more)>summary::before,button[aria-expanded]::before{content:"";position:absolute;right:9px;top:50%;transform:translateY(-50%);width:30px;height:30px;box-sizing:border-box;border:1px solid var(--border);border-radius:10px;background:var(--panel2);pointer-events:none}
+details:not(.mobile-more)>summary::after,button[aria-expanded]::after{content:"";position:absolute;right:20px;top:50%;width:8px;height:8px;margin:0;box-sizing:border-box;border-right:2px solid var(--text);border-bottom:2px solid var(--text);transform:translateY(-70%) rotate(45deg);transition:transform .16s ease;pointer-events:none}
+details[open]:not(.mobile-more)>summary::after,button[aria-expanded=true]::after{content:"";transform:translateY(-20%) rotate(225deg)}
+details:not(.mobile-more)>summary:hover::before,details:not(.mobile-more)>summary:focus-visible::before,button[aria-expanded]:hover::before,button[aria-expanded]:focus-visible::before{background:var(--accent-soft);border-color:var(--accent-strong)}
+.daily-check>details>summary{display:flex;align-items:center;padding:14px 52px 14px 15px!important;border:1px solid var(--border);background:var(--panel2);margin-bottom:16px;min-height:82px}
+.daily-check>details>summary h3{margin:0}
+.daily-check>details>summary .eyebrow{font-size:.64rem;line-height:1.4;margin-bottom:5px}
+.daily-check>details>summary:hover,.daily-check>details>summary:focus-visible{border-color:var(--accent-strong)}
+.companion-week>summary{min-height:46px}
+.training-session-open[aria-expanded]{padding-right:45px!important;min-height:80px}
+.training-session-open[aria-expanded]::before{right:5px;width:26px;height:26px}
+.training-session-open[aria-expanded]::after{right:14px}
+@media(prefers-reduced-motion:reduce){details:not(.mobile-more)>summary::after,button[aria-expanded]::after{transition:none}}

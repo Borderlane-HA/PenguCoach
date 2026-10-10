@@ -95,8 +95,8 @@ export default function AIAdmin(){
     </section>
 
     <section className="card ai-infra-card">
-      <button type="button" className="ai-infra-toggle" onClick={()=>setInfraOpen(v=>!v)}>
-        <div><strong>{bi(lang,"Provider & Modelle","Providers & models")}</strong><small>{bi(lang,"Ollama, OpenAI, Claude, IONOS AI Model Hub, Gemini, Grok und OpenAI-kompatible Endpunkte verwalten.","Manage Ollama, OpenAI, Claude, IONOS AI Model Hub, Gemini, Grok and OpenAI-compatible endpoints.")}</small></div><span>{infraOpen?"−":"+"}</span>
+      <button type="button" className="ai-infra-toggle" aria-expanded={infraOpen} onClick={()=>setInfraOpen(v=>!v)}>
+        <div><strong>{bi(lang,"Provider & Modelle","Providers & models")}</strong><small>{bi(lang,"Ollama, OpenAI, Claude, IONOS AI Model Hub, Gemini, Grok und OpenAI-kompatible Endpunkte verwalten.","Manage Ollama, OpenAI, Claude, IONOS AI Model Hub, Gemini, Grok and OpenAI-compatible endpoints.")}</small></div>
       </button>
       {infraOpen&&<div className="ai-infra-body">
         <div className="grid2">

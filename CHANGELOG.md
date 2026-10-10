@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.0-alpha.54 — Visible collapsible sections
+
+- Consistent, theme-aware chevrons for collapsible sections throughout Today, health, routes, training, feedback and Coach settings. The chevron turns upward when open.
+- Check-in has a highlighted full-width header; nested explanations keep their own independent state indicators.
+- Calendar week/session toggles now display the same indicator. Keyboard focus, hover and reduced-motion preferences are supported.
+- Styling-only correction; readiness, data loading and saved preferences are unchanged. No migration or new dependency.
+
 ## 0.1.0-alpha.53 — Your Today flow
 
 - Today switches between morning, preparation and reflection using the user’s local date, recorded completed activities and pending plans; stages can also be selected manually.
