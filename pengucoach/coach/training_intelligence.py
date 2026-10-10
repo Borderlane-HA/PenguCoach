@@ -225,14 +225,23 @@ def plan_conflicts(
                 "session_ids": [x["id"] for x in rows], "total_minutes": total,
             })
 
-    ordered = sorted(sessions, key=lambda x: (x["date"], x["id"]))
-    for left, right in zip(ordered, ordered[1:]):
-        d1, d2 = date.fromisoformat(left["date"]), date.fromisoformat(right["date"])
-        if (d2 - d1).days == 1 and _is_hard_session(left) and _is_hard_session(right):
-            conflicts.append({
-                "type": "hard_back_to_back", "severity": "warning", "session_id": right["id"],
-                "related_session_id": left["id"], "date": right["date"], "proposed_action": "reduce",
-            })
+    # Inspect each hard session against every hard session on the preceding
+    # day, including other user-owned saved plans. Easy same-day sessions must
+    # not hide a hard/hard pair in a sorted-neighbor comparison.
+    hard = [s for s in sessions if _is_hard_session(s)]
+    for right in hard:
+        previous = [left for left in [*hard, *(other_plan_sessions or [])]
+                    if _is_hard_session(left)
+                    and (date.fromisoformat(right['date'])-date.fromisoformat(left['date'])).days == 1]
+        if previous:
+            conflicts.append({"type": "hard_back_to_back", "severity": "warning", "session_id": right['id'],
+                              "related_session_id": previous[0]['id'], "date": right['date'], "proposed_action": "reduce"})
+        # When our plan precedes a hard day in another plan, our own session is
+        # the one that can be moved here.
+        if any(_is_hard_session(other) and (date.fromisoformat(other['date'])-date.fromisoformat(right['date'])).days == 1
+               for other in other_plan_sessions or []):
+            conflicts.append({"type": "hard_back_to_back", "severity": "warning", "session_id": right['id'],
+                              "date": right['date'], "proposed_action": "postpone", "other_plan": True})
 
     other_index: dict[tuple[str, str], dict[str, Any]] = {}
     for other in other_plan_sessions or []:

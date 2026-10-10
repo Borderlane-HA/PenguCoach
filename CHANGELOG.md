@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.0-alpha.51 — Local training companion
+
+- Today opens the existing reviewed short-workout preview directly when time is short; original/proposed duration is clearer.
+- User-confirmed activity experiences: sport/type matching, Today/plan hints, Coach context, edit/pause/delete in the existing profile.
+- Recorded 1/5/20-minute power/pace best efforts, exact full-recording windows, chart jumps and bounded sport-specific personal comparisons.
+- Current calendar-draft load checks, adjacent intensive days across saved plans, free alternative dates and review before saving warnings.
+- Route briefing with approximate sustained climbs, measured averages, personal GPS notes and upcoming timed-workout placement along the recording.
+- Feedback, experiences and route notes have independent editing/deletion; profile clearing includes training experiences. Existing Garmin locks and panorama consent remain enforced.
+- No new dependency or database migration. Details and calculation limits: `docs/LOCAL_TRAINING_FEATURES.md`.
+
 ## v0.1.0-alpha.50 — Training & Personal Progress
 
 - Added recorded-sample goal review for linked plan sessions: nested repeats, timed/distance steps, time-weighted below/in/above-target distributions, coverage and adjustable recording alignment. Missing sensors, times or sport-specific zones stay unassessed. Full recording is used for review; the interactive chart remains downsampled.

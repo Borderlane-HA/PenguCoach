@@ -1,6 +1,7 @@
 "use client";
 
 import {useEffect,useRef,useState} from "react";
+import BestEfforts from "../../components/BestEfforts";
 import AppShell from "../../components/AppShell";
 import {API,api} from "../../lib/api";
 import {bi,useI18n,type Lang} from "../../lib/i18n";
@@ -63,7 +64,7 @@ export default function Activities(){
       <div className="activity-upload-actions"><button className="ghost" onClick={closeUpload} disabled={uploading}>{bi(lang,"Abbrechen","Cancel")}</button><button onClick={()=>void upload()} disabled={!file||uploading}>{uploading?bi(lang,"Wird importiert…","Importing…"):bi(lang,"Importieren & analysieren","Import & analyse")}</button></div>
       <div className="activity-upload-note">{bi(lang,"Unterstützt: FIT, GPX, TCX und ZIP mit FIT. CSV wird bewusst nicht automatisch interpretiert, da das Format keine einheitliche Trainingsstruktur vorgibt.","Supported: FIT, GPX, TCX and ZIP containing FIT. CSV is intentionally not auto-interpreted because it has no standard activity schema.")}</div>
     </section></div>}
-  </AppShell>
+  <BestEfforts lang={lang}/></AppShell>
 }
 
 

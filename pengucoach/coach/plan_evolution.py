@@ -263,7 +263,7 @@ async def comparison_data(db, user, run, schedule):
                     other_sessions.append({**s, "match_key": str(other_run.id)+":"+s["id"]})
     items = compare_v2(sessions, activities, user, confirmed=confirmed, reserved=reserved, other_sessions=other_sessions)
     matched_ids = [uuid.UUID(s["activity_id"]) for s in items if s["activity_id"]]
-    feedback = {str(f.activity_id): f.data for f in (await db.scalars(select(ActivityFeedback).where(ActivityFeedback.user_id == user.id, ActivityFeedback.activity_id.in_(matched_ids)))).all()}
+    feedback = {str(f.activity_id): {k:v for k,v in (f.data or {}).items() if k in {"feeling", "exertion", "discomfort", "comment"}} for f in (await db.scalars(select(ActivityFeedback).where(ActivityFeedback.user_id == user.id, ActivityFeedback.activity_id.in_(matched_ids)))).all()}
     metrics = {str(m.activity_id): m for m in (await db.scalars(select(ActivityMetric).where(ActivityMetric.user_id == user.id, ActivityMetric.activity_id.in_(matched_ids)))).all()}
     for s in items:
         s["feedback"] = feedback.get(s["activity_id"])

@@ -3,6 +3,7 @@
 import {useCallback,useEffect,useMemo,useRef,useState} from "react";
 import ActivityRouteMap from "./ActivityRouteMap";
 import ActivityPanorama from "./ActivityPanorama";
+import RouteBriefing from "./RouteBriefing";
 import RouteComparison from "./RouteComparison";
 import {api} from "../lib/api";
 import {AxisMode,extent,finite,linePath,makeAxis,MapSettings,METRICS,Metric,metricLabel,nearestIndex,routeSegments,Sample,timeLabel} from "../lib/activityExplorer";
@@ -17,6 +18,7 @@ export default function ActivityExplorer({data,lang,activityId}:{data:Sample[];l
   const initial=useMemo(()=>{const keys=available.filter(m=>DEFAULTS.includes(m.key));return (keys.length?keys:available.slice(0,3)).map(m=>m.key)},[available]);
   const [selected,setSelected]=useState<string[]>([]),[mode,setMode]=useState<"overlay"|"stacked">("overlay"),[xMode,setXMode]=useState<AxisMode>("time");
   const [from,setFrom]=useState(0),[to,setTo]=useState(100),[cursor,setCursor]=useState<number|null>(0),[pinned,setPinned]=useState(false);
+  const [annotations,setAnnotations]=useState<Record<string,any>[]>([]);
   const [settings,setSettings]=useState<MapSettings|null>(null),[settingsFailed,setSettingsFailed]=useState(false);
   const [playing,setPlaying]=useState(false),[replaySpeed,setReplaySpeed]=useState(60);
   const replayClock=useRef(0);
@@ -75,6 +77,11 @@ export default function ActivityExplorer({data,lang,activityId}:{data:Sample[];l
     function seek(event:Event){const detail=(event as CustomEvent).detail;if(detail?.activityId!==activityId)return;const time=makeAxis(data,"time");if(time.kind!=="time")return;const first=time.values[0],last=time.values.at(-1)!;setPlaying(false);setFrom(0);setTo(100);setXMode("time");setPinned(true);setCursor(nearestIndex(time.positions,(detail.elapsed-first)/(last-first)))}
     window.addEventListener("pengucoach-activity-seek",seek);return()=>window.removeEventListener("pengucoach-activity-seek",seek);
   },[activityId,data]);
+  useEffect(()=>{
+    const requested=new URLSearchParams(window.location.search).get("seek");if(requested==null||!data.length)return;
+    const time=makeAxis(data,"time"),elapsed=Number(requested);if(time.kind!=="time"||!Number.isFinite(elapsed))return;
+    setXMode("time");setPinned(true);setCursor(nearestIndex(time.positions,(elapsed-time.values[0])/(time.values.at(-1)!-time.values[0])));
+  },[activityId,data]);
   const steepest=useMemo(()=>{let index=-1,grade=3;filtered.forEach((r,i)=>{const value=finite(r.grade_pct);if(value!=null&&value>grade){grade=value;index=i}});return index},[filtered]);
   const interaction={onPointerMove:move,onPointerDown:(event:React.PointerEvent<SVGSVGElement>)=>{if(event.pointerType!=="mouse")pick(pointerIndex(event))},onClick:(event:React.MouseEvent<SVGSVGElement>)=>pick(pointerIndex(event)),onKeyDown:keySelect,tabIndex:0};
   function tickLabel(fraction:number){
@@ -96,7 +103,7 @@ export default function ActivityExplorer({data,lang,activityId}:{data:Sample[];l
       <div className={`route-view-grid ${googleActive?"google-open":""}`}><div className="route-map-area">
       {settingsFailed?<div className="map-state"><p>{de?"Karten-Einstellungen konnten nicht geladen werden.":"Could not load map settings."}</p><button type="button" className="ghost compact" onClick={loadSettings}>{de?"Erneut laden":"Retry"}</button></div>:!settings?<div className="map-state">{de?"Karten-Einstellungen werden geladen…":"Loading map settings…"}</div>:googleActive?<div className="map-state">{de?"Nach dem Schließen der Straßenansicht erscheint die Streckenkarte wieder.":"Close street-level view to return to the route map."}</div>:settings.map_enabled?<>
         <div className="route-map-controls"><label>{de?"Streckenfarbe":"Route color"}<select value={colorKey} onChange={e=>setColorKey(e.target.value)}><option value="">{de?"Einheitlich":"Single color"}</option>{available.map(metric=><option value={metric.key} key={metric.key}>{de?metric.de:metric.en}</option>)}</select></label><span className="muted">{routePoints.length.toLocaleString(de?"de-DE":"en-GB")} {de?"GPS-Punkte":"GPS points"}{route.length>1?` · ${route.length} ${de?"Abschnitte":"segments"}`:""}</span></div>
-        <ActivityRouteMap data={filtered} index={current} colorMetric={colorMetric} onSelect={pick} de={de}/>
+        <ActivityRouteMap data={filtered} index={current} colorMetric={colorMetric} onSelect={pick} de={de} annotations={annotations}/>
       </>:<div className="map-state">{de?"Die Streckenkarte ist in deinen Einstellungen deaktiviert.":"The route map is disabled in your settings."}</div>}
       </div><ActivityPanorama settings={settings} point={routePoint} points={routePoints} de={de} onGoogleActive={setGoogleActive}/></div>
     </section>}
@@ -124,6 +131,7 @@ export default function ActivityExplorer({data,lang,activityId}:{data:Sample[];l
     {available.some(m=>m.key==="grade_pct")&&<small className="chart-scale-note">{de?"Steigung wird geglättet aus Höhe und Distanz berechnet und ist eine Näherung.":"Grade is estimated from smoothed elevation and distance."}</small>}
     {axis.kind==="points"&&<small className="chart-scale-note">{de?"Ohne vollständige Zeit- oder Distanzwerte zeigt die Achse Aufzeichnungspunkte.":"Without complete time or distance values the axis displays recorded points."}</small>}
     <div className="range-panel"><div className="between"><strong>{de?"Analysebereich":"Analysis range"}</strong><span className="muted">{Math.min(from,to)}–{Math.max(from,to)} %</span></div><div className="dual-range"><input aria-label={de?"Start des Analysebereichs":"Analysis range start"} type="range" min="0" max="100" value={from} onChange={e=>changeRange(Number(e.target.value),true)}/><input aria-label={de?"Ende des Analysebereichs":"Analysis range end"} type="range" min="0" max="100" value={to} onChange={e=>changeRange(Number(e.target.value),false)}/></div><div className="range-actions"><button type="button" className="ghost compact" onClick={()=>{setFrom(0);setTo(100);setCursor(0)}}>{de?"Gesamt":"All"}</button><button type="button" className="ghost compact" onClick={()=>{setFrom(0);setTo(50);setCursor(0)}}>{de?"1. Hälfte":"First half"}</button><button type="button" className="ghost compact" onClick={()=>{setFrom(50);setTo(100);setCursor(0)}}>{de?"2. Hälfte":"Second half"}</button></div></div>
+    {activityId&&routeSegments(data).flat().length>0&&<RouteBriefing activityId={activityId} data={data} pointIndex={point?data.indexOf(point):null} de={de} onAnnotations={setAnnotations} onSelect={index=>{setPlaying(false);setFrom(0);setTo(100);setCursor(index);setPinned(true)}}/>}
     {activityId&&<RouteComparison activityId={activityId} start={Math.min(from,to)} end={Math.max(from,to)} axis={axis.kind} de={de} hasRoute={routePoints.length>=12}/>}
   </div>;
 }

@@ -2,6 +2,7 @@
 
 import {useEffect,useRef,useState} from "react";
 import {useParams} from "next/navigation";
+import BestEfforts from "../../../components/BestEfforts";
 import WorkoutReview from "../../../components/WorkoutReview";
 import ActivityFeedback from "../../../components/ActivityFeedback";
 import AppShell from "../../../components/AppShell";
@@ -72,7 +73,7 @@ export default function Detail(){
       <div className="card stat-group"><h2>⚡ {bi(lang,"Leistung & Kadenz","Power & cadence")}</h2><div className="mini-metrics"><Metric label={bi(lang,"Ø Leistung","Avg power")} value={n(d.avg_power??pw.avg)!=null?`${int(d.avg_power??pw.avg)} W`:"—"}/><Metric label={bi(lang,"Max Leistung","Max power")} value={n(gx.max_power_w??pw.max)!=null?`${int(gx.max_power_w??pw.max)} W`:"—"}/><Metric label="Normalized Power" value={n(gx.normalized_power_w??pw.normalized)!=null?`${int(gx.normalized_power_w??pw.normalized)} W`:"—"}/><Metric label={bi(lang,"Ø / Max Kadenz","Avg / max cadence")} value={n(d.avg_cadence??ca.avg)!=null||n(gx.max_cadence??ca.max)!=null?`${int(d.avg_cadence??ca.avg)} / ${int(gx.max_cadence??ca.max)} rpm`:"—"}/></div></div>
     </section>
 
-    <WorkoutReview activityId={String(params.id)} lang={lang}/>
+    <BestEfforts lang={lang} activityId={params.id}/><WorkoutReview activityId={String(params.id)} lang={lang}/>
     <section className="card chart-card"><div className="between"><div><h2>{bi(lang,"Interaktive Aktivitätsanalyse","Interactive activity analysis")}</h2><p className="muted">{bi(lang,"Herzfrequenz, Geschwindigkeit, Höhe, Leistung, Kadenz und Steigung überlagern oder synchron untereinander anzeigen.","Overlay heart rate, speed, elevation, power, cadence and grade, or show them as synchronized panels.")}</p></div><span className="badge">{series.length.toLocaleString()} {bi(lang,"Datenpunkte","samples")}</span></div><ActivityExplorer key={params.id} data={series} lang={lang} activityId={String(params.id)}/></section>
 
     {splits.length>0&&<section className="card"><div className="between"><div><h2>{family==="swim"?bi(lang,"100-m-Splits","100 m splits"):bi(lang,"Kilometer-Splits","Kilometre splits")}</h2><p className="muted">{bi(lang,"Pace, Herzfrequenz, Leistung, Kadenz und Höhenmeter pro Abschnitt.","Pace, heart rate, power, cadence and elevation for each split.")}</p></div><span className="badge">{splits.length} splits</span></div><div className="table-scroll"><table className="splits-table"><thead><tr><th>#</th><th>{bi(lang,"Zeit","Time")}</th><th>Pace</th><th>{bi(lang,"Geschw.","Speed")}</th><th>Ø HR</th><th>Max HR</th><th>Ø W</th><th>Max W</th><th>{bi(lang,"Kadenz","Cadence")}</th><th>↗</th><th>↘</th><th>{bi(lang,"Steigung","Grade")}</th></tr></thead><tbody>{splits.map((x:AnyObj)=><tr key={x.index}><td><strong>{x.label}</strong></td><td>{duration(x.elapsed_s)}</td><td>{pace(x.pace_s_per_km)}</td><td>{n(x.avg_speed_kmh)!=null?`${num(x.avg_speed_kmh,1)} km/h`:"—"}</td><td>{int(x.avg_hr)}</td><td>{int(x.max_hr)}</td><td>{int(x.avg_power)}</td><td>{int(x.max_power)}</td><td>{int(x.avg_cadence)}</td><td>{n(x.ascent_m)!=null?`${int(x.ascent_m)} m`:"—"}</td><td>{n(x.descent_m)!=null?`${int(x.descent_m)} m`:"—"}</td><td>{n(x.avg_grade_pct)!=null?`${num(x.avg_grade_pct,1)} %`:"—"}</td></tr>)}</tbody></table></div></section>}

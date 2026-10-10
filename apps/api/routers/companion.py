@@ -87,6 +87,11 @@ async def save_profile(payload: ProfileIn, user: User = Depends(safety_confirmed
 async def clear_profile(user: User = Depends(safety_confirmed_user), db: AsyncSession = Depends(get_db)):
     await db.execute(delete(CoachProfile).where(CoachProfile.user_id == user.id))
     await db.execute(delete(CoachMemory).where(CoachMemory.user_id == user.id))
+    feedback = (await db.scalars(select(ActivityFeedback).where(ActivityFeedback.user_id == user.id))).all()
+    for row in feedback:
+        data = dict(row.data or {})
+        data.pop("experience", None)
+        row.data = data
     await db.commit()
     return {"deleted": True}
 
@@ -180,7 +185,7 @@ async def save_feedback(activity_id: uuid.UUID, payload: FeedbackIn, user: User 
     if not row:
         row = ActivityFeedback(activity_id=activity_id, user_id=user.id)
         db.add(row)
-    row.data = payload.model_dump()
+    row.data = {**(row.data or {}), **payload.model_dump()}
     await db.commit()
     return row.data
 
@@ -188,7 +193,13 @@ async def save_feedback(activity_id: uuid.UUID, payload: FeedbackIn, user: User 
 @router.delete("/feedback/{activity_id}")
 async def delete_feedback(activity_id: uuid.UUID, user: User = Depends(safety_confirmed_user), db: AsyncSession = Depends(get_db)):
     await owned(db, Activity, activity_id, user)
-    await db.execute(delete(ActivityFeedback).where(ActivityFeedback.activity_id == activity_id, ActivityFeedback.user_id == user.id))
+    row = await db.scalar(select(ActivityFeedback).where(ActivityFeedback.activity_id == activity_id, ActivityFeedback.user_id == user.id))
+    if row:
+        remaining = {k: v for k, v in (row.data or {}).items() if k in {"experience", "route_notes"}}
+        if remaining:
+            row.data = remaining
+        else:
+            await db.delete(row)
     await db.commit()
     return {"deleted": True}
 
@@ -385,6 +396,9 @@ async def comparison(run_id: uuid.UUID, user: User = Depends(safety_confirmed_us
     from pengucoach.coach.plan_evolution import comparison_data
     comparison_result = await comparison_data(db, user, run, schedule)
     items = comparison_result["items"]
+    from pengucoach.coach.session_features import active_experiences, matching_experiences
+    entries = await active_experiences(db, user)
+    items = [{**s, "experience_hints": matching_experiences(entries, s)} for s in items]
     brief = await briefing(db, user)
     readiness = brief.get("readiness") or {}
     suggestions = []

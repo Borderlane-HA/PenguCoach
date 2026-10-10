@@ -78,7 +78,10 @@ async def personal_context(db, user, *, training=True, recovery=True, days=7):
         result["today_checkin"] = {"date": checkin.date.isoformat(), **checkin.data} if checkin else None
     if training:
         feedback = (await db.execute(select(ActivityFeedback, Activity).join(Activity, Activity.id == ActivityFeedback.activity_id).where(ActivityFeedback.user_id == user.id, Activity.started_at >= day_start(user_today(user) - timedelta(days=max(0, days - 1)), user)).order_by(Activity.started_at.desc()).limit(8))).all()
-        result["recent_feedback"] = [{"activity": a.name, "date": activity_day(a, user).isoformat(), **f.data} for f, a in feedback]
+        from pengucoach.coach.session_features import active_experiences, matching_experiences
+        confirmed_experiences = await active_experiences(db, user)
+        result["training_experiences"] = confirmed_experiences
+        result["recent_feedback"] = [{"activity": a.name, "date": activity_day(a, user).isoformat(), **{k:v for k,v in (f.data or {}).items() if k in {"feeling", "exertion", "discomfort", "comment"}}} for f, a in feedback]
         schedules = list((await db.scalars(select(PlanSchedule).where(PlanSchedule.user_id == user.id).order_by(PlanSchedule.updated_at.desc()).limit(5))).all())
         upcoming = []
         comparisons = []
@@ -94,7 +97,7 @@ async def personal_context(db, user, *, training=True, recovery=True, days=7):
                 comparisons.extend({k:v for k,v in s.items() if k not in {"candidates", "candidate_ids", "recorded_laps"}} for s in compared["items"] if s["id"] in recent_ids)
                 upcoming.extend([{**s, "plan_id": str(run.id), "schedule_revision": schedule.revision} for s in all_sessions if s["id"] not in completed_ids and user_today(user).isoformat() <= s["date"] <= (user_today(user) + timedelta(days=7)).isoformat()])
         result["recent_plan_comparison"] = comparisons[-12:]
-        result["upcoming_sessions"] = sorted(upcoming, key=lambda s: s["date"])[:10]
+        result["upcoming_sessions"] = [{**s, "experience_hints": matching_experiences(confirmed_experiences, s)} for s in sorted(upcoming, key=lambda s: s["date"])[:10]]
     return result
 
 
@@ -142,7 +145,7 @@ async def briefing(db, user):
         return {"sessions": len(rows), "minutes": round(sum(a.duration_seconds or 0 for a in rows) / 60), "distance_km": round(sum(a.distance_m or 0 for a in rows) / 1000, 1), "active_days": len({activity_day(a, user) for a in rows})}
     reasons = []
     recent_feedback = (await db.execute(select(ActivityFeedback, Activity).join(Activity, Activity.id == ActivityFeedback.activity_id).where(ActivityFeedback.user_id == user.id, Activity.started_at >= day_start(today - timedelta(days=2), user), Activity.started_at <= datetime.now(timezone.utc)))).all()
-    recent_feedback_data = [{"activity": a.name, "date": activity_day(a, user).isoformat(), **(f.data or {})} for f, a in recent_feedback]
+    recent_feedback_data = [{"activity": a.name, "date": activity_day(a, user).isoformat(), **{k:v for k,v in (f.data or {}).items() if k in {"feeling", "exertion", "discomfort", "comment"}}} for f, a in recent_feedback]
     if any(f.get("feeling") == "hard" or (f.get("exertion") or 0) >= 9 for f in recent_feedback_data):
         reasons.append("hard_feedback")
     if any(str(f.get("discomfort") or "").strip() for f in recent_feedback_data):

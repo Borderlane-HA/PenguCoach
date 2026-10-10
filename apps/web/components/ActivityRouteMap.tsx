@@ -6,7 +6,7 @@ import {extent,finite,Metric,routeSegments,Sample} from "../lib/activityExplorer
 
 const COLORS=["#3064b2","#327fc2","#369ccc","#42aec0","#60b79c","#9db974","#cfba5b","#e8ac49","#ed8a3e","#e15f37","#c9443d"];
 
-export default function ActivityRouteMap({data,index,colorMetric,onSelect,de}:{data:Sample[];index:number|null;colorMetric:Metric|null;onSelect:(i:number)=>void;de:boolean}) {
+export default function ActivityRouteMap({data,index,colorMetric,onSelect,de,annotations=[]}:{data:Sample[];index:number|null;colorMetric:Metric|null;onSelect:(i:number)=>void;de:boolean;annotations?:Record<string,any>[]}) {
   const container=useRef<HTMLDivElement>(null), map=useRef<Leaflet.Map|null>(null), library=useRef<typeof Leaflet|null>(null);
   const layers=useRef<Leaflet.LayerGroup|null>(null), marker=useRef<Leaflet.CircleMarker|null>(null);
   const handler=useRef(onSelect); handler.current=onSelect;
@@ -63,12 +63,19 @@ export default function ActivityRouteMap({data,index,colorMetric,onSelect,de}:{d
     const first=points[0], last=points.at(-1)!;
     L.circleMarker([first.lat,first.lon],{radius:5,color:"#fff",weight:2,fillColor:"#2d806b",fillOpacity:1}).bindTooltip(de?"Start":"Start").addTo(group);
     L.circleMarker([last.lat,last.lon],{radius:5,color:"#fff",weight:2,fillColor:"#d94b4b",fillOpacity:1}).bindTooltip(de?"Ziel":"Finish").addTo(group);
+    for(const point of annotations){
+      const lat=finite(point.lat),lon=finite(point.lon);if(lat==null||lon==null||Math.abs(lat)>90||Math.abs(lon)>180)continue;
+      const text=document.createElement("span");text.textContent=point.label;
+      L.circleMarker([lat,lon],{radius:6,color:"#fff",weight:2,fillColor:point.kind==="hill"?"#bb6c22":point.kind==="plan"?"#3064b2":accent,fillOpacity:1}).bindTooltip(text).on("click",()=>{
+        let index=0,distance=Infinity;data.forEach((r,i)=>{const a=finite(r.position_lat),b=finite(r.position_long);if(a==null||b==null)return;const d=(a-lat)**2+(b-lon)**2;if(d<distance){distance=d;index=i}});handler.current(index);
+      }).addTo(group);
+    }
     view.on("click",nearest);
     view.fitBounds(L.latLngBounds(points.map(p=>[p.lat,p.lon])),{padding:[25,25],maxZoom:16,animate:false});
     const observer=new ResizeObserver(()=>view.invalidateSize());
     if(container.current)observer.observe(container.current);
     return()=>{view.off("click",nearest);observer.disconnect();};
-  },[ready,segments,points,colorMetric,data,de]);
+  },[ready,segments,points,colorMetric,data,de,annotations]);
 
   useEffect(()=>{
     const L=library.current, view=map.current;
