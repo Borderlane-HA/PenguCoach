@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.0-alpha.56 — Compact, collapsible navigation
+
+- Connections and preferences now share a collapsible Settings section; Admin is collapsible too.
+- A header button collapses the desktop sidebar to a 72 px icon rail, giving the page more room. Settings and Admin open beside the rail as compact menus.
+- Sidebar width and section choices are remembered per signed-in username in this browser. The current section opens on navigation, and active pages remain marked.
+- The navigation scrolls independently on short screens while account controls stay visible. Mobile settings use the same grouped sections in a bounded, scrollable menu. Desktop and mobile navigation now switch consistently at 980 px, fixing the previous gap at intermediate tablet widths.
+- Navigation controls include accessible labels, keyboard focus, Escape and outside-click dismissal. All existing destinations and role restrictions remain in place.
+
+
 ## 0.1.0-alpha.55 — A clearer Today dashboard
 
 - Today settings move into a compact hero icon and an accessible modal, with keyboard focus, Escape and discard/restore/save actions.

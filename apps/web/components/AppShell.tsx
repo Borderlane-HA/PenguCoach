@@ -1,16 +1,19 @@
 "use client";
 
-import {useEffect,useMemo,useState} from "react";
+import {useEffect,useMemo,useRef,useState} from "react";
 import {usePathname} from "next/navigation";
 import {api} from "../lib/api";
 import {bi,useI18n} from "../lib/i18n";
 
 type Me={username:string;role:string;locale:string;safety_required:boolean;app_version:string};
 type Appearance={theme:string;has_avatar:boolean;has_app_icon:boolean;avatar_version?:number;app_icon_version?:number};
-type IconName="today"|"health"|"activities"|"training"|"coach"|"garmin"|"sparky"|"weather"|"maps"|"privacy"|"appearance"|"about"|"ai"|"users"|"logout";
+type IconName="today"|"health"|"activities"|"training"|"coach"|"garmin"|"sparky"|"weather"|"maps"|"privacy"|"appearance"|"about"|"ai"|"users"|"logout"|"settings"|"admin"|"panel-open"|"panel-close";
 
 function Icon({name}:{name:IconName}){
   const common={width:20,height:20,viewBox:"0 0 24 24",fill:"none",stroke:"currentColor",strokeWidth:1.8,strokeLinecap:"round" as const,strokeLinejoin:"round" as const,"aria-hidden":true};
+  if(name==="panel-open"||name==="panel-close")return <svg {...common}><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M9 4v16"/><path d={name==="panel-open"?"m13 9 3 3-3 3":"m16 9-3 3 3 3"}/></svg>;
+  if(name==="settings")return <svg {...common}><path d="m10 3-.5 2-2 .9-1.8-.6-2 3.4 1.5 1.4v2.3l-1.5 1.4 2 3.4 1.8-.6 2 .9.5 2h4l.5-2 2-.9 1.8.6 2-3.4-1.5-1.4v-2.3l1.5-1.4-2-3.4-1.8.6-2-.9-.5-2Z"/><circle cx="12" cy="11.3" r="3"/></svg>;
+  if(name==="admin")return <svg {...common}><path d="M12 3 5 6v5c0 4.7 2.7 8.1 7 10 4.3-1.9 7-5.3 7-10V6l-7-3Z"/><circle cx="12" cy="10" r="2"/><path d="M8.5 16a3.5 3.5 0 0 1 7 0"/></svg>;
   if(name==="today")return <svg {...common}><rect x="4" y="4" width="16" height="16" rx="4"/><path d="M8 9h8M8 13h3M14 13h2M8 17h5"/></svg>;
   if(name==="health")return <svg {...common}><path d="M20.8 5.8a5 5 0 0 0-7.1 0L12 7.5l-1.7-1.7a5 5 0 1 0-7.1 7.1L12 21l8.8-8.1a5 5 0 0 0 0-7.1Z"/><path d="M7 12h2l1-2 2 5 1.5-3H17"/></svg>;
   if(name==="activities")return <svg {...common}><path d="M4 13h3l2-5 3 10 2-6h6"/><path d="M4 5v14"/></svg>;
@@ -28,13 +31,47 @@ function Icon({name}:{name:IconName}){
   return <svg {...common}><path d="M16 20v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 20v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/></svg>;
 }
 
+type SidebarPreferences={collapsed:boolean;settingsOpen:boolean;adminOpen:boolean};
+const defaultSidebar:SidebarPreferences={collapsed:false,settingsOpen:false,adminOpen:false};
+function readSidebar(username:string,pathname:string):SidebarPreferences{
+  let saved:Partial<SidebarPreferences>={};
+  try{saved=JSON.parse(localStorage.getItem(`pengucoach_sidebar_${username}`)||"{}")||{}}catch{}
+  return {collapsed:saved.collapsed===true,settingsOpen:pathname.startsWith("/settings/")||saved.settingsOpen===true,adminOpen:pathname.startsWith("/admin/")||saved.adminOpen===true};
+}
+
 export default function AppShell({children,title}:{children:React.ReactNode;title?:string}){
   const{lang,setLang}=useI18n();
   const pathname=usePathname();
   const[me,setMe]=useState<Me|null>(null),[appearance,setAppearance]=useState<Appearance|null>(null),[loggingOut,setLoggingOut]=useState(false);
 
+  const[sidebar,setSidebar]=useState<SidebarPreferences>(defaultSidebar);
+  const[flyout,setFlyout]=useState<"settings"|"admin"|null>(null),[flyoutTop,setFlyoutTop]=useState(80);
+  const mobileMenu=useRef<HTMLDetailsElement>(null);
+  useEffect(()=>{
+    setFlyout(null);
+    setSidebar(v=>pathname.startsWith("/settings/")?{...v,settingsOpen:true}:pathname.startsWith("/admin/")?{...v,adminOpen:true}:v);
+  },[pathname]);
+  useEffect(()=>{if(me)try{localStorage.setItem(`pengucoach_sidebar_${me.username}`,JSON.stringify(sidebar))}catch{}},[sidebar,me]);
+  useEffect(()=>{
+    const dismiss=(event:PointerEvent)=>{
+      const target=event.target;
+      if(!(target instanceof Element))return;
+      if(!target.closest(".side-group"))setFlyout(null);
+      if(mobileMenu.current?.open&&!mobileMenu.current.contains(target))mobileMenu.current.open=false;
+    };
+    const escape=(event:KeyboardEvent)=>{
+      if(event.key!=="Escape")return;
+      if(flyout){event.preventDefault();setFlyout(null);document.querySelector<HTMLButtonElement>(`[data-side-group="${flyout}"]`)?.focus()}
+      if(mobileMenu.current?.open){event.preventDefault();mobileMenu.current.open=false;mobileMenu.current.querySelector("summary")?.focus()}
+    };
+    const resize=()=>setFlyout(null);
+    document.addEventListener("pointerdown",dismiss);document.addEventListener("keydown",escape);window.addEventListener("resize",resize);
+    return()=>{document.removeEventListener("pointerdown",dismiss);document.removeEventListener("keydown",escape);window.removeEventListener("resize",resize)};
+  },[flyout]);
+  useEffect(()=>{if(flyout)document.querySelector<HTMLAnchorElement>(`#side-${flyout}-links a`)?.focus()},[flyout]);
+
   const loadAppearance=()=>api<Appearance>("/settings/appearance").then(v=>{const theme=v.theme||"light";setAppearance(v);document.documentElement.dataset.theme=theme;try{localStorage.setItem("pengucoach_theme",theme)}catch{}}).catch(()=>{const cached=typeof window!=="undefined"?localStorage.getItem("pengucoach_theme"):null;if(!cached)document.documentElement.dataset.theme="light"});
-  useEffect(()=>{api<Me>("/auth/me").then(v=>{if(v.safety_required)location.replace("/safety");else{setMe(v);void loadAppearance()}}).catch(()=>location.replace("/"));const handler=()=>void loadAppearance();window.addEventListener("pengucoach-appearance-changed",handler);return()=>window.removeEventListener("pengucoach-appearance-changed",handler)},[]);
+  useEffect(()=>{api<Me>("/auth/me").then(v=>{if(v.safety_required)location.replace("/safety");else{setSidebar(readSidebar(v.username,pathname));setMe(v);void loadAppearance()}}).catch(()=>location.replace("/"));const handler=()=>void loadAppearance();window.addEventListener("pengucoach-appearance-changed",handler);return()=>window.removeEventListener("pengucoach-appearance-changed",handler)},[]);
 
   const nav=useMemo(()=>[
     {href:"/today",icon:"today" as IconName,label:bi(lang,"Heute","Today")},
@@ -77,20 +114,42 @@ export default function AppShell({children,title}:{children:React.ReactNode;titl
 
   if(!me)return <main className="auth-loading"><div className="loading-mark"><img src="/pengucoach-icon.svg" alt=""/></div><p>{bi(lang,"PenguCoach wird geladen…","Loading PenguCoach…")}</p></main>;
 
-  return <div className="app-frame">
-    <aside className="side-nav" aria-label={bi(lang,"Hauptnavigation","Main navigation")}>
-      <a className="side-brand" href="/today"><span className="brand-mark custom"><img src={appIcon} alt=""/></span><span><strong>PenguCoach</strong><small>Training & Health</small></span></a>
-      <div className="side-section"><div className="side-label">{bi(lang,"Übersicht","Overview")}</div>{nav.map(x=><a className={`side-link ${active(x.href)?"active":""}`} href={x.href} key={x.href} aria-current={active(x.href)?"page":undefined}><Icon name={x.icon}/><span>{x.label}</span>{active(x.href)&&<i/>}</a>)}</div>
-      <div className="side-section"><div className="side-label">{bi(lang,"Verbindungen & Einstellungen","Connections & settings")}</div>{settings.map(x=><a className={`side-link ${active(x.href)?"active":""}`} href={x.href} key={x.href} aria-current={active(x.href)?"page":undefined}><Icon name={x.icon}/><span>{x.label}</span>{active(x.href)&&<i/>}</a>)}</div>
-      {me.role==="admin"&&<div className="side-section"><div className="side-label">Admin</div>{admin.map(x=><a className={`side-link ${active(x.href)?"active":""}`} href={x.href} key={x.href} aria-current={active(x.href)?"page":undefined}><Icon name={x.icon}/><span>{x.label}</span>{active(x.href)&&<i/>}</a>)}</div>}
+  const settingsLabel=bi(lang,"Einstellungen","Settings");
+  const toggleLabel=sidebar.collapsed?bi(lang,"Seitenleiste ausklappen","Expand sidebar"):bi(lang,"Seitenleiste einklappen","Collapse sidebar");
+  const link=(x:{href:string;icon:IconName;label:string},mobile=false)=><a className={mobile?undefined:`side-link ${active(x.href)?"active":""}`} href={x.href} key={x.href} aria-label={x.label} title={sidebar.collapsed&&!mobile?x.label:undefined} aria-current={active(x.href)?"page":undefined}><Icon name={x.icon}/><span>{x.label}</span>{!mobile&&active(x.href)&&<i/>}</a>;
+  const group=(name:"settings"|"admin",mobile=false)=>{
+    const label=name==="settings"?settingsLabel:"Admin",items=name==="settings"?settings:admin;
+    const open=mobile||!sidebar.collapsed?(name==="settings"?sidebar.settingsOpen:sidebar.adminOpen):flyout===name;
+    const selected=items.some(x=>active(x.href));
+    const id=`${mobile?"mobile":"side"}-${name}-links`;
+    return <div className={mobile?"mobile-nav-group":"side-section side-group"} key={name}>
+      <button className={`${mobile?"mobile-group-toggle":"side-group-toggle"} ${selected?"active":""}`} type="button" aria-label={label} title={!mobile&&sidebar.collapsed?label:undefined} aria-expanded={open} aria-controls={id} data-side-group={mobile?undefined:name} onClick={event=>{
+        if(!mobile&&sidebar.collapsed){setFlyoutTop(Math.max(12,Math.min(event.currentTarget.getBoundingClientRect().top,window.innerHeight-250)));setFlyout(open?null:name)}
+        else setSidebar(v=>({...v,[name==="settings"?"settingsOpen":"adminOpen"]:!open}));
+      }}><Icon name={name}/><span>{label}</span>{selected&&<i className="side-group-current"/>}</button>
+      <div id={id} hidden={!open} className={`${mobile?"mobile-group-links":"side-group-links"} ${!mobile&&sidebar.collapsed?"side-flyout":""}`} style={!mobile&&sidebar.collapsed?{top:flyoutTop,"--flyout-top":`${flyoutTop}px`} as React.CSSProperties:undefined}>
+        {!mobile&&sidebar.collapsed&&<div className="side-flyout-heading">{label}</div>}
+        {items.map(x=>link(x,mobile))}
+      </div>
+    </div>;
+  };
+
+  return <div className={`app-frame ${sidebar.collapsed?"sidebar-collapsed":""}`}>
+    <aside id="pengucoach-sidebar" className="side-nav" aria-label={bi(lang,"Hauptnavigation","Main navigation")}>
+      <a className="side-brand" href="/today" aria-label={bi(lang,"PenguCoach – Heute","PenguCoach – Today")} title={sidebar.collapsed?"PenguCoach":undefined}><span className="brand-mark custom"><img src={appIcon} alt=""/></span><span><strong>PenguCoach</strong><small>Training & Health</small></span></a>
+      <nav className="side-navigation" aria-label={bi(lang,"Seiten","Pages")} onWheel={event=>{if(!(event.target instanceof Element&&event.target.closest(".side-flyout")))setFlyout(null)}} onTouchMove={event=>{if(!(event.target instanceof Element&&event.target.closest(".side-flyout")))setFlyout(null)}}>
+        <div className="side-section"><div className="side-label">{bi(lang,"Übersicht","Overview")}</div>{nav.map(x=>link(x))}</div>
+        {group("settings")}
+        {me.role==="admin"&&group("admin")}
+      </nav>
       <div className="side-account">
-        <a className="side-user" href="/settings/appearance"><span className={`side-avatar ${avatar?"photo":""}`}>{avatar?<img src={avatar} alt=""/>:initials}</span><span><strong>{me.username}</strong><small>{me.role}</small></span></a>
-        <button className="side-logout" type="button" onClick={()=>void logout()} disabled={loggingOut} title={bi(lang,"Abmelden","Sign out")}><Icon name="logout"/><span>{loggingOut?bi(lang,"Abmelden…","Signing out…"):bi(lang,"Abmelden","Sign out")}</span></button>
+        <a className="side-user" href="/settings/appearance" aria-label={bi(lang,`${me.username} – Darstellung`,`${me.username} – Appearance`)} title={sidebar.collapsed?me.username:undefined}><span className={`side-avatar ${avatar?"photo":""}`}>{avatar?<img src={avatar} alt=""/>:initials}</span><span><strong>{me.username}</strong><small>{me.role}</small></span></a>
+        <button className="side-logout" type="button" onClick={()=>void logout()} disabled={loggingOut} title={bi(lang,"Abmelden","Sign out")} aria-label={bi(lang,"Abmelden","Sign out")}><Icon name="logout"/><span>{loggingOut?bi(lang,"Abmelden…","Signing out…"):bi(lang,"Abmelden","Sign out")}</span></button>
         <div className="side-version" title={bi(lang,"Installierte PenguCoach-Version","Installed PenguCoach version")}>v{me.app_version}</div>
       </div>
     </aside>
 
-    <section className="app-main"><header className="topbar"><div className="top-context"><span className="top-kicker">PenguCoach</span><strong>{title??current?.label??bi(lang,"Übersicht","Overview")}</strong></div><div className="top-actions"><details className="mobile-more"><summary aria-label={bi(lang,"Einstellungen öffnen","Open settings")}>☰</summary><nav aria-label={bi(lang,"Einstellungen","Settings")}>{[...settings,...(me.role==="admin"?admin:[])].map(x=><a key={x.href} href={x.href} aria-current={active(x.href)?"page":undefined}><Icon name={x.icon}/>{x.label}</a>)}</nav></details><span className="health-live"><i/>{bi(lang,"System aktiv","System online")}</span><button className="language-switch" onClick={()=>setLang(lang==="de"?"en":"de")} aria-label={bi(lang,"Sprache wechseln","Change language")}>{lang==="de"?"DE":"EN"}<span>⌄</span></button><a className={`top-avatar ${avatar?"photo":""}`} href="/settings/appearance" title={me.username}>{avatar?<img src={avatar} alt=""/>:initials}</a><button className="top-logout" type="button" onClick={()=>void logout()} disabled={loggingOut} title={bi(lang,"Abmelden","Sign out")} aria-label={bi(lang,"Abmelden","Sign out")}><Icon name="logout"/></button></div></header><main className="stack page">{title&&<div className="page-title"><h1>{title}</h1></div>}{children}</main></section>
+    <section className="app-main"><header className="topbar"><div className="top-heading"><button className="sidebar-toggle ghost" type="button" aria-label={toggleLabel} title={toggleLabel} aria-expanded={!sidebar.collapsed} aria-controls="pengucoach-sidebar" onClick={()=>{setFlyout(null);setSidebar(v=>({...v,collapsed:!v.collapsed}))}}><Icon name={sidebar.collapsed?"panel-open":"panel-close"}/></button><div className="top-context"><span className="top-kicker">PenguCoach</span><strong>{title??current?.label??bi(lang,"Übersicht","Overview")}</strong></div></div><div className="top-actions"><details ref={mobileMenu} className="mobile-more"><summary aria-label={bi(lang,"Navigationsmenü öffnen","Open navigation menu")} title={settingsLabel}><Icon name="settings"/></summary><nav aria-label={settingsLabel}>{group("settings",true)}{me.role==="admin"&&group("admin",true)}</nav></details><span className="health-live"><i/>{bi(lang,"System aktiv","System online")}</span><button className="language-switch" onClick={()=>setLang(lang==="de"?"en":"de")} aria-label={bi(lang,"Sprache wechseln","Change language")}>{lang==="de"?"DE":"EN"}<span>⌄</span></button><a className={`top-avatar ${avatar?"photo":""}`} href="/settings/appearance" title={me.username}>{avatar?<img src={avatar} alt=""/>:initials}</a><button className="top-logout" type="button" onClick={()=>void logout()} disabled={loggingOut} title={bi(lang,"Abmelden","Sign out")} aria-label={bi(lang,"Abmelden","Sign out")}><Icon name="logout"/></button></div></header><main className="stack page">{title&&<div className="page-title"><h1>{title}</h1></div>}{children}</main></section>
 
     <nav className="mobile-dock" aria-label={bi(lang,"Mobile Navigation","Mobile navigation")}>{nav.map(x=><a className={active(x.href)?"active":""} href={x.href} key={x.href} aria-current={active(x.href)?"page":undefined}><Icon name={x.icon}/><span>{x.label}</span></a>)}</nav>
   </div>;
