@@ -92,6 +92,66 @@ def best_efforts(series, windows=(60, 300, 1200)):
     return result
 
 
+def speed_passages(series):
+    """Sustained recorded speed relative to this route, never a future target.
+
+    Left-sample-held intervals; missing GPS/time/distance/speed and recording
+    breaks interrupt passages. Stops do not lower the moving-speed baseline.
+    """
+    intervals = []
+    for index, (left, right) in enumerate(zip(series, series[1:])):
+        a, b = number(left.get('elapsed_s')), number(right.get('elapsed_s'))
+        d, e = number(left.get('distance_km')), number(right.get('distance_km'))
+        speed, next_speed = number(left.get('speed_kmh')), number(right.get('speed_kmh'))
+        coords = [(number(r.get('position_lat')), number(r.get('position_long'))) for r in (left, right)]
+        valid = (a is not None and b is not None and 0 < b-a <= 30
+                 and d is not None and e is not None and 0 <= (e-d)*1000 <= 250
+                 and speed is not None and next_speed is not None and 0 <= speed <= 200 and 0 <= next_speed <= 200
+                 and left.get('track_segment') == right.get('track_segment')
+                 and all(lat is not None and lon is not None and abs(lat) <= 90 and abs(lon) <= 180 for lat, lon in coords))
+        intervals.append((index, speed, b-a, (e-d)*1000) if valid else None)
+    moving = [item for item in intervals if item and item[1] > 0]
+    seconds = sum(item[2] for item in moving)
+    if seconds < 60:
+        return {'speed_passages': [], 'has_speed': bool(moving), 'speed_threshold_kmh': None}
+    average = sum(item[1]*item[2] for item in moving)/seconds
+    accumulated = 0
+    percentile = 0
+    for item in sorted(moving, key=lambda item: item[1]):
+        accumulated += item[2]
+        if accumulated >= seconds*.75:
+            percentile = item[1]
+            break
+    threshold = max(percentile, average*1.15)
+    passages, active = [], []
+
+    def finish():
+        nonlocal active
+        duration = sum(item[2] for item in active)
+        length = sum(item[3] for item in active)
+        if duration >= 30 and length >= 149.9:
+            start, end = active[0][0], active[-1][0]+1
+            first, last = series[start], series[end]
+            passages.append({'start_index': start, 'end_index': end,
+                             'start_s': number(first.get('elapsed_s')), 'end_s': number(last.get('elapsed_s')),
+                             'distance_km': number(first.get('distance_km')), 'end_distance_km': number(last.get('distance_km')),
+                             'lat': number(first.get('position_lat')), 'lon': number(first.get('position_long')),
+                             'length_m': round(length), 'duration_s': round(duration, 1),
+                             'avg_speed_kmh': round(sum(item[1]*item[2] for item in active)/duration, 1),
+                             'metrics': route_metrics(series[start:end+1])})
+        active = []
+
+    for item in intervals:
+        if item and item[1] >= threshold and item[3] > 0:
+            active.append(item)
+        else:
+            finish()
+    finish()
+    passages = sorted(passages, key=lambda passage: passage['length_m'], reverse=True)[:8]
+    passages.sort(key=lambda passage: passage['start_index'])
+    return {'speed_passages': passages, 'has_speed': bool(moving), 'speed_threshold_kmh': round(threshold, 1)}
+
+
 def route_briefing(series):
     """100m elevation bins. No bridging missing values or recording breaks."""
     hills=[]
@@ -134,7 +194,7 @@ def route_briefing(series):
     finish()
     hills=sorted(hills,key=lambda h:h['gain_m'],reverse=True)[:8]
     hills.sort(key=lambda h:h['start_index'])
-    return {'hills':hills,'metrics':route_metrics(series),'has_gps':any(number(r.get('position_lat')) is not None and number(r.get('position_long')) is not None for r in series),'has_elevation':any(number(r.get('altitude_m')) is not None for r in series),'method':'100m_bins_3pct_300m_15m_gain'}
+    return {'hills':hills,**speed_passages(series),'metrics':route_metrics(series),'has_gps':any(number(r.get('position_lat')) is not None and number(r.get('position_long')) is not None for r in series),'has_elevation':any(number(r.get('altitude_m')) is not None for r in series),'method':'100m_bins_3pct_300m_15m_gain'}
 
 
 def route_plan_overlay(series, session):

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.0-alpha.52 — Fast route passages
+
+- Route preparation now identifies sustained faster sections from recorded speed, GPS, distance and elapsed time, independently of elevation.
+- Fast-passage cards show length, duration, average speed and available HR/power; profile bands, map highlights and shared chart jumps keep them synchronized.
+- Relative time-weighted thresholds, minimum length/duration and recording-break guards avoid treating pauses or isolated spikes as passages. No future speed or road safety is inferred.
+- Missing speed hides the section. Existing routes, climbs, notes and planned-session previews remain compatible; no migration or new API key required.
+
 ## 0.1.0-alpha.51 — Local training companion
 
 - Today opens the existing reviewed short-workout preview directly when time is short; original/proposed duration is clearer.

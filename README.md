@@ -10,13 +10,13 @@
 
 PenguCoach is designed as a local-first, multi-user platform that reads Garmin Connect and/or SparkyFitness data, supports manual body measurements and FIT/GPX/TCX imports, archives original FIT files, calculates deterministic activity metrics and can use local or cloud LLMs for contextual training analysis.
 
-### Local training companion (Alpha.51)
+### Local training companion (Alpha.52)
 
-Reviewed time-budget variants, confirmed training experiences, recorded 1/5/20-minute best efforts, calendar-draft load checks and a route briefing with personal GPS notes and timed-plan orientation. All calculations use available recorded data; no extra AI calls or API keys are required. See [calculation rules and workflow](docs/LOCAL_TRAINING_FEATURES.md).
+Reviewed time-budget variants, confirmed training experiences, recorded 1/5/20-minute best efforts, calendar-draft load checks and a route briefing with climbs, sustained fast passages, personal GPS notes and timed-plan orientation. All calculations use available recorded data; no extra AI calls or API keys are required. See [calculation rules and workflow](docs/LOCAL_TRAINING_FEATURES.md).
 
 ## Current alpha scope
 
-`v0.1.0-alpha.51` is the current end-to-end alpha baseline:
+`v0.1.0-alpha.52` is the current end-to-end alpha baseline:
 
 - **Training & Progress:** recorded-sample goal review with time-weighted intervals and adjustable alignment; GPS-verified whole-route or selected-section comparison; synchronized replay; historical readiness, observed sleep/check-in patterns and personal milestones. Today prioritizes one contextual action. See [`docs/TRAINING_INSIGHTS.md`](docs/TRAINING_INSIGHTS.md).
 - **Visual Readiness:** three clear traffic-light lamps, a short training action and compact strain chips. Detailed explanations and data confidence are available on demand; sparse data stays neutral.

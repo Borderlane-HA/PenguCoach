@@ -34,7 +34,7 @@ export default function ActivityRouteMap({data,index,colorMetric,onSelect,de,ann
   useEffect(()=>{
     const L=library.current, view=map.current, group=layers.current;
     if(!ready||!L||!view||!group||!points.length)return;
-    group.clearLayers(); marker.current=null;
+    group.clearLayers(); marker.current?.remove(); marker.current=null;
     const nearest=(event:Leaflet.LeafletMouseEvent)=>{
       let best=-1, distance=32*32;
       for(const point of points){
@@ -65,8 +65,13 @@ export default function ActivityRouteMap({data,index,colorMetric,onSelect,de,ann
     L.circleMarker([last.lat,last.lon],{radius:5,color:"#fff",weight:2,fillColor:"#d94b4b",fillOpacity:1}).bindTooltip(de?"Ziel":"Finish").addTo(group);
     for(const point of annotations){
       const lat=finite(point.lat),lon=finite(point.lon);if(lat==null||lon==null||Math.abs(lat)>90||Math.abs(lon)>180)continue;
+      if(point.kind==="speed"&&Number.isInteger(point.start_index)&&Number.isInteger(point.end_index)){
+        const route=data.slice(point.start_index,point.end_index+1).map(r=>[finite(r.position_lat),finite(r.position_long)]).filter(p=>p[0]!=null&&p[1]!=null&&Math.abs(p[0]!)<=90&&Math.abs(p[1]!)<=180) as [number,number][];
+        if(route.length>1)L.polyline(route,{color:"#8257c9",weight:6,opacity:.8,interactive:false}).addTo(group);
+      }
       const text=document.createElement("span");text.textContent=point.label;
-      L.circleMarker([lat,lon],{radius:6,color:"#fff",weight:2,fillColor:point.kind==="hill"?"#bb6c22":point.kind==="plan"?"#3064b2":accent,fillOpacity:1}).bindTooltip(text).on("click",()=>{
+      L.circleMarker([lat,lon],{radius:6,bubblingMouseEvents:false,color:"#fff",weight:2,fillColor:point.kind==="speed"?"#8257c9":point.kind==="hill"?"#bb6c22":point.kind==="plan"?"#3064b2":accent,fillOpacity:1}).bindTooltip(text).on("click",()=>{
+        if(Number.isInteger(point.start_index)&&data[point.start_index]){handler.current(point.start_index);return}
         let index=0,distance=Infinity;data.forEach((r,i)=>{const a=finite(r.position_lat),b=finite(r.position_long);if(a==null||b==null)return;const d=(a-lat)**2+(b-lon)**2;if(d<distance){distance=d;index=i}});handler.current(index);
       }).addTo(group);
     }
@@ -85,7 +90,7 @@ export default function ActivityRouteMap({data,index,colorMetric,onSelect,de,ann
     if(!marker.current)marker.current=L.circleMarker([point.lat,point.lon],{radius:8,color:"#fff",weight:3,fillColor:"#172c42",fillOpacity:1,interactive:false}).addTo(view);
     else marker.current.setLatLng([point.lat,point.lon]);
     marker.current.bringToFront();
-  },[ready,points,index,colorMetric,de]);
+  },[ready,points,index,colorMetric,de,annotations]);
 
   return <div className="activity-map-shell">
     <div ref={container} className="activity-route-map" role="region" aria-label={de?"Karte der aufgezeichneten Strecke":"Recorded route map"}/>

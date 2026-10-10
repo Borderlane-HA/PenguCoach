@@ -32,6 +32,18 @@ export default function ActivityExplorer({data,lang,activityId}:{data:Sample[];l
     const lo=Math.min(from,to)/100,hi=Math.max(from,to)/100;
     return data.filter((_,i)=>fullAxis.positions[i]>=lo&&fullAxis.positions[i]<=hi);
   },[data,fullAxis,from,to]);
+  const mapAnnotations=useMemo(()=>{
+    const indices=new Map(data.map((row,i)=>[row,i]));
+    return annotations.flatMap(item=>{
+      const first=item.start_index??item.point_index;
+      if(!Number.isInteger(first))return [item];
+      const last=item.end_index??first;
+      const visible=filtered.map((row,index)=>({row,index,original:indices.get(row)!})).filter(p=>p.original>=first&&p.original<=last);
+      if(!visible.length)return [];
+      const start=visible[0],end=visible.at(-1)!;
+      return [{...item,start_index:start.index,end_index:end.index,lat:start.row.position_lat,lon:start.row.position_long}];
+    });
+  },[annotations,data,filtered]);
   const axis=useMemo(()=>makeAxis(filtered,xMode),[filtered,xMode]);
   const route=useMemo(()=>routeSegments(filtered),[filtered]);
   const routePoints=useMemo(()=>route.flat(),[route]);
@@ -103,7 +115,7 @@ export default function ActivityExplorer({data,lang,activityId}:{data:Sample[];l
       <div className={`route-view-grid ${googleActive?"google-open":""}`}><div className="route-map-area">
       {settingsFailed?<div className="map-state"><p>{de?"Karten-Einstellungen konnten nicht geladen werden.":"Could not load map settings."}</p><button type="button" className="ghost compact" onClick={loadSettings}>{de?"Erneut laden":"Retry"}</button></div>:!settings?<div className="map-state">{de?"Karten-Einstellungen werden geladen…":"Loading map settings…"}</div>:googleActive?<div className="map-state">{de?"Nach dem Schließen der Straßenansicht erscheint die Streckenkarte wieder.":"Close street-level view to return to the route map."}</div>:settings.map_enabled?<>
         <div className="route-map-controls"><label>{de?"Streckenfarbe":"Route color"}<select value={colorKey} onChange={e=>setColorKey(e.target.value)}><option value="">{de?"Einheitlich":"Single color"}</option>{available.map(metric=><option value={metric.key} key={metric.key}>{de?metric.de:metric.en}</option>)}</select></label><span className="muted">{routePoints.length.toLocaleString(de?"de-DE":"en-GB")} {de?"GPS-Punkte":"GPS points"}{route.length>1?` · ${route.length} ${de?"Abschnitte":"segments"}`:""}</span></div>
-        <ActivityRouteMap data={filtered} index={current} colorMetric={colorMetric} onSelect={pick} de={de} annotations={annotations}/>
+        <ActivityRouteMap data={filtered} index={current} colorMetric={colorMetric} onSelect={pick} de={de} annotations={mapAnnotations}/>
       </>:<div className="map-state">{de?"Die Streckenkarte ist in deinen Einstellungen deaktiviert.":"The route map is disabled in your settings."}</div>}
       </div><ActivityPanorama settings={settings} point={routePoint} points={routePoints} de={de} onGoogleActive={setGoogleActive}/></div>
     </section>}

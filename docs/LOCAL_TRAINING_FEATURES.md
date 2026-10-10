@@ -125,3 +125,23 @@ selection must match the user's upcoming list. Read-only previews write nothing.
 Existing databases work without migrations because additions use existing JSON
 fields. Notes and experiences remain user-owned and removable through the
 activity or Coach profile controls described above.
+
+## Recorded fast passages (Alpha.52)
+
+Route preparation also detects sustained faster sections, using recorded speed,
+GPS, distance and elapsed time independently of elevation. A qualifying interval
+has valid coordinates, non-decreasing distance (at most 250m between points),
+speed between 0 and 200 km/h, matching track segments and a positive time gap no
+larger than 30 seconds. Missing or invalid readings interrupt continuity.
+
+The threshold is the greater of the duration-weighted 75th speed percentile and
+115% of duration-weighted moving speed. Stops are excluded from this baseline;
+no speed is inferred from distance or missing timestamps. At least 60 seconds
+of moving readings are needed. Passages must last 30 seconds and span 150m.
+Up to eight longest passages are displayed in route order. Segment average
+speed is time weighted; optional HR/power use the existing 70% coverage rule.
+
+Cards, speed-profile bands, elevation-profile bands and purple route-map sections
+link to the shared chart cursor. The speed view is available without elevation;
+without usable speed it is hidden. These are historical descriptions, not future
+targets or judgements about a safe place to ride or run fast.
