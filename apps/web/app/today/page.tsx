@@ -82,15 +82,14 @@ export default function Today(){
               <span className="metric-label">{bi(lang,"Heute im Fokus","Today in focus")}</span>
               <strong>{h?.available===true?bi(lang,"Tagesdaten bereit","Daily data ready"):h?bi(lang,"Tagesdaten fehlen","Daily data missing"):bi(lang,"Wird geladen …","Loading …")}</strong>
             </div>
-            <span className={`sync-pill ${h?.available===true?"ok":"pending"}`}>{h?.available===true?bi(lang,"Synchronisiert","Synced"):h?bi(lang,"Noch offen","Not available yet"):bi(lang,"Wird geladen","Loading")}</span>
+            <div className="today-focus-tools"><TodayCustomization value={preferences} onSaved={setPreferences} lang={lang} loaded={prefsLoaded} error={prefsError} onRetry={()=>void loadPreferences()}/></div>
           </div>
           <div className="today-focus-list">{focusItems.map((item:Record<string,any>)=><div className="today-focus-item" key={item.label}><span>{item.label}</span><strong>{item.value}</strong><small>{item.note}</small></div>)}</div>
           <a className="text-link" href="/health">{bi(lang,"Gesundheit öffnen","Open health")} →</a>
       </div>
     </section>
 
-    <TodayCustomization value={preferences} onSaved={setPreferences} lang={lang} loaded={prefsLoaded} error={prefsError} onRetry={()=>void loadPreferences()}/>
-    <DayPhases phase={phase} onChange={setPhaseOverride} automatic={phaseOverride==null} lang={lang}/>
+    <DayPhases data={briefing} phase={phase} onChange={setPhaseOverride} automatic={phaseOverride==null} lang={lang}/>
     <DailyCompanion onData={setBriefing} phase={phase}/>
     <div className="today-personal-cards">{preferences.order.map((key:string)=>!preferences.hidden.includes(key)&&cardsById[key]?<div className={`today-order-item today-block-${key}`} data-today-card={key} key={key}>{cardsById[key]}</div>:null)}</div>
     </AppShell>

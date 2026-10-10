@@ -7,7 +7,8 @@ from pengucoach.common.dates import day_start, user_today, user_zone
 from pengucoach.db.models import Activity, ActivityFeedback, CoachCheckin
 from pengucoach.coach.readiness import compute_readiness, soreness_level
 
-TODAY_CARDS = ['preparation', 'weather', 'reflection', 'progress', 'load', 'metrics', 'trend', 'activities']
+LEGACY_TODAY_ORDER = ['preparation', 'weather', 'reflection', 'progress', 'load', 'metrics', 'trend', 'activities']
+TODAY_CARDS = ['progress', 'preparation', 'weather', 'reflection', 'load', 'metrics', 'trend', 'activities']
 TODAY_METRICS = ['steps', 'sleep', 'resting_hr', 'hrv', 'stress', 'hydration', 'body_battery_high', 'weight']
 
 
@@ -21,6 +22,8 @@ def today_preferences(pref):
         return list(dict.fromkeys(k for k in values if isinstance(k, str) and k in allowed))
     order = keys('order', TODAY_CARDS)
     order += [k for k in TODAY_CARDS if k not in order]
+    if order == LEGACY_TODAY_ORDER:
+        order = list(TODAY_CARDS)
     pinned = keys('pinned_metrics', TODAY_METRICS, ['steps', 'sleep', 'resting_hr'])[:4]
     start, end = raw.get('preferred_start_hour', 7), raw.get('preferred_end_hour', 21)
     if type(start) is not int or type(end) is not int or not 0 <= start < end <= 24:

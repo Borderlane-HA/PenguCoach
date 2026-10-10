@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.0-alpha.55 — A clearer Today dashboard
+
+- Today settings move into a compact hero icon and an accessible modal, with keyboard focus, Escape and discard/restore/save actions.
+- Connected daily stages show check-in, planned session and completed activity context, with automatic selection and manual navigation.
+- Full-width daily overview and weekly reflection; the check-in sits below with a compact saved summary and a responsive form.
+- Personal progress moves to the top of the default card order, with compact summary readings and a responsive, selectable chart. Custom card orders and hidden cards remain honored.
+- No new dependencies or database migration. Existing readiness, consent and feedback rules remain intact.
+
 ## 0.1.0-alpha.54 — Visible collapsible sections
 
 - Consistent, theme-aware chevrons for collapsible sections throughout Today, health, routes, training, feedback and Coach settings. The chevron turns upward when open.

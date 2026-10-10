@@ -549,3 +549,52 @@ details:not(.mobile-more)>summary:hover::before,details:not(.mobile-more)>summar
 .training-session-open[aria-expanded]::before{right:5px;width:26px;height:26px}
 .training-session-open[aria-expanded]::after{right:14px}
 @media(prefers-reduced-motion:reduce){details:not(.mobile-more)>summary::after,button[aria-expanded]::after{transition:none}}
+
+/* Today: compact controls, connected stages and a full-width daily overview. */
+.today-focus-head>.today-focus-tools{display:flex;align-items:center;gap:8px;flex-shrink:0}
+.today-customize-trigger{display:grid;place-items:center;width:36px;height:36px;padding:0;border:1px solid var(--border);border-radius:11px;background:var(--panel)!important;color:var(--text)!important;box-shadow:none!important}
+.today-customize-trigger:hover{background:var(--accent-soft)!important;border-color:var(--accent-strong)}
+dialog.today-customization{width:min(600px,calc(100vw - 28px));max-height:calc(100dvh - 40px);padding:24px!important;margin:auto!important;box-sizing:border-box;overflow:auto;border:1px solid var(--border);border-radius:22px;background:var(--panel);color:var(--text);box-shadow:0 24px 90px #0004}
+dialog.today-customization::backdrop{background:#101d2c80;backdrop-filter:blur(4px)}
+.today-customization-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:15px;padding-bottom:18px;border-bottom:1px solid var(--border)}
+.today-customization-heading h2{font-size:1.2rem;margin:0 0 6px}
+.today-customization-heading small{color:var(--muted);font-size:.74rem}
+.today-customization-heading>button{flex:none;width:36px;height:36px;padding:0;color:var(--text)!important;font-size:1.4rem}
+.today-customization h4{margin:0 0 7px}.today-customization .today-layout-list button{width:32px;height:32px;padding:0}
+.today-day-flow{margin:22px 0 0}.today-flow-heading{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;gap:10px}
+.today-flow-heading .eyebrow{margin:0;font-size:.65rem}.today-flow-heading .phase-auto{display:flex;gap:6px;align-items:center;padding:5px 10px;min-height:30px;background:transparent!important;border:1px solid var(--border);color:var(--muted)!important;font-size:.7rem;box-shadow:none}
+.today-flow-heading .phase-auto[aria-pressed=true]{background:var(--accent-soft)!important;color:var(--accent-strong)!important;border-color:var(--border)}
+.today-day-flow .today-phases{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:22px;padding:0;border:0;position:relative}
+.today-day-flow .today-phases::before{content:"";position:absolute;top:50%;left:3%;right:3%;height:1px;background:var(--border)}
+.today-day-flow .today-phases>button.ghost{position:relative;min-width:0;padding:13px 15px;gap:12px;text-align:left;border-radius:16px;transition:background .16s,border-color .16s}
+.today-day-flow .today-phases>button>span.phase-symbol{flex:none;width:36px;height:36px;border-radius:12px;background:var(--panel2);color:var(--muted)}
+.today-day-flow .today-phases>button>div{display:grid;gap:4px;min-width:0}.today-day-flow .today-phases strong{font-size:.84rem}.today-day-flow .today-phases small{font-size:.7rem;font-weight:400;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.today-day-flow .today-phases>button.active{box-shadow:0 4px 18px color-mix(in srgb,var(--accent) 8%,transparent)!important}
+.today-day-flow .today-phases>button.active>span.phase-symbol,.today-day-flow .today-phases>button.phase-complete>span.phase-symbol{color:var(--accent-strong);background:var(--accent-soft)}
+.phase-current-dot{width:6px;height:6px;border-radius:50%;background:var(--accent-strong);flex:none;margin-left:auto}
+.daily-overview{display:contents}
+.daily-companion.today-stack{grid-template-columns:minmax(0,1fr);margin:22px 0;box-shadow:none}
+.today-stack .daily-focus{padding:24px 28px}.today-stack .daily-focus h2{font-size:clamp(1.6rem,2.4vw,2rem);margin:8px 0 18px}
+.today-stack .daily-overview{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(300px,1fr);gap:24px;align-items:center}
+.today-stack .daily-overview .readiness-card{margin:0}.today-stack .daily-stats{margin:0;gap:14px}.today-stack .daily-stats strong{font-size:2.1rem}
+.today-stack .evolution-freshness{margin:16px 0 0}.today-stack .daily-primary-actions{margin-top:16px}.today-stack .briefing-evidence{margin-top:14px;padding-top:10px}
+.today-stack .companion-week{grid-row:2;grid-column:1;padding:14px 28px}.today-stack .companion-week>summary{align-items:center}
+.today-stack .daily-check{grid-row:3;border-left:0;border-top:1px solid var(--border);padding:18px 28px;background:var(--panel)}
+.today-stack .daily-check>details:not([open])>summary{margin-bottom:0}.today-stack .daily-check>p:empty{display:none}
+.checkin-saved-summary{display:block;font-size:.74rem;color:var(--muted);margin-top:6px;font-weight:500}
+.today-stack .daily-check fieldset{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));column-gap:22px;row-gap:10px}
+.today-stack .daily-check fieldset>label{margin:0}.today-stack .daily-check fieldset>label:nth-of-type(3){grid-column:3;grid-row:1}
+.today-stack .daily-check fieldset>label:nth-of-type(4),.today-stack .daily-check fieldset>.companion-actions,.today-stack .daily-check .body-checkin{grid-column:1/-1}
+.today-stack .daily-check .body-checkin{margin:8px 0}.today-stack .daily-check .body-checkin-grid{grid-template-columns:180px minmax(0,1fr);max-width:800px;margin:14px auto 0}.today-stack .body-region-list{grid-template-columns:repeat(5,minmax(0,1fr))}.today-stack .body-levels{display:flex}.today-stack .body-levels button{min-width:64px}
+.today-stack .daily-check .energy-choice{padding:10px 4px}.today-stack .daily-check .energy-choice small{font-size:.6rem}
+.personal-progress{overflow:hidden}.progress-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-bottom:16px}
+.progress-summary article{padding:14px 16px;border:1px solid var(--border);border-radius:14px;background:linear-gradient(135deg,var(--accent-soft),var(--panel));min-width:0;display:grid;gap:6px}
+.progress-summary article>span{font-size:.72rem;color:var(--muted);font-weight:650}.progress-summary article>strong{font-size:1.85rem;letter-spacing:-.04em;line-height:1.1}
+.progress-summary article>strong small{font-size:.75rem;color:var(--muted);font-weight:500;letter-spacing:0}.progress-summary article>small{font-size:.66rem;color:var(--muted)}
+.personal-progress .progress-history>svg{height:220px;cursor:crosshair}.personal-progress .chart-axis-label{font-size:11px}.personal-progress .progress-history>.goal-legend{margin:0 0 12px}.personal-progress .progress-history>input{height:18px}
+.progress-more{border-top:1px solid var(--border);margin-top:14px;padding-top:8px}.progress-more>summary{font-weight:700;font-size:.82rem}.progress-more .progress-insight-grid{margin-top:0;border:0;padding-top:12px}.personal-progress .insight-details{margin-top:12px}
+.today-block-reflection,.today-block-weather{grid-column:1/-1}.today-weather-windows{grid-template-columns:repeat(3,minmax(0,1fr))}.today-reflection-body:has(fieldset){display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 24px}.today-reflection-body>label{grid-column:1;grid-row:1}.today-reflection-body>.today-recorded-result{grid-column:1;grid-row:2;margin-bottom:0}.today-reflection-body>fieldset{grid-column:2;grid-row:1/3}.today-reflection-body>p[role=status]{grid-column:2;grid-row:3}.today-reflection-body>.today-tomorrow{grid-column:1/-1}
+@media(max-width:1100px){.today-stack .daily-overview{grid-template-columns:minmax(0,1fr)}.today-stack .daily-stats{justify-content:flex-start}.today-stack .daily-overview .readiness-card{grid-template-columns:auto minmax(0,1fr) auto}.today-stack .readiness-lights,.today-stack .readiness-copy,.today-stack .readiness-dial{grid-row:auto;grid-column:auto}}
+@media(max-width:760px){.today-day-flow .today-phases{gap:6px}.today-day-flow .today-phases>button.ghost{flex-direction:column;align-items:flex-start;padding:10px;gap:8px}.today-day-flow .today-phases strong{font-size:.7rem}.today-day-flow .today-phases small{white-space:normal;font-size:.64rem;line-height:1.35;max-height:2.7em}.today-day-flow .phase-current-dot{position:absolute;top:12px;right:10px}.today-stack .daily-focus{padding:20px}.today-stack .daily-check,.today-stack .companion-week{padding:14px 20px}.today-stack .daily-check fieldset{grid-template-columns:1fr;gap:16px}.today-stack .daily-check fieldset>label:nth-of-type(3){grid-column:1;grid-row:auto}.today-stack .daily-check .body-checkin-grid{grid-template-columns:100px minmax(0,1fr)}.today-stack .body-region-list{grid-template-columns:1fr}.today-stack .body-levels{display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}.today-stack .body-levels button{min-width:0}.today-stack .daily-overview .readiness-card{grid-template-columns:minmax(0,1fr) auto}.today-stack .readiness-lights{grid-column:1;grid-row:1}.today-stack .readiness-copy{grid-column:1;grid-row:2}.today-stack .readiness-dial{grid-column:2;grid-row:1/3}.progress-summary{gap:6px}.progress-summary article{padding:11px 9px}.progress-summary article>span{font-size:.62rem;line-height:1.3}.progress-summary article>strong{font-size:1.35rem}.progress-summary article>strong small,.progress-summary article>small{font-size:.58rem}.personal-progress .progress-history>svg{height:220px}dialog.today-customization{padding:18px!important;border-radius:18px}.today-focus-tools{flex-wrap:wrap;justify-content:flex-end;max-width:140px}}
+@media(prefers-reduced-motion:reduce){.today-day-flow .today-phases>button.ghost{transition:none}}
+@media(max-width:760px){.today-weather-windows{grid-template-columns:1fr}.today-reflection-body:has(fieldset){display:block}.today-reflection-body>.today-recorded-result{margin-bottom:20px}}

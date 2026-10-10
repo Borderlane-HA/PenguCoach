@@ -20,7 +20,7 @@ Reviewed time-budget variants, confirmed training experiences, recorded 1/5/20-m
 
 ## Current alpha scope
 
-`v0.1.0-alpha.54` is the current end-to-end alpha baseline:
+`v0.1.0-alpha.55` is the current end-to-end alpha baseline:
 
 - **Training & Progress:** recorded-sample goal review with time-weighted intervals and adjustable alignment; GPS-verified whole-route or selected-section comparison; synchronized replay; historical readiness, observed sleep/check-in patterns and personal milestones. Today prioritizes one contextual action. See [`docs/TRAINING_INSIGHTS.md`](docs/TRAINING_INSIGHTS.md).
 - **Visual Readiness:** three clear traffic-light lamps, a short training action and compact strain chips. Detailed explanations and data confidence are available on demand; sparse data stays neutral.
