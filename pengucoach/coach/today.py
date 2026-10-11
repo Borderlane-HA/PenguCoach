@@ -9,7 +9,7 @@ from pengucoach.coach.readiness import compute_readiness, soreness_level
 
 LEGACY_TODAY_ORDER = ['preparation', 'weather', 'reflection', 'progress', 'load', 'metrics', 'trend', 'activities']
 TODAY_CARDS = ['progress', 'preparation', 'weather', 'reflection', 'load', 'metrics', 'trend', 'activities']
-TODAY_METRICS = ['steps', 'sleep', 'resting_hr', 'hrv', 'stress', 'hydration', 'body_battery_high', 'weight']
+TODAY_METRICS = ['steps', 'sleep', 'resting_hr', 'hrv', 'stress', 'hydration', 'body_battery_high', 'weight', 'body_fat', 'training_readiness', 'vo2max']
 
 
 def today_preferences(pref):
@@ -24,12 +24,12 @@ def today_preferences(pref):
     order += [k for k in TODAY_CARDS if k not in order]
     if order == LEGACY_TODAY_ORDER:
         order = list(TODAY_CARDS)
-    pinned = keys('pinned_metrics', TODAY_METRICS, ['steps', 'sleep', 'resting_hr'])[:4]
+    pinned = keys('pinned_metrics', TODAY_METRICS, ['steps', 'sleep', 'resting_hr', 'hrv', 'weight', 'stress'])[:len(TODAY_METRICS)]
     start, end = raw.get('preferred_start_hour', 7), raw.get('preferred_end_hour', 21)
     if type(start) is not int or type(end) is not int or not 0 <= start < end <= 24:
         start, end = 7, 21
     return {'order': order, 'hidden': keys('hidden', TODAY_CARDS),
-            'pinned_metrics': pinned or ['steps', 'sleep', 'resting_hr'],
+            'pinned_metrics': pinned or ['steps', 'sleep', 'resting_hr', 'hrv', 'weight', 'stress'],
             'preferred_start_hour': start, 'preferred_end_hour': end}
 
 

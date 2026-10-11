@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.0-alpha.57 — A calmer Today with guided daily assistants
+
+- Check-in and daily wrap-up now live in two equally sized, clickable tiles next to the daily recommendation. Battery/moon icons and explicit status labels reflect recorded answers and saved activity feedback.
+- Check-in walks through energy, soreness/body regions, available time and a final review. Daily wrap-up walks through the selected activity, feedback and tomorrow's outlook. Back, cancel and Escape keep stored data unchanged; changes are applied only by the final save action.
+- Weekly session count, minutes and active days are shown in the weekly reflection instead of repeated beside the readiness indicator.
+- Readings are visible directly below the compact header, with one shared selection instead of duplicated headline readings. Users can select any of eleven metrics, including body fat, device readiness and both VO2max values. Existing favorite selections and hidden-card preferences are retained.
+- Successful check-in/feedback writes refresh the readiness and progress views. Failed saves keep the assistant draft available; feedback preserves exertion, discomfort, experiences and route notes. Rest days do not invent activity feedback.
+- Native dialogs support focus return, keyboard operation and responsive scrolling. No new dependencies or database migrations are needed.
+
+
 ## 0.1.0-alpha.56 — Compact, collapsible navigation
 
 - Connections and preferences now share a collapsible Settings section; Admin is collapsible too.

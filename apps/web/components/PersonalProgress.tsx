@@ -7,6 +7,7 @@ const colors:Record<string,string>={green:"#169b62",yellow:"#e7ad27",red:"#d9435
 const dateLabel=(value:string,lang:Lang)=>new Date(`${value}T12:00:00Z`).toLocaleDateString(lang==="de"?"de-DE":"en-GB",{day:"2-digit",month:"short",timeZone:"UTC"});
 export default function PersonalProgress({lang}:{lang:Lang}){
  const[data,setData]=useState<O|null>(null),[days,setDays]=useState(7),[index,setIndex]=useState(6),[busy,setBusy]=useState(true),[error,setError]=useState(false),[retry,setRetry]=useState(0),request=useRef(0);
+ useEffect(()=>{const refresh=()=>setRetry(n=>n+1);window.addEventListener("pengucoach-checkin-updated",refresh);window.addEventListener("pengucoach-feedback-updated",refresh);return()=>{window.removeEventListener("pengucoach-checkin-updated",refresh);window.removeEventListener("pengucoach-feedback-updated",refresh)}},[]);
  useEffect(()=>{const id=++request.current;setBusy(true);setError(false);api<O>(`/coach/progress?days=${days}`).then(v=>{if(id===request.current){setData(v);setIndex(v.history.length-1)}}).catch(()=>{if(id===request.current)setError(true)}).finally(()=>{if(id===request.current)setBusy(false)});return()=>{request.current++}},[days,retry]);
  const rows:O[]=data?.history||[],selected=rows[Math.min(index,rows.length-1)],chart=useRef<HTMLDivElement>(null),[chartWidth,setChartWidth]=useState(720);
  useEffect(()=>{const node=chart.current;if(!node)return;const observer=new ResizeObserver(entries=>setChartWidth(Math.max(280,entries[0].contentRect.width)));observer.observe(node);return()=>observer.disconnect()},[busy,error]);

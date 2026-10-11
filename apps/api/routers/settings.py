@@ -238,7 +238,7 @@ async def delete_app_icon(user: User = Depends(safety_confirmed_user), db: Async
 class TodaySettingsIn(BaseModel):
     order: list[Literal['preparation','weather','reflection','progress','load','metrics','trend','activities']] = Field(default_factory=lambda: list(TODAY_CARDS), max_length=8)
     hidden: list[Literal['preparation','weather','reflection','progress','load','metrics','trend','activities']] = Field(default_factory=list, max_length=8)
-    pinned_metrics: list[Literal['steps','sleep','resting_hr','hrv','stress','hydration','body_battery_high','weight']] = Field(default_factory=lambda: ['steps','sleep','resting_hr'], min_length=1, max_length=4)
+    pinned_metrics: list[Literal['steps','sleep','resting_hr','hrv','stress','hydration','body_battery_high','weight','body_fat','training_readiness','vo2max']] = Field(default_factory=lambda: ['steps','sleep','resting_hr','hrv','weight','stress'], min_length=1, max_length=11)
     preferred_start_hour: int = Field(default=7, ge=0, le=23)
     preferred_end_hour: int = Field(default=21, ge=1, le=24)
 
