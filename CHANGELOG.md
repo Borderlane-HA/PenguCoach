@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.0-alpha.58 — A clearer activity analysis panel
+
+- The activity header now says “Start AI analysis”, without a model name in the action button or a duplicate model badge in the panel.
+- The analysis-context selector uses “7 days”; the existing seven-day context and internal three-day comparison remain unchanged.
+- Model selection and token limits are grouped in an expandable settings section. Context and response profile remain directly available.
+- The expandable prompt editor uses the full panel width, with a clear label, local default restore action and a note explaining that edits apply to the next analysis rather than the global default.
+- Progress, live token counts, cancellation and the start button use a separate responsive action row.
+
 ## 0.1.0-alpha.57 — A calmer Today with guided daily assistants
 
 - Check-in and daily wrap-up now live in two equally sized, clickable tiles next to the daily recommendation. Battery/moon icons and explicit status labels reflect recorded answers and saved activity feedback.

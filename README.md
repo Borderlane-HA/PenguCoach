@@ -20,7 +20,9 @@ Reviewed time-budget variants, confirmed training experiences, recorded 1/5/20-m
 
 ## Current alpha scope
 
-`v0.1.0-alpha.57` is the current end-to-end alpha baseline:
+`v0.1.0-alpha.58` is the current end-to-end alpha baseline:
+
+- **Clearer activity analysis:** plain “7 days” context, a compact start action, expandable model settings and a full-width prompt editor with local default restoration.
 
 - **Calmer Today:** open, selectable readings at the top; equal status tiles for guided check-in and daily wrap-up; weekly figures shown once in the weekly reflection.
 
