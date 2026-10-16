@@ -20,7 +20,9 @@ Reviewed time-budget variants, confirmed training experiences, recorded 1/5/20-m
 
 ## Current alpha scope
 
-`v0.1.0-alpha.58` is the current end-to-end alpha baseline:
+`v0.1.0-alpha.59` is the current end-to-end alpha baseline:
+
+- **Your training week:** a calm weekly calendar, measurable goal journey, Progress tab and reviewed “What if” adjustments; focused dialogs and collapsed plan management keep the main screen concise. See [Training workspace](docs/TRAINING_WORKSPACE.md).
 
 - **Clearer activity analysis:** plain “7 days” context, a compact start action, expandable model settings and a full-width prompt editor with local default restoration.
 

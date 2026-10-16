@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from apps.api.routers import activities, companion, admin_ai, admin_users, auth, coach, garmin, garmin_workouts, health, jobs, setup, sparkyfitness, settings as user_settings, weather
 from pengucoach.common.config import settings
-from apps.api.routers import maps, plan_evolution, insights, session_features
+from apps.api.routers import maps, plan_evolution, insights, session_features, training_workspace
 
 
 @asynccontextmanager
@@ -26,3 +26,4 @@ app.include_router(insights.router, prefix="/api/v1")
 async def healthcheck() -> dict[str, str]: return {"status": "ok", "version": settings.resolved_app_version}
 
 app.include_router(session_features.router, prefix="/api/v1")
+app.include_router(training_workspace.router, prefix="/api/v1")

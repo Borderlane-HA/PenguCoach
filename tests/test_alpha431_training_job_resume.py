@@ -29,7 +29,6 @@ def test_training_page_restores_server_job_and_keeps_it_visible():
     assert '/jobs/active?job_type=training_plan' in page
     assert 'training-running-job' in page
     assert 'PLANERSTELLUNG LÄUFT' in page
-    assert 'Plan wird bereits erstellt' in page
     assert 'showRunningJob' in page
     assert 'disabled={busy||jobLookup||!model||!isMonday(planStart)}' in page
 

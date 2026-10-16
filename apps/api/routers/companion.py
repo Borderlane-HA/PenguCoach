@@ -75,11 +75,12 @@ async def profile(user: User = Depends(safety_confirmed_user), db: AsyncSession 
 
 @router.put("/profile")
 async def save_profile(payload: ProfileIn, user: User = Depends(safety_confirmed_user), db: AsyncSession = Depends(get_db)):
-    row = await db.get(CoachProfile, user.id)
+    row = await db.scalar(select(CoachProfile).where(CoachProfile.user_id == user.id).with_for_update().execution_options(populate_existing=True))
     if not row:
         row = CoachProfile(user_id=user.id)
         db.add(row)
-    row.data = payload.model_dump(mode="json")
+    retained = {k: v for k, v in (row.data or {}).items() if k in {"goal_journey", "_goal_journey_revision"}}
+    row.data = {**payload.model_dump(mode="json"), **retained}
     await db.commit()
     return row.data
 

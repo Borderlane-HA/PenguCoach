@@ -151,6 +151,7 @@ class WeekIn(BaseModel):
     apply: bool = False
     review_token: str | None = None
     expected_items: list[dict] | None = Field(default=None,max_length=168)
+    override_training_days: bool = False
 
 
 @router.post("/plans/{run_id}/week-review")
@@ -187,7 +188,13 @@ async def review_week(run_id: uuid.UUID,payload: WeekIn,user: User = Depends(saf
     check = brief.get("checkin") or {}
     if start <= today <= start+timedelta(days=6) and today not in payload.availability and check.get("minutes") is not None:
         caps[today.isoformat()] = check["minutes"]
-    result = week_proposal(sessions,comparisons["items"],start=start,plan_start=schedule.start_date,weeks=run.metadata_json["structured_plan"]["weeks"],profile=(profile.data or {}) if profile else {},availability=caps,readiness=brief["readiness"],today=today,locked=locked,weather=weather_rows,blocked_dates=blocked,caution=bool(set(brief.get("reasons") or []) - {"no_time"}))
+    proposal_profile = dict((profile.data or {}) if profile else {})
+    if payload.override_training_days:
+        if len(payload.availability) != 7:
+            raise HTTPException(422, "SEVEN_DAY_AVAILABILITY_REQUIRED")
+        proposal_profile["training_days"] = [d.isoweekday() for d, minutes in payload.availability.items() if minutes >= 5]
+        # An all-zero availability is handled by caps; do not fall back to profile days.
+    result = week_proposal(sessions,comparisons["items"],start=start,plan_start=schedule.start_date,weeks=run.metadata_json["structured_plan"]["weeks"],profile=proposal_profile,availability=caps,readiness=brief["readiness"],today=today,locked=locked,weather=weather_rows,blocked_dates=blocked,caution=bool(set(brief.get("reasons") or []) - {"no_time"}))
     result.update(revision=schedule.revision,readiness=brief["readiness"],freshness=comparisons["freshness"],recent_completed=sum(s["status"] == "matched" and (today-timedelta(days=6)).isoformat() <= (s.get("actual_date") or "") <= today.isoformat() for s in comparisons["items"]),availability=caps)
     # Freshness age changes by the minute, so exclude transient timestamps from
     # the token while retaining all actual comparison/readiness facts.

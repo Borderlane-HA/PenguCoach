@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.0-alpha.59 — Your week, your goal, your coach
+
+- Training now opens with the approved calm weekly layout: My week, My goal and Progress tabs; a seven-column desktop calendar and a stacked mobile day list; compact goal and coach cards; collapsed plan management and technical details.
+- Workout cards show actual matching state and open a focused dialog with steps, notes and activity links. Multiple sessions per day, old unstructured plans, empty states and unsaved calendar previews are supported.
+- A native assistant reviews calendar activation, seven-day availability, keeping one day free and shorter workout variants before applying changes. Explicit availability can override usual training days for that proposal without changing the coach profile. Existing revision checks and completed/exported-workout protections are retained.
+- A measurable goal journey supports distance in one activity, recorded activity duration or a count of sessions of at least five minutes. Quarter-target milestones link to real activities within the user's local date range. Unknown readings, future records and other users do not advance the goal.
+- Goal edits and removal preserve the rest of the profile and use a revision guard. The general profile editor preserves separately managed goals, including when older clients save profile fields.
+- Existing plan creation, live jobs, plan history, full editor, activity matching and Garmin export remain available. A running generation job stays visible above the workspace. Saved calendar changes refresh the weekly overview.
+- No new runtime dependency or database migration is required. See `docs/TRAINING_WORKSPACE.md` for measurement rules and workflows.
+
 ## 0.1.0-alpha.58 — A clearer activity analysis panel
 
 - The activity header now says “Start AI analysis”, without a model name in the action button or a duplicate model badge in the panel.
