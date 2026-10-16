@@ -27,16 +27,88 @@ ProgressCallback = Callable[[dict[str, Any]], None]
 CancelCheck = Callable[[], bool]
 
 
-OPENAI_COMPATIBLE_PROVIDER_TYPES = {"openai", "openai_compatible", "ionos", "gemini", "xai"}
+OPENAI_COMPATIBLE_PROVIDER_TYPES = {"openai", "openai_compatible", "ionos", "gemini", "xai", "openrouter"}
 PROVIDER_DEFAULT_BASE_URLS = {
     "openai": "https://api.openai.com/v1",
     "ionos": "https://openai.inference.de-txl.ionos.com/v1",
     "gemini": "https://generativelanguage.googleapis.com/v1beta/openai",
     "xai": "https://api.x.ai/v1",
+    "openrouter": "https://openrouter.ai/api/v1",
 }
 
 def provider_base_url(provider_type: str, configured: str | None) -> str:
-    return (configured or PROVIDER_DEFAULT_BASE_URLS.get(provider_type) or "").rstrip("/")
+    return ((configured or "").strip() or PROVIDER_DEFAULT_BASE_URLS.get(provider_type) or "").rstrip("/")
+
+
+def provider_is_local(provider: LlmProvider) -> bool:
+    # A stale or manually edited flag must never bypass the local-only policy.
+    return provider.provider_type != "openrouter" and bool(provider.is_local)
+
+
+class OpenRouterError(RuntimeError):
+    """Only expose fixed error codes, never provider messages or key/account data."""
+
+
+def _openrouter_headers(api_key: str | None) -> dict[str, str]:
+    key = (api_key or "").strip()
+    if not key:
+        raise OpenRouterError("OPENROUTER_API_KEY_REQUIRED")
+    return {"Authorization": f"Bearer {key}", "Content-Type": "application/json",
+            "X-OpenRouter-Title": "PenguCoach"}
+
+
+def _openrouter_body(response: httpx.Response) -> dict[str, Any]:
+    codes = {401: "OPENROUTER_INVALID_API_KEY", 402: "OPENROUTER_CREDITS_REQUIRED",
+             403: "OPENROUTER_ACCESS_DENIED", 429: "OPENROUTER_RATE_LIMITED",
+             502: "OPENROUTER_UPSTREAM_UNAVAILABLE", 503: "OPENROUTER_UPSTREAM_UNAVAILABLE"}
+    if response.is_error:
+        raise OpenRouterError(codes.get(response.status_code, "OPENROUTER_REQUEST_FAILED"))
+    try:
+        body = response.json()
+    except ValueError:
+        raise OpenRouterError("OPENROUTER_INVALID_RESPONSE") from None
+    if not isinstance(body, dict):
+        raise OpenRouterError("OPENROUTER_INVALID_RESPONSE")
+    if "error" in body:
+        error = body["error"]
+        code = error.get("code") if isinstance(error, dict) else None
+        # Do not include raw error messages: upstreams can echo request content.
+        raise OpenRouterError({str(k): v for k, v in codes.items()}.get(str(code), "OPENROUTER_REQUEST_FAILED"))
+    return body
+
+
+def _openrouter_models(body: dict[str, Any]) -> list[dict[str, Any]]:
+    data = body.get("data")
+    if not isinstance(data, list):
+        raise OpenRouterError("OPENROUTER_INVALID_RESPONSE")
+    details = []
+    seen = set()
+    for item in data:
+        if not isinstance(item, dict) or not isinstance(item.get("id"), str):
+            continue
+        identifier = item["id"].strip()
+        if not identifier or len(identifier) > 255 or identifier in seen:
+            continue
+        architecture = item.get("architecture") or {}
+        if not isinstance(architecture, dict):
+            continue
+        if any(key in architecture and "text" not in (architecture[key] or [])
+               for key in ("input_modalities", "output_modalities")):
+            continue
+        top = item.get("top_provider") or {}
+        top = top if isinstance(top, dict) else {}
+        contexts = [v for v in (item.get("context_length"), top.get("context_length"))
+                    if isinstance(v, int) and not isinstance(v, bool) and v > 0]
+        context = min(contexts) if contexts else None
+        output = top.get("max_completion_tokens")
+        output = output if isinstance(output, int) and not isinstance(output, bool) and output > 0 else None
+        if (context and context < 1024) or (output and output < 128):
+            continue
+        seen.add(identifier)
+        details.append({"id": identifier, "display_name": str(item.get("name") or identifier)[:255],
+                        "context_window": min(context, 4_000_000) if context else None,
+                        "max_output_tokens": min(output, 1_000_000) if output else None})
+    return details
 
 
 def _emit_progress(callback: ProgressCallback | None, **payload: Any) -> None:
@@ -249,7 +321,7 @@ async def eligible_models(db: AsyncSession, local_only: bool = False) -> list[di
     out: list[dict[str, Any]] = []
     for model in models:
         provider = await db.get(LlmProvider, model.provider_id)
-        if not provider or not provider.enabled or (local_only and not provider.is_local):
+        if not provider or not provider.enabled or (local_only and not provider_is_local(provider)):
             continue
         meta = model.metadata_json if isinstance(model.metadata_json, dict) else {}
         out.append({
@@ -258,7 +330,7 @@ async def eligible_models(db: AsyncSession, local_only: bool = False) -> list[di
             "model_identifier": model.model_identifier,
             "provider": provider.name,
             "provider_type": provider.provider_type,
-            "local": provider.is_local,
+            "local": provider_is_local(provider),
             "context_window": model.context_window,
             "provider_max_output_tokens": meta.get("provider_max_output_tokens"),
             "input_cost_per_million_eur": model_pricing(meta)["input_eur_per_million"],
@@ -278,7 +350,7 @@ async def resolve_model(
         model = await db.get(LlmModel, model_id)
         if model and model.enabled:
             provider = await db.get(LlmProvider, model.provider_id)
-            if provider and provider.enabled and (not local_only or provider.is_local):
+            if provider and provider.enabled and (not local_only or provider_is_local(provider)):
                 return provider, model
         return None
 
@@ -291,13 +363,13 @@ async def resolve_model(
         if not model or not model.enabled:
             continue
         provider = await db.get(LlmProvider, model.provider_id)
-        if provider and provider.enabled and (not local_only or provider.is_local):
+        if provider and provider.enabled and (not local_only or provider_is_local(provider)):
             return provider, model
 
     models = (await db.scalars(select(LlmModel).where(LlmModel.enabled.is_(True)).order_by(LlmModel.display_name))).all()
     for model in models:
         provider = await db.get(LlmProvider, model.provider_id)
-        if provider and provider.enabled and (not local_only or provider.is_local):
+        if provider and provider.enabled and (not local_only or provider_is_local(provider)):
             return provider, model
     return None
 
@@ -613,7 +685,8 @@ async def chat(
     async with httpx.AsyncClient(timeout=timeout) as client:
         if provider.provider_type in OPENAI_COMPATIBLE_PROVIDER_TYPES:
             base = provider_base_url(provider.provider_type, provider.base_url)
-            headers = {"Authorization": f"Bearer {_secret(provider)}", "Content-Type": "application/json"}
+            headers = (_openrouter_headers(_secret(provider)) if provider.provider_type == "openrouter" else
+                       {"Authorization": f"Bearer {_secret(provider)}", "Content-Type": "application/json"})
             response = await client.post(
                 base + "/chat/completions",
                 headers=headers,
@@ -624,12 +697,29 @@ async def chat(
                     "max_tokens": max_tokens,
                 },
             )
-            response.raise_for_status()
-            body = response.json()
-            choice = body["choices"][0]
-            text = choice["message"]["content"]
-            stop_reason = choice.get("finish_reason")
+            if provider.provider_type == "openrouter":
+                body = _openrouter_body(response)
+                try:
+                    choice = body["choices"][0]
+                    text = choice["message"]["content"]
+                    stop_reason = choice.get("finish_reason")
+                except (KeyError, IndexError, TypeError, AttributeError):
+                    raise OpenRouterError("OPENROUTER_INVALID_RESPONSE") from None
+                if stop_reason == "error":
+                    raise OpenRouterError("OPENROUTER_UPSTREAM_UNAVAILABLE")
+                if stop_reason == "content_filter":
+                    raise OpenRouterError("OPENROUTER_CONTENT_FILTERED")
+                if text is not None and not isinstance(text, str):
+                    raise OpenRouterError("OPENROUTER_INVALID_RESPONSE")
+            else:
+                response.raise_for_status()
+                body = response.json()
+                choice = body["choices"][0]
+                text = choice["message"]["content"]
+                stop_reason = choice.get("finish_reason")
             raw_usage = body.get("usage") or {}
+            if provider.provider_type == "openrouter" and not isinstance(raw_usage, dict):
+                raise OpenRouterError("OPENROUTER_INVALID_RESPONSE")
             usage = {
                 "input_tokens": raw_usage.get("prompt_tokens"),
                 "output_tokens": raw_usage.get("completion_tokens"),
@@ -806,7 +896,7 @@ async def chat(
         "model": model.display_name,
         "model_identifier": model.model_identifier,
         "model_id": str(model.id),
-        "local": provider.is_local,
+        "local": provider_is_local(provider),
         "max_output_tokens": max_tokens,
         "requested_max_output_tokens": requested_output_tokens,
         "output_budget_adjusted": output_budget_adjusted,
@@ -833,6 +923,15 @@ async def test_provider(provider_type: str, base_url: str | None, api_key: str |
             response.raise_for_status()
             models = [x.get("name") for x in response.json().get("models", [])]
             return {"ok": True, "models": models}
+        if provider_type == "openrouter":
+            base = provider_base_url(provider_type, base_url)
+            headers = _openrouter_headers(api_key)
+            # /models is public; only /key proves that the supplied key is valid.
+            verified = _openrouter_body(await client.get(base + "/key", headers=headers))
+            if not isinstance(verified.get("data"), dict):
+                raise OpenRouterError("OPENROUTER_INVALID_RESPONSE")
+            details = _openrouter_models(_openrouter_body(await client.get(base + "/models", headers=headers)))
+            return {"ok": True, "models": [x["id"] for x in details], "model_details": details}
         if provider_type in OPENAI_COMPATIBLE_PROVIDER_TYPES:
             base = provider_base_url(provider_type, base_url)
             response = await client.get(base + "/models", headers={"Authorization": f"Bearer {api_key or ''}"})

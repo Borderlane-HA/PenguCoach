@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from pengucoach.auth.dependencies import admin_user
 from pengucoach.db.models import AiRun, LlmModel, LlmProvider, LlmRoute, User
 from pengucoach.db.session import get_db
-from pengucoach.llm.service import TASK_DEFAULTS, task_settings, test_provider
+from pengucoach.llm.service import TASK_DEFAULTS, OpenRouterError, provider_is_local, task_settings, test_provider
 from pengucoach.llm.usage import calculate_cost_eur, model_pricing, period_start
 from pengucoach.security.crypto import SecretBox
 
@@ -18,7 +18,7 @@ router = APIRouter(prefix="/admin/ai", tags=["admin-ai"])
 
 class ProviderIn(BaseModel):
     name: str = Field(min_length=2, max_length=128)
-    provider_type: str = Field(pattern=r"^(ollama|openai|anthropic|openai_compatible|ionos|gemini|xai)$")
+    provider_type: str = Field(pattern=r"^(ollama|openai|anthropic|openai_compatible|ionos|gemini|xai|openrouter)$")
     base_url: str | None = None
     api_key: str | None = None
     enabled: bool = True
@@ -75,7 +75,7 @@ def _model_payload(x: LlmModel, provider: LlmProvider | None) -> dict:
         "provider_id": str(x.provider_id),
         "provider_name": provider.name if provider else None,
         "provider_type": provider.provider_type if provider else None,
-        "local": provider.is_local if provider else None,
+        "local": provider_is_local(provider) if provider else None,
         "model_identifier": x.model_identifier,
         "display_name": x.display_name,
         "enabled": x.enabled,
@@ -92,19 +92,21 @@ async def providers(_: User = Depends(admin_user), db: AsyncSession = Depends(ge
     rows = (await db.scalars(select(LlmProvider).order_by(LlmProvider.name))).all()
     return [{
         "id": str(x.id), "name": x.name, "provider_type": x.provider_type, "base_url": x.base_url,
-        "enabled": x.enabled, "is_local": x.is_local, "has_secret": bool(x.secret_ciphertext)
+        "enabled": x.enabled, "is_local": provider_is_local(x), "has_secret": bool(x.secret_ciphertext)
     } for x in rows]
 
 
 @router.post("/providers")
 async def create_provider(payload: ProviderIn, _: User = Depends(admin_user), db: AsyncSession = Depends(get_db)):
+    if payload.provider_type == "openrouter" and not (payload.api_key or "").strip():
+        raise HTTPException(status_code=400, detail="OPENROUTER_API_KEY_REQUIRED")
     row = LlmProvider(
         name=payload.name,
         provider_type=payload.provider_type,
         base_url=payload.base_url,
         enabled=payload.enabled,
-        is_local=payload.is_local or payload.provider_type == "ollama",
-        secret_ciphertext=SecretBox().encrypt(payload.api_key) if payload.api_key else None,
+        is_local=False if payload.provider_type == "openrouter" else payload.is_local or payload.provider_type == "ollama",
+        secret_ciphertext=SecretBox().encrypt(payload.api_key.strip()) if payload.api_key and payload.api_key.strip() else None,
     )
     db.add(row)
     await db.commit()
@@ -119,9 +121,9 @@ async def update_provider(provider_id: uuid.UUID, payload: ProviderUpdate, _: Us
     row.name = payload.name
     row.base_url = payload.base_url
     row.enabled = payload.enabled
-    row.is_local = payload.is_local or row.provider_type == "ollama"
-    if payload.api_key:
-        row.secret_ciphertext = SecretBox().encrypt(payload.api_key)
+    row.is_local = False if row.provider_type == "openrouter" else payload.is_local or row.provider_type == "ollama"
+    if payload.api_key and payload.api_key.strip():
+        row.secret_ciphertext = SecretBox().encrypt(payload.api_key.strip())
     await db.commit()
     return {"saved": True}
 
@@ -140,6 +142,8 @@ async def delete_provider(provider_id: uuid.UUID, _: User = Depends(admin_user),
 async def provider_test(payload: ProviderIn, _: User = Depends(admin_user)):
     try:
         return await test_provider(payload.provider_type, payload.base_url, payload.api_key)
+    except OpenRouterError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from None
     except Exception as exc:
         raise HTTPException(status_code=400, detail=f"PROVIDER_TEST_FAILED:{type(exc).__name__}") from exc
 
@@ -154,6 +158,8 @@ async def discover_provider_models(provider_id: uuid.UUID, _: User = Depends(adm
     secret = SecretBox().decrypt(row.secret_ciphertext) if row.secret_ciphertext else None
     try:
         return await test_provider(row.provider_type, row.base_url, secret)
+    except OpenRouterError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from None
     except Exception as exc:
         raise HTTPException(status_code=400, detail=f"PROVIDER_DISCOVERY_FAILED:{type(exc).__name__}") from exc
 

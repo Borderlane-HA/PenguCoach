@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.0-alpha.60 — OpenRouter integration
+
+- Adds OpenRouter as a native cloud provider for coach chat, activity analysis and training planning, addressing [request #1](https://github.com/Borderlane-HA/PenguCoach/issues/1). Existing installations can keep their current provider configuration.
+- Connection testing verifies the API key through `/key` before loading the full text-model catalog. It does not generate a completion or send training/health context. Keys use the existing encrypted secret storage.
+- Model discovery now supports search by name or exact model ID and progressive display, including models beyond the previous 60-row UI/100-model provider limits. OpenRouter model IDs, including vendor prefixes and suffixes, are preserved; reported context and output limits are imported.
+- OpenRouter always counts as cloud AI, including if an incorrect local flag was stored. Existing local-only and explicit cloud-data permission checks remain effective.
+- Provider HTTP errors and error envelopes (including HTTP 200) become fixed error codes without raw account or prompt details. Usage, output budgets and truncation detection use the existing common path.
+- Cloud-permission notices now use theme colors with readable contrast in dark and light themes.
+- OpenRouter USD prices are not silently used as EUR prices; model EUR pricing remains explicit. No database migration or new runtime dependency is required. See `docs/OPENROUTER.md` for setup and limits.
+
 ## 0.1.0-alpha.59 — Your week, your goal, your coach
 
 - Training now opens with the approved calm weekly layout: My week, My goal and Progress tabs; a seven-column desktop calendar and a stacked mobile day list; compact goal and coach cards; collapsed plan management and technical details.

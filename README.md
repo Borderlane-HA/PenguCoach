@@ -20,7 +20,9 @@ Reviewed time-budget variants, confirmed training experiences, recorded 1/5/20-m
 
 ## Current alpha scope
 
-`v0.1.0-alpha.59` is the current end-to-end alpha baseline:
+`v0.1.0-alpha.60` is the current end-to-end alpha baseline:
+
+- **OpenRouter:** native provider selection, key verification without a model request, searchable model discovery and imported context/output limits for chat, activity analysis and training plans. See [OpenRouter setup](docs/OPENROUTER.md).
 
 - **Your training week:** a calm weekly calendar, measurable goal journey, Progress tab and reviewed “What if” adjustments; focused dialogs and collapsed plan management keep the main screen concise. See [Training workspace](docs/TRAINING_WORKSPACE.md).
 
@@ -74,7 +76,7 @@ Reviewed time-budget variants, confirmed training experiences, recorded 1/5/20-m
 - performance-oriented server-side activity journal: the first 25/50/100 rows load independently from source/status counters, PostgreSQL indexes accelerate the common user/date and source filters, summary counters are aggregated/cached separately, and responsive skeleton/loading states keep large 5,000+ activity histories visibly responsive; detail views retain FIT time series
 - manual activity import without Garmin: FIT, GPX, TCX and ZIP-contained FIT files are stored locally, normalized into the same activity history and analysed with the same deterministic pipeline
 - health overview and professional historical charts with Today / Last 7 days / This week / This month / Last 3 months / Last 6 months / This year / All filters; top health cards show averages of the available measurements in the selected period while missing days are not treated as zero
-- Ollama, OpenAI, Anthropic, IONOS AI Model Hub, Google Gemini, xAI/Grok and generic OpenAI-compatible provider management
+- Ollama, OpenAI, Anthropic, IONOS AI Model Hub, Google Gemini, xAI/Grok, OpenRouter and generic OpenAI-compatible provider management
 - optional per-model input/output token pricing plus system-wide AI usage/cost statistics for today, 7 days, 30 days, current year and all time; local models retain token statistics even without prices
 - per-function response profiles (**Very low / Low / Standard / High**) for Coach, activity analysis and training planning, with cost estimates before generation and actual token/cost snapshots after completion
 - optional monthly AI cost budget indicator (informational only), per-model/per-task breakdowns, average tokens/request and measured output throughput for newly timed runs
