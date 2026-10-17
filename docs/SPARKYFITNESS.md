@@ -1,3 +1,21 @@
+# SparkyFitness integration
+
+## GPS, sensor series and laps (alpha.64, SparkyFitness 1.8.0)
+
+SparkyFitness stores GPS/sensor samples, laps and HR-zone times separately from `ExerciseSession_raw_data`. A raw HealthKit summary with only start/end/duration/distance/calories does not contain that recording. PenguCoach now reads the same separate endpoints as Sparky's editor:
+
+- `GET /api/generic-health/workout-gps/{exerciseEntryId}` → `{data: {points: [...]}}` or `{data: null}`.
+- `GET /api/generic-health/workout-laps/{exerciseEntryId}` → `{data: [...]}`.
+- `GET /api/generic-health/workout-hr-zones/{exerciseEntryId}` → `{data: [...]}`.
+
+Verified source contracts: [SparkyFitness v1.8.0 frontend service](https://github.com/CodeWithCJ/SparkyFitness/blob/v1.8.0/SparkyFitnessFrontend/src/api/Health/genericHealthService.ts), [server routes](https://github.com/CodeWithCJ/SparkyFitness/blob/v1.8.0/SparkyFitnessServer/routes/genericHealthRoutes.ts), [GPS schema](https://github.com/CodeWithCJ/SparkyFitness/blob/v1.8.0/shared/src/schemas/database/ExerciseEntryGpsPoints.zod.ts) and [HR-zone schema](https://github.com/CodeWithCJ/SparkyFitness/blob/v1.8.0/shared/src/schemas/database/ExerciseEntryHrZones.zod.ts).
+
+The API key also needs check-in/health read access for these endpoints (the upstream router uses `checkin_read`). A denied/unsupported optional endpoint does not fail the whole sync; denied access is shown in the activity detail. Previously imported telemetry is preserved on a failed fetch. Empty successful responses clear removed upstream data. Optional endpoints are skipped for the remainder of a sync if unavailable or denied.
+
+After updating API, web and workers together, select the desired history range (or **All data**), save and run **Sync now**. Existing IDs, feedback and plan assignments remain intact. Manual sync refreshes telemetry throughout that range; automatic sync stays restricted to today/yesterday. No deletion or new migration is required. A large first historical import makes additional read requests, reflected in sync progress.
+
+Available timestamped points feed the existing OpenStreetMap/chart view, measured HR minimum, altitude/speed/power/cadence channels, per-activity efforts, route briefing and plan execution review. Recorded laps and HR-zone times remain separate from locally computed distance splits. Invalid timestamps/coordinates/values remain missing; gaps are not connected as one track. FIT recordings retain priority for merged activities. Summary-only entries never become fabricated curves or routes. There is a 100,000-point per-workout import bound; absent provider samples and unsupported optional endpoints remain empty. No live Sparky credentials or paid AI calls were used during development.
+
 # SparkyFitness connection
 
 ## Recording time and additional readings (alpha.63)

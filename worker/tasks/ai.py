@@ -293,21 +293,26 @@ async def _persist_plan(db, user, payload, answer, content, metadata, locale):
         "continuation": metadata.get("continuation"), "goal": metadata.get("goal"), "created_at": run.created_at.isoformat()}
 
 
-async def _save_plan_draft(db, user, payload, context, answer, segments, locale, calls=None, usage=None, cost=None):
+async def _save_plan_draft(db, user, payload, context, answer, segments, locale, calls=None, usage=None, cost=None, validation_error=None):
     state = {"context": context, "segments": [{**p.model_dump(mode="json"), "weeks": context["goal"]["weeks"]} for p in segments]}
     metadata = _answer_metadata(answer, locale, str(payload.get("quality_profile") or "standard"),
         goal=context["goal"], structured_plan=None, structured_plan_valid=False,
-        structured_plan_error="TOKEN_LIMIT_DRAFT", draft=True, _request={**public(payload), "prompt": payload.get("_base_prompt") or payload.get("prompt")}, _plan_state=json_value(state))
-    metadata["truncated"] = True
-    metadata["continuation"] = {"available": True, "revision": 0, "additional_tokens": 8000}
+        structured_plan_error=validation_error or "TOKEN_LIMIT_DRAFT", draft=True, _request={**public(payload), "prompt": payload.get("_base_prompt") or payload.get("prompt")}, _plan_state=json_value(state))
+    metadata["truncated"] = bool(answer.get("truncated"))
+    metadata["continuation"] = {"available": True, "revision": 0,
+        "reason": "invalid_plan" if validation_error and not answer.get("truncated") else "token_limit",
+        "additional_tokens": 0 if validation_error and not answer.get("truncated") else 8000}
+    metadata["validated_weeks"] = max((s.week for p in segments for s in p.sessions), default=0)
     if usage is not None:
         metadata["usage"] = usage
         metadata["cost_eur"] = cost
     metadata["generation_calls"] = calls or []
+    if calls:
+        metadata["elapsed_seconds"] = sum(c.get("elapsed_seconds") or 0 for c in calls)
     completed = "\n\n".join(render_plan_markdown(p, locale) for p in segments)
     pending = str(answer.get("content") or "")
     content = completed + ("\n\n### Unvollständiger Abschnitt / Incomplete section\n```json\n"+pending+"\n```" if completed and pending else pending)
-    return await _persist_plan(db, user, payload, {**answer, "truncated": True}, content, metadata, locale)
+    return await _persist_plan(db, user, payload, answer, content, metadata, locale)
 
 
 async def _training_plan(
@@ -405,8 +410,9 @@ async def _training_plan(
             if cancel_check and cancel_check():
                 raise AiGenerationCancelled("AI_JOB_CANCELLED")
             content, plan_meta = normalize_training_plan_answer(answer, locale)
-            if answer.get("truncated") and not plan_meta.get("structured_plan_valid"):
-                return await _save_plan_draft(db, user, payload, context, answer, [], locale)
+            if not plan_meta.get("structured_plan_valid"):
+                return await _save_plan_draft(db, user, payload, context, answer, [], locale,
+                    validation_error=plan_meta.get("structured_plan_error"))
             if plan_meta.get("structured_plan_valid"):
                 answer["continuation"] = {"available": False, "revision": 0}
             generation_chunks = 1
@@ -527,6 +533,8 @@ async def _training_plan(
                         return None, f"SEGMENT_WEEK_COUNT:{parsed.weeks}!={local_weeks}"
                     if parsed is not None and len(parsed.sessions) < segment_sessions:
                         return None, f"SEGMENT_SESSION_COUNT:{len(parsed.sessions)}<{segment_sessions}"
+                    if parsed is not None and any(sum(s.week == w for s in parsed.sessions) < days_per_week for w in range(1, local_weeks + 1)):
+                        return None, "SEGMENT_WEEK_SESSION_COUNT:each week needs all requested sessions"
                     return parsed, parsed_error
 
                 # Parse before treating an exact token-cap finish as a failure: a
@@ -535,7 +543,7 @@ async def _training_plan(
                 # Retry only when the plan is incomplete/invalid. A valid schema
                 # document is accepted even if Ollama reports a length boundary.
                 needs_retry = segment is None
-                if needs_retry and compact_budget < requested_max:
+                if needs_retry:
                     retry_budget = requested_max
                     answer_part = await chat(
                         db,
@@ -549,6 +557,9 @@ async def _training_plan(
                             segment_instruction
                             + "\nThe previous attempt was incomplete or invalid. Return only one compact, complete JSON object; "
                               "shorten wording aggressively before omitting any requested session."
+                            + f"\nValidation feedback: {segment_error}. Use local week numbers and all requested sessions. "
+                              "Strength: integer reps; a range uses reps plus reps_max; holds use duration_seconds with reps=null; "
+                              "max-N uses reps_in_reserve=N with reps=null. Never use zero or free text in numeric fields."
                         ),
                         requested_max_tokens=retry_budget,
                         requested_context_window_tokens=payload.get("context_window_tokens"),
@@ -562,10 +573,9 @@ async def _training_plan(
                     account_call(answer_part, 2)
                     segment, segment_error = parse_segment(answer_part)
                 if segment is None:
-                    if answer_part.get("truncated"):
-                        return await _save_plan_draft(db, user, payload, context, answer_part, segments, locale,
-                            generation_calls, usage_totals, round(total_cost_eur, 8) if priced_calls else None)
-                    raise RuntimeError(f"TRAINING_PLAN_SEGMENT_INVALID:{start_week}-{end_week}:{segment_error}")
+                    return await _save_plan_draft(db, user, payload, context, answer_part, segments, locale,
+                        generation_calls, usage_totals, round(total_cost_eur, 8) if priced_calls else None,
+                        validation_error=f"TRAINING_PLAN_SEGMENT_INVALID:{start_week}-{end_week}:{segment_error}")
                 for session in segment.sessions:
                     session.week += start_week - 1
                 segments.append(segment)

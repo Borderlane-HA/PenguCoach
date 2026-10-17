@@ -70,7 +70,8 @@ async def delete_experience(activity_id: uuid.UUID,user=Depends(safety_confirmed
 
 async def full_series(db,user,activity):
     fit=await db.scalar(select(FitFile).where(FitFile.activity_id==activity.id,FitFile.user_id==user.id,FitFile.status=='parsed'))
-    return await asyncio.to_thread(read_full,fit) if fit else []
+    from pengucoach.fit.service import load_recording_series
+    return await asyncio.to_thread(load_recording_series, activity, fit, 100_000)
 
 
 def read_full(fit):

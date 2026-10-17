@@ -45,8 +45,10 @@ async def _continue(user_id, payload, progress_callback=None, cancel_check=None,
                 raise RuntimeError('NO_ELIGIBLE_LLM_MODEL_CONFIGURED')
             snapshot = meta.get('_resume') or {}
             previous = run.content
+            format_retry = run.task_type == 'training_plan' and (meta.get('continuation') or {}).get('reason') == 'invalid_plan'
             ceiling = min(65536, (model.metadata_json or {}).get('provider_max_output_tokens') or 65536)
-            output = min(ceiling, (run.max_output_tokens or 0)+8000 if not previous or run.task_type == 'training_plan' else 8000)
+            output = min(ceiling, (run.max_output_tokens or 8000) if format_retry else
+                (run.max_output_tokens or 0)+8000 if not previous or run.task_type == 'training_plan' else 8000)
             ctx = snapshot.get('context_window_tokens') or meta.get('context_window_tokens') or 8192
             source_context = snapshot.get('context') or (meta.get('_plan_state') or {}).get('context') or {}
             messages = copy.deepcopy(snapshot.get('messages') or [])
@@ -59,7 +61,8 @@ async def _continue(user_id, payload, progress_callback=None, cancel_check=None,
             if run.task_type == 'training_plan':
                 request = dict(meta.get('_request') or {})
                 request.update(max_tokens=output, context_window_tokens=ctx, model_id=str(run.model_id),
-                    _continue_run_id=str(run.id), _minimum_retry_output=(run.max_output_tokens or 0)+1, _resume_plan=meta.get('_plan_state') or {'context': source_context})
+                    _continue_run_id=str(run.id), _minimum_retry_output=None if format_retry else (run.max_output_tokens or 0)+1,
+                    _resume_plan=meta.get('_plan_state') or {'context': source_context})
                 # Use the same validated plan generator and preserve prior successful segments.
                 result = await _training_plan(user_id, request, progress_callback=progress_callback, cancel_check=cancel_check)
                 status = 'finished'

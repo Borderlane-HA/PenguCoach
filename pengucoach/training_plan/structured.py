@@ -63,9 +63,55 @@ class PlanStep(BaseModel):
 class StrengthExercise(BaseModel):
     name: str = Field(min_length=1, max_length=120)
     sets: int = Field(default=3, ge=1, le=20)
-    reps: int = Field(default=10, ge=1, le=100)
+    reps: int | None = Field(default=10, ge=1, le=100)
+    reps_max: int | None = Field(default=None, ge=1, le=100)
+    duration_seconds: int | None = Field(default=None, ge=1, le=3600)
+    reps_in_reserve: int | None = Field(default=None, ge=0, le=10)
     rest_seconds: int = Field(default=90, ge=0, le=1800)
     weight_kg: float | None = Field(default=None, ge=0, le=1000)
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_prescription(cls, value):
+        if not isinstance(value, dict):
+            return value
+        value = dict(value)
+        reps = value.get("reps")
+        if isinstance(reps, bool):
+            raise ValueError("reps must be a number, range, duration or max-N")
+        if isinstance(reps, str):
+            text = reps.strip().lower()
+            interval = re.fullmatch(r"(\d+)\s*[-–—−]\s*(\d+)", text)
+            timed = re.fullmatch(r"(\d+)\s*(s|sec|seconds?|sek(?:unden)?|min|minutes?|minuten?)", text)
+            reserve = re.fullmatch(r"max\s*[-–—−]\s*(\d+)", text)
+            if interval:
+                value.update(reps=int(interval[1]), reps_max=int(interval[2]))
+            elif timed:
+                value.update(reps=None, duration_seconds=int(timed[1]) * (60 if timed[2].startswith("min") else 1))
+            elif reserve:
+                value.update(reps=None, reps_in_reserve=int(reserve[1]))
+        if value.get("duration_seconds") is not None or value.get("reps_in_reserve") is not None:
+            # Explicit non-repetition prescriptions must not acquire the legacy
+            # default of ten reps. Zero is a common placeholder for a timed set.
+            if value.get("reps") in (None, 0):
+                value["reps"] = None
+        return value
+
+    @model_validator(mode="after")
+    def validate_prescription(self):
+        if sum(x is not None for x in (self.reps, self.duration_seconds, self.reps_in_reserve)) != 1:
+            raise ValueError("choose exactly one of reps, duration_seconds or reps_in_reserve")
+        if self.reps_max is not None and (self.reps is None or self.reps_max < self.reps):
+            raise ValueError("reps_max requires reps and must be >= reps")
+        return self
+
+
+def strength_prescription(exercise: StrengthExercise, locale: str = "de") -> str:
+    if exercise.duration_seconds is not None:
+        return f"{exercise.duration_seconds} s"
+    if exercise.reps_in_reserve is not None:
+        return f"max − {exercise.reps_in_reserve} {'Wdh.' if locale.startswith('de') else 'reps'}"
+    return f"{exercise.reps}–{exercise.reps_max}" if exercise.reps_max is not None else str(exercise.reps)
 
 
 class TrainingSession(BaseModel):
@@ -126,6 +172,10 @@ JSON schema/semantics:
   {{"type":"power_zone","zone":1..7}} or {{"type":"power_watts","watts":250,"tolerance_pct":5}}. Use watts only when supported by measured FTP/power context, never invent FTP. Prefer the user's Garmin zones from context when available.
 - a repeat step has repeat>=2 and nested steps. Example: 6 x (3 min interval + 2 min recovery).
 - strength sessions should populate strength_exercises with canonical plain English Garmin exercise names plus sets/reps/rest_seconds;
+  use integer reps (e.g. 8), or reps=8 and reps_max=10 for a range. For timed holds use
+  duration_seconds=45 and reps=null; never write "45s" in reps. For max minus two reps use
+  reps_in_reserve=2 and reps=null. Choose exactly one of reps, duration_seconds or reps_in_reserve.
+  Never use reps=0. Include the fields inside strength_exercises, not in the session's notes alone.
   prefer simple catalogue names such as Squat, Push-up, Lunge, Plank, Side Plank, Deadlift, Row, Leg Press, Bench Press,
   and Calf Raise instead of localized names or phrases like "or similar"; steps may be empty for strength. Each strength_exercises
   item must be one concrete movement, never a circuit/block title, muscle-group label, superset name or descriptive session heading.
@@ -226,5 +276,5 @@ def render_plan_markdown(plan: TrainingPlanDocument, locale: str = "de") -> str:
             if session.strength_exercises:
                 for exercise in session.strength_exercises:
                     weight = f" · {exercise.weight_kg:g} kg" if exercise.weight_kg is not None else ""
-                    out.append(f"- {exercise.name}: {exercise.sets}×{exercise.reps} · {exercise.rest_seconds}s {'Pause' if de else 'rest'}{weight}")
+                    out.append(f"- {exercise.name}: {exercise.sets}×{strength_prescription(exercise, locale)} · {exercise.rest_seconds}s {'Pause' if de else 'rest'}{weight}")
     return "\n".join(out).strip()

@@ -217,3 +217,40 @@ def load_activity_detail(fit_file: FitFile, sport_type: str | None = None) -> di
         "stats": build_activity_stats(df, sport_type=sport_type),
         "splits": build_distance_splits(df, sport_type=sport_type),
     }
+
+
+def load_recording_series(activity: Activity, fit_file: FitFile | None, limit: int = 5000):
+    if fit_file and fit_file.status == "parsed":
+        rows = load_activity_series(fit_file, limit)
+        if rows:
+            return rows
+    from pengucoach.sparkyfitness.telemetry import frame
+    rows = serialize_series(frame(activity.raw), limit=limit)
+    from pengucoach.sparkyfitness.activity_time import stored_time_info
+    origin = getattr(activity, "started_at", None)
+    if origin and stored_time_info(activity).get("precision") == "second":
+        origin = origin if origin.tzinfo else origin.replace(tzinfo=timezone.utc)
+        for row in rows:
+            # The first GPS fix can arrive after workout start. Keep that gap
+            # when comparing measured samples with planned intervals.
+            row["elapsed_s"] = (datetime.fromisoformat(row["timestamp"]) - origin).total_seconds()
+    return rows
+
+
+def load_recording_detail(activity: Activity, fit_file: FitFile | None):
+    if fit_file and fit_file.status == "parsed":
+        result = load_activity_detail(fit_file, activity.sport_type)
+        if result.get("stats"):
+            return {**result, "source": "fit"}
+    from pengucoach.sparkyfitness.telemetry import frame, laps, zones, telemetry
+    df = frame(activity.raw)
+    stats = build_activity_stats(df, activity.sport_type) if not df.empty else None
+    if stats and stats.get("power_w", {}).get("source"):
+        stats["power_w"]["source"] = "sparkyfitness"
+        # Sparky may downsample GPS/sensor points. The FIT helper assumes 1 Hz
+        # for normalized power, so use only a provider's actual summary value.
+        stats["power_w"]["normalized"] = None
+    return {"stats": stats, "splits": build_distance_splits(df, activity.sport_type),
+        "laps": laps(activity.raw), "hr_zones": zones(activity.raw),
+        "source": "sparkyfitness" if telemetry(activity.raw) else None,
+        "telemetry_status": telemetry(activity.raw).get("status", {})}

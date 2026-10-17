@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from pengucoach.db.models import Activity, ActivityMetric, BodyMeasurement, DailyHealth, FitFile, HrvDaily, SleepSession, SourceRecord, User
 from pengucoach.fit.activity_detail import selected_activity_extras
 from pengucoach.sparkyfitness.activity_time import stored_time_info
-from pengucoach.fit.service import load_activity_detail
+from pengucoach.fit.service import load_recording_detail
 from pengucoach.garmin.zones import activity_zone_time, training_zone_snapshot
 
 
@@ -331,11 +331,10 @@ async def build_activity_analysis_context(
     metric = await db.scalar(select(ActivityMetric).where(ActivityMetric.activity_id == activity.id))
     fit = await db.scalar(select(FitFile).where(FitFile.activity_id == activity.id))
     fit_detail: dict[str, Any] = {"stats": None, "splits": []}
-    if fit and fit.status == "parsed" and fit.parquet_path:
-        try:
-            fit_detail = await asyncio.to_thread(load_activity_detail, fit, activity.sport_type)
-        except Exception:
-            fit_detail = {"stats": None, "splits": []}
+    try:
+        fit_detail = await asyncio.to_thread(load_recording_detail, activity, fit)
+    except (OSError, ValueError):
+        fit_detail = {"stats": None, "splits": []}
 
     zones = await training_zone_snapshot(db, user.id)
     zone_time = await asyncio.to_thread(
@@ -371,12 +370,14 @@ async def build_activity_analysis_context(
     current = {
         "summary": _activity_garmin(activity),
         "pengucoach": _metric_payload(metric),
-        "fit_analytics_source": "pengucoach_fit",
+        "fit_analytics_source": fit_detail.get("source") or "unavailable",
         "fit_analytics": fit_detail.get("stats"),
         "training_zones": zones if zones.get("synced") else None,
         "time_in_zones": zone_time,
-        "splits_source": "pengucoach_fit",
+        "splits_source": fit_detail.get("source") or "unavailable",
         "splits": (fit_detail.get("splits") or [])[:120],
+        "recorded_laps": (fit_detail.get("laps") or [])[:120],
+        "recorded_hr_zones": fit_detail.get("hr_zones") or [],
     }
     scope = {0: "session_only", 1: "activity_day", 3: "three_days", 7: "seven_days"}[lookback_days]
     body = await _body_context(db, user.id, start_date, end_date, user=user) if lookback_days else None

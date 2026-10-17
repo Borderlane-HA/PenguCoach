@@ -23,7 +23,7 @@ from garminconnect.workout import (
     create_strength_set,
 )
 
-from pengucoach.training_plan.structured import PlanStep, TrainingSession
+from pengucoach.training_plan.structured import PlanStep, TrainingSession, strength_prescription
 
 
 # (sport id, Garmin key, workout class, upload method).  Garmin's library has
@@ -398,17 +398,26 @@ def _build_strength_steps(
         resolved = resolve_strength_exercise(exercise.name, mappings, allow_generic_fallback=True)
         if not resolved:  # defensive: generic fallback should make this unreachable
             raise ValueError(f"GARMIN_EXERCISE_NOT_FOUND:{exercise.name}")
-        result.append(
-            create_strength_set(
+        group = create_strength_set(
                 str(resolved["category"]),
                 step_order=order,
                 sets=exercise.sets,
-                reps=exercise.reps,
+                reps=exercise.reps or 1,
                 rest_seconds=float(exercise.rest_seconds),
                 exercise_name=str(resolved.get("exercise") or ""),
                 weight_kg=exercise.weight_kg,
             )
-        )
+        work = group.workoutSteps[0]
+        if exercise.duration_seconds is not None:
+            work.endCondition = {"conditionTypeId": 2, "conditionTypeKey": "time", "displayOrder": 2, "displayable": True}
+            work.endConditionValue = float(exercise.duration_seconds)
+        elif exercise.reps_max is not None or exercise.reps_in_reserve is not None:
+            # Garmin has one numeric reps target. Preserve ranges/RIR as an
+            # explicit lap-button step instead of silently selecting a target.
+            work.endCondition = {"conditionTypeId": 1, "conditionTypeKey": "lap.button", "displayOrder": 1, "displayable": True}
+            work.endConditionValue = None
+        work.description = f"{exercise.name}: {strength_prescription(exercise, 'en')}"[:500]
+        result.append(group)
         order += 3
     return result
 

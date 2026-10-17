@@ -15,7 +15,7 @@ from pengucoach.coach.workout_review import evaluate_goals, gps_points, number, 
 from pengucoach.common.dates import day_start, user_today
 from pengucoach.db.models import Activity, ActivityFeedback, AiRun, CoachCheckin, DailyHealth, FitFile, HrvDaily, PlanActivityMatch, PlanSchedule, SleepSession
 from pengucoach.db.session import get_db
-from pengucoach.fit.service import load_activity_series
+from pengucoach.fit.service import load_recording_series
 from pengucoach.garmin.zones import training_zone_snapshot
 from apps.api.routers.activities import _owned_activity
 
@@ -24,7 +24,7 @@ router = APIRouter(tags=["training-insights"])
 
 async def _series(db, user, activity, limit=5000):
     fit = await db.scalar(select(FitFile).where(FitFile.activity_id == activity.id, FitFile.user_id == user.id))
-    return await asyncio.to_thread(load_activity_series, fit, limit) if fit and fit.status == "parsed" else []
+    return await asyncio.to_thread(load_recording_series, activity, fit, limit)
 
 
 def _profile(snapshot, domain, sport):
@@ -113,7 +113,7 @@ async def route_comparison(activity_id: uuid.UUID, start: float = Query(default=
         current = route_metrics(reference)
         for a, fit in candidates:
             try:
-                rows = load_activity_series(fit, 5000)
+                rows = load_recording_series(a, fit, 5000)
             except (OSError, ValueError):
                 continue
             match = route_match(reference, rows, segment=segment)

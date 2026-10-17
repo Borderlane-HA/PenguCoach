@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from pengucoach.db.models import Activity, BodyMeasurement, DailyHealth, HrvDaily, SleepSession, SourceRecord, SparkyFitnessConnection, User
 from pengucoach.security.crypto import SecretBox
 from pengucoach.sparkyfitness.activity_time import resolve_activity_time
+from pengucoach.sparkyfitness.telemetry import enrich_telemetry
 from pengucoach.sparkyfitness.client import SparkyFitnessClient, SparkyFitnessError
 
 
@@ -1110,6 +1111,7 @@ async def _sync_activities(
     start: date | None,
     *,
     progress=None,
+    refresh_telemetry: bool = True,
 ) -> dict[str, int]:
     user = await db.get(User, user_id)
     default_timezone = (user.timezone if user else None) or "UTC"
@@ -1168,6 +1170,11 @@ async def _sync_activities(
                 continue
             seen += 1
             external_id = _session_id(item, index)
+            previous = await db.scalar(select(SourceRecord).where(SourceRecord.user_id == user_id,
+                SourceRecord.source == "sparkyfitness", SourceRecord.domain == "exercise_session", SourceRecord.external_id == external_id))
+            item, telemetry_requests = await enrich_telemetry(client, item, previous.payload if previous else None,
+                refresh=refresh_telemetry or day is None or day >= date.today() - timedelta(days=2))
+            detail_requests += telemetry_requests
             if await _upsert_source_record(
                 db, user_id, domain="exercise_session", external_id=external_id, record_date=day,
                 observed_at=session_time.timestamp if session_time.precision == "second" else None, payload=item,
@@ -1371,7 +1378,8 @@ async def sync_sparkyfitness(db: AsyncSession, user_id: uuid.UUID, *, progress=N
             summary["sleep_entries"] = len(rows)
             summary["sleep_fields_filled"] = await _merge_sleep(db, user_id, rows)
         if conn.sync_activities and capabilities.get("activities"):
-            summary["activities"] = await _sync_activities(db, client, user_id, None if all_data else start, progress=progress)
+            summary["activities"] = await _sync_activities(db, client, user_id, None if all_data else start,
+                progress=progress, refresh_telemetry=not incremental)
         finished = datetime.now(timezone.utc)
         conn.last_successful_sync_at = finished
         conn.last_sync_summary = summary

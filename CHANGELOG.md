@@ -1,5 +1,17 @@
 # Changelog
 
+
+## 0.1.0-alpha.64
+
+- Fix IONOS/Qwen training-plan failures caused by strength prescriptions such as `8-10`, `45s` and `max-2`. Preserve repetition ranges, timed holds and repetitions in reserve as distinct, validated targets. Invalid zero reps remain invalid and trigger a targeted repair request.
+- Retry malformed plan sections once with the validation reason, even when the initial request already used the full budget. Save unsuccessful sections as resumable drafts, retain validated weeks and retry only the pending section without increasing the budget. Genuine token-limit drafts retain the explicit +8,000-token control.
+- Display and edit all strength target types throughout Today, plan previews and the calendar editor. Garmin exports timed holds as timed steps; rep ranges and max-minus prescriptions retain their text and use a lap-button step rather than inventing a numeric reps target.
+- Fix Garmin incremental sync jobs failing after import with `Activity is not JSON serializable`: return activity IDs instead of ORM objects across the Celery result boundary.
+- Read SparkyFitness 1.8.0's separate `/generic-health/workout-gps`, `/workout-laps` and `/workout-hr-zones` endpoints. Import compact trackpoints and their real sensor channels into the existing synchronized map/chart view, recorded laps and HR-zone tables, plus available additional summary readings.
+- Use Sparky samples for activity AI context, per-activity efforts, route briefing and planned-workout execution evidence when no parsed FIT recording exists. Keep FIT as the primary recording, retain missing values and segment recording gaps. Never invent samples from workout summaries or compute FIT's 1 Hz normalized-power approximation from downsampled Sparky points.
+- Optional telemetry permissions, unavailable endpoints and server failures do not discard the session import. Show a read-permission notice when access is denied; manual sync refreshes the chosen historical range, including late telemetry. No new migration or dependencies.
+
+
 ## 0.1.0-alpha.63 — Sparky recording times and available readings
 
 - Reads separate `entry_date`/`entry_time` with the recording timezone, using the PenguCoach user's timezone if no recording zone is supplied. Original HealthKit/provider timestamps retain priority, including nested JSON-string payloads. Summer/winter offsets follow the recorded date; invalid or ambiguous local clocks remain date-only unless an explicit timestamp resolves them.

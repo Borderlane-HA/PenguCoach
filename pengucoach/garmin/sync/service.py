@@ -504,7 +504,10 @@ async def sync_day(
     connection.token_ciphertext = serialize_refreshed_token(raw_client)
     connection.last_validated_at = datetime.now(timezone.utc)
     await db.flush()
-    return {"date": day.isoformat(), "domains": domains, "activities": len(activities or []), "activity_rows": activity_rows, "inserted": inserted}
+    # This result crosses Celery's JSON boundary after the transaction commits.
+    # Returning ORM instances here caused successful imports to become failed jobs.
+    return {"date": day.isoformat(), "domains": domains, "activities": len(activities or []),
+            "activity_ids": [str(row.id) for row in activity_rows], "inserted": inserted}
 
 
 async def run_incremental_sync(db: AsyncSession, user: User, connection: GarminConnection) -> dict[str, Any]:

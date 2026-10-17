@@ -18,9 +18,12 @@ Morning, workout preparation and daily reflection; larger readiness lamps with a
 
 Reviewed time-budget variants, confirmed training experiences, recorded 1/5/20-minute best efforts, calendar-draft load checks and a route briefing with climbs, sustained fast passages, personal GPS notes and timed-plan orientation. All calculations use available recorded data; no extra AI calls or API keys are required. See [calculation rules and workflow](docs/LOCAL_TRAINING_FEATURES.md).
 
+
+**Alpha.64 maintenance update:** fixes strength-plan generation for ranges/timed holds and Garmin sync result serialization; preserves valid plan sections on validation failure; adds SparkyFitness 1.8.0 GPS/sensor series, laps and HR zones via its separate read endpoints. See [SparkyFitness setup](docs/SPARKYFITNESS.md) for API-key read permissions and the historical resync procedure.
+
 ## Current alpha scope
 
-`v0.1.0-alpha.63` is the current end-to-end alpha baseline:
+`v0.1.0-alpha.64` is the current end-to-end alpha baseline:
 
 - **Sparky recording times and readings:** separate local clocks and recording zones, historical timestamp correction on sync, explicit time-unknown display, better minimum-HR/telemetry extraction and missing values shown as missing. See [SparkyFitness](docs/SPARKYFITNESS.md).
 

@@ -11,7 +11,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 CONTAINERS = (
     "exercise_entry_details", "exerciseEntryDetails", "telemetry", "raw_data", "rawData",
     "provider_activity_details", "providerActivityDetails", "activity_details", "activityDetails",
-    "activity", "details", "entry", "data", "workout", "session",
+    "activity", "details", "entry", "data", "workout", "session", "detail_data", "detailData",
 )
 START_KEYS = ("startTime", "started_at", "start_time", "startAt", "start_at", "startDate", "entry_timestamp", "entryTimestamp", "timestamp", "logged_at", "loggedAt", "measured_at", "measuredAt")
 
@@ -41,6 +41,8 @@ def containers(item: dict) -> list[dict]:
             child = mapping(row.get(key))
             if child:
                 queue.append(child)
+            elif key in {"activity_details", "activityDetails", "provider_activity_details", "details"} and isinstance(row.get(key), list):
+                queue.extend(value for value in row[key][:128] if isinstance(value, dict))
     return result
 
 

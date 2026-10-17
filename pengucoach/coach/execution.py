@@ -46,6 +46,8 @@ async def source_data(db, user, session, activity, offset=0, snapshot=None):
         file_version = (path.stat().st_size, path.stat().st_mtime_ns) if path else None
     except OSError:
         file_version = None
+    from pengucoach.sparkyfitness.telemetry import telemetry
+    telemetry_version = digest(telemetry(activity.raw)) if not file_version and telemetry(activity.raw) else None
     facts = {'planned': planned_payload(session), 'activity': {'id': str(activity.id), 'name': activity.name,
         'started_at': (activity.started_at if activity.started_at.tzinfo else activity.started_at.replace(tzinfo=timezone.utc)).astimezone(timezone.utc).isoformat() if activity.started_at else None,
         'duration_seconds': activity.duration_seconds, 'distance_m': number(activity.distance_m),
@@ -53,7 +55,8 @@ async def source_data(db, user, session, activity, offset=0, snapshot=None):
         'feedback': feedback.data if feedback else None, 'ftp_w': power.get('ftp_w'),
         'profiles': {'power_zone': power.get('zones', []), 'heart_rate_zone': hr.get('zones', [])},
         'zone_source': snapshot.get('source'), 'zone_date': str(snapshot.get('synced_at') or ''),
-        'offset_s': offset, 'recording': {'status': fit.status if fit else None, 'version': file_version, 'sha256': fit.sha256 if fit else None, 'parser_version': fit.parser_version if fit else None}}
+        'offset_s': offset, 'recording': {'status': fit.status if fit else 'sparkyfitness' if telemetry_version else None,
+            'telemetry_version': telemetry_version, 'version': file_version, 'sha256': fit.sha256 if fit else None, 'parser_version': fit.parser_version if fit else None}}
     return facts, path, digest(facts)
 
 
@@ -104,6 +107,9 @@ async def review_session(db, user, run, schedule, session_id, *, offset=None, co
                 from pengucoach.fit.activity_detail import serialize_series
                 frame = pd.read_parquet(path)
                 rows = serialize_series(frame, limit=max(1, len(frame)))
+            else:
+                from pengucoach.fit.service import load_recording_series
+                rows = load_recording_series(activity, None, 100_000)
             goals = evaluate_goals(rows, facts['planned'], facts['profiles'], offset_s=offset)
             return {'facts': facts, 'goals': goals, 'summary': summary(facts, goals)}
         try:

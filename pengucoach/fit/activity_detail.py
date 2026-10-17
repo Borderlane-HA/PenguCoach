@@ -345,6 +345,14 @@ def selected_garmin_extras(raw: dict[str, Any] | None) -> dict[str, Any]:
 
 
 SPARKY_EXTRA_FIELDS: dict[str, tuple[str, ...]] = {
+    "active_calories_kcal": ("active_calories",),
+    "resting_calories_kcal": ("resting_calories",),
+    "avg_moving_speed_mps": ("avg_moving_speed_mps",),
+    "avg_respiration_brpm": ("avg_respiration_brpm",),
+    "max_respiration_brpm": ("max_respiration_brpm",),
+    "steps": ("steps",),
+    "floors_climbed": ("floors_climbed",),
+    "water_loss_ml": ("water_estimated",),
     "elapsed_duration_s": ("elapsed_time_seconds", "elapsedTimeSeconds", "elapsed_seconds", "elapsedSeconds"),
     "min_hr_bpm": ("min_heart_rate", "minHeartRate", "minimum_heart_rate", "minimumHeartRate", "min_hr", "min_hr_bpm", "heart_rate_min", "heartRateMin"),
     "avg_hr_bpm": ("avg_heart_rate", "avgHeartRate", "averageHeartRate", "avg_hr"),

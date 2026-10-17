@@ -11,7 +11,7 @@ from pengucoach.db.models import Activity, ActivityMetric, FitFile, GarminConnec
 from pengucoach.db.session import get_db
 from pengucoach.fit.activity_detail import selected_activity_extras, selected_garmin_extras
 from pengucoach.sparkyfitness.activity_time import stored_time_info
-from pengucoach.fit.service import load_activity_detail, load_activity_series
+from pengucoach.fit.service import load_recording_detail, load_recording_series
 from pengucoach.imports.manual_activity import MAX_UPLOAD_BYTES, import_manual_activity
 from worker.tasks.fit import analyze_fit
 
@@ -281,7 +281,7 @@ async def series(
 ):
     row = await _owned_activity(activity_id, user, db)
     fit = await db.scalar(select(FitFile).where(FitFile.activity_id == row.id))
-    data = await asyncio.to_thread(load_activity_series, fit, limit) if fit else []
+    data = await asyncio.to_thread(load_recording_series, row, fit, limit)
     return {"data": data}
 
 
@@ -293,9 +293,7 @@ async def activity_analysis(
 ):
     row = await _owned_activity(activity_id, user, db)
     fit = await db.scalar(select(FitFile).where(FitFile.activity_id == row.id))
-    if not fit or fit.status != "parsed" or not fit.parquet_path:
-        return {"stats": None, "splits": [], "fit_status": row.fit_status}
-    result = await asyncio.to_thread(load_activity_detail, fit, row.sport_type)
+    result = await asyncio.to_thread(load_recording_detail, row, fit)
     result["fit_status"] = row.fit_status
     return result
 

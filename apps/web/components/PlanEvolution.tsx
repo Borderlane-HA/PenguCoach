@@ -1,4 +1,5 @@
 "use client";
+import {strengthPrescription} from "../lib/strength";
 import NumberInput from "./NumberInput";
 import {useEffect,useState} from "react";
 import {api} from "../lib/api";
@@ -49,7 +50,7 @@ function stepLabel(step:O,lang:Lang):string{
 }
 
 export function SessionPreview({session,lang}:{session:O;lang:Lang}){
- return <div className="evolution-session"><small>{session.date}</small><strong>{session.name}</strong><span>{session.duration_min} min</span>{session.steps?.length>0&&<ul>{session.steps.map((s:O,i:number)=><li key={i}>{stepLabel(s,lang)}</li>)}</ul>}{session.strength_exercises?.length>0&&<ul>{session.strength_exercises.map((s:O,i:number)=><li key={i}>{s.name} · {s.sets} × {s.reps} · {s.rest_seconds} s {bi(lang,"Pause","rest")}</li>)}</ul>}</div>
+ return <div className="evolution-session"><small>{session.date}</small><strong>{session.name}</strong><span>{session.duration_min} min</span>{session.steps?.length>0&&<ul>{session.steps.map((s:O,i:number)=><li key={i}>{stepLabel(s,lang)}</li>)}</ul>}{session.strength_exercises?.length>0&&<ul>{session.strength_exercises.map((s:O,i:number)=><li key={i}>{s.name} · {s.sets} × {strengthPrescription(s,lang)} · {s.rest_seconds} s {bi(lang,"Pause","rest")}</li>)}</ul>}</div>
 }
 
 export function ShortVariant({runId,session,revision,lang,onApplied,initialMinutes}:{runId:string;session:O;revision:number;lang:Lang;onApplied:()=>void;initialMinutes?:number}){
