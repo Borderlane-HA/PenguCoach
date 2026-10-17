@@ -43,8 +43,8 @@ export function ruleLabel(value:string,lang:Lang){
 function stepLabel(step:O,lang:Lang):string{
  if(step.type==="repeat")return `${step.repeat} × (${(step.steps||[]).map((s:O)=>stepLabel(s,lang)).join(" + ")})`;
  const kinds:O={warmup:bi(lang,"Aufwärmen","Warmup"),cooldown:bi(lang,"Auslaufen","Cooldown"),work:bi(lang,"Hauptteil","Work"),interval:bi(lang,"Intervall","Interval"),recovery:bi(lang,"Erholung","Recovery"),rest:bi(lang,"Pause","Rest")};
- const target=step.target?.zone?` · ${step.target.type==="power_zone"?bi(lang,"Leistung","Power"):bi(lang,"Puls","HR")} Z${step.target.zone}`:"";
- return `${kinds[step.type]||step.type} · ${step.duration_seconds?`${Math.round(step.duration_seconds/6)/10} min`:`${step.distance_meters} m`}${target}`;
+ const target=step.target?.type==="power_watts"?` · ${step.target.watts} W (±${step.target.tolerance_pct??5}%)`:step.target?.zone?` · ${step.target.type==="power_zone"?bi(lang,"Leistung","Power"):bi(lang,"Puls","HR")} Z${step.target.zone}`:"";
+ return `${kinds[step.type]||step.type} · ${step.duration_seconds?(step.duration_seconds<120?`${step.duration_seconds} s`:`${Math.round(step.duration_seconds/6)/10} min`):`${step.distance_meters} m`}${target}`;
 }
 
 export function SessionPreview({session,lang}:{session:O;lang:Lang}){

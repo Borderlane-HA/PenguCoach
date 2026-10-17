@@ -25,9 +25,9 @@ def test_training_segments_get_generous_budget_and_full_budget_retry():
     assert "retry_budget = requested_max" in worker
     assert "def parse_segment" in worker
     assert "SEGMENT_SESSION_COUNT" in worker
-    # A raw truncation flag alone must no longer fail before parsing the JSON.
+    # Validate JSON before saving a recoverable incomplete-plan draft.
     parse_pos = worker.index("segment, segment_error = parse_segment(answer_part)")
-    fail_pos = worker.index('raise RuntimeError(f"TRAINING_PLAN_SEGMENT_TRUNCATED:{start_week}-{end_week}")')
+    fail_pos = worker.index("return await _save_plan_draft(db, user, payload, context, answer_part")
     assert parse_pos < fail_pos
 
 

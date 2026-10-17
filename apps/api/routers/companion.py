@@ -15,7 +15,7 @@ from pengucoach.coach.training_intelligence import plan_intelligence, training_l
 from pengucoach.common.dates import day_start, user_today
 from pengucoach.db.models import Activity, ActivityFeedback, AiRun, CoachCheckin, CoachDecisionLog, CoachMemory, CoachProfile, Conversation, GarminWorkoutExport, Message, PlanSchedule, User
 from pengucoach.db.session import get_db
-from pengucoach.training_plan.structured import TrainingPlanDocument
+from pengucoach.training_plan.structured import TrainingPlanDocument, TrainingSession
 
 router = APIRouter(prefix="/coach", tags=["companion"])
 
@@ -365,7 +365,10 @@ async def guard_exported(db, user, run, previous, start, overrides):
             old = (previous.overrides or {}).get(item.session_id, original.get(item.session_id)) if previous else original.get(item.session_id)
             new = overrides.get(item.session_id, original.get(item.session_id))
             scheduled = start + timedelta(weeks=new["week"] - 1, days=new["day"] - 1) if new else None
-            if old != new or (previous and previous.start_date != start) or (item.scheduled_date and item.scheduled_date != scheduled):
+            # Local matching time is not part of the exported Garmin workout.
+            old_workout = TrainingSession.model_validate(old).model_dump(exclude={"start_time"}) if old else None
+            new_workout = TrainingSession.model_validate(new).model_dump(exclude={"start_time"}) if new else None
+            if old_workout != new_workout or (previous and previous.start_date != start) or (item.scheduled_date and item.scheduled_date != scheduled):
                 raise HTTPException(409, "EXPORTED_SESSION_LOCKED")
 
 

@@ -20,7 +20,9 @@ Reviewed time-budget variants, confirmed training experiences, recorded 1/5/20-m
 
 ## Current alpha scope
 
-`v0.1.0-alpha.60` is the current end-to-end alpha baseline:
+`v0.1.0-alpha.61` is the current end-to-end alpha baseline:
+
+- **Train, review, improve:** recorded interval-level plan execution, optional ±4-hour matching, manual activity assignment, AI session reviews and reviewed adjustments for a comparable future session. Evidence also informs future AI plans. Explicit +8,000-token continuation preserves partial text and valid plan segments. See [Execution review and continuation](docs/TRAINING_EXECUTION.md).
 
 - **OpenRouter:** native provider selection, key verification without a model request, searchable model discovery and imported context/output limits for chat, activity analysis and training plans. See [OpenRouter setup](docs/OPENROUTER.md).
 

@@ -112,6 +112,11 @@ def session_exportability(session: TrainingSession) -> tuple[bool, str | None]:
 
 
 def _target_payload(step: PlanStep) -> tuple[dict[str, Any], dict[str, Any]]:
+    if step.target.type == "power_watts":
+        # Garmin's power target uses watts when no zoneNumber is supplied.
+        watts, tolerance = step.target.watts, step.target.tolerance_pct / 100
+        return ({"workoutTargetTypeId": 2, "workoutTargetTypeKey": "power.zone", "displayOrder": 2},
+                {"targetValueOne": round(watts*(1-tolerance), 1), "targetValueTwo": round(watts*(1+tolerance), 1)})
     if step.target.type == "heart_rate_zone" and step.target.zone:
         if step.target.zone > 5:
             raise ValueError("GARMIN_HR_ZONE_OUT_OF_RANGE")

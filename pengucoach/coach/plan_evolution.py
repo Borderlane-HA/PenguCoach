@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import copy
 import uuid
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone
 
 from sqlalchemy import or_, select
 from pengucoach.db.models import Activity, ActivityFeedback, ActivityMetric, AiRun, GarminConnection, PlanActivityMatch, PlanSchedule, SparkyFitnessConnection
@@ -19,11 +19,27 @@ def local_day(activity, user):
     return (stamp if stamp.tzinfo else stamp.replace(tzinfo=timezone.utc)).astimezone(user_zone(user)).date()
 
 
+def planned_start(session, user):
+    if not session.get("start_time"):
+        return None
+    local = datetime.combine(date.fromisoformat(session["date"]), time.fromisoformat(session["start_time"]), user_zone(user))
+    # Nonexistent/ambiguous DST times require explicit manual assignment.
+    utc = local.astimezone(timezone.utc)
+    if utc.astimezone(user_zone(user)).replace(tzinfo=None) != local.replace(tzinfo=None):
+        return None
+    other = local.replace(fold=1).astimezone(timezone.utc)
+    if other != utc and other.astimezone(user_zone(user)).replace(tzinfo=None) == local.replace(tzinfo=None):
+        return None
+    return utc
+
+
 def targets(steps):
     result = []
     for step in steps or []:
         target = step.get("target") or {}
-        if target.get("type") != "none" and target.get("zone"):
+        if target.get("type") == "power_watts" and target.get("watts"):
+            result.append({"type": "power_watts", "watts": target["watts"]})
+        elif target.get("type") != "none" and target.get("zone"):
             result.append({"type": target["type"], "zone": target["zone"]})
         result.extend(targets(step.get("steps")))
     return [dict(t) for t in sorted({tuple(sorted(x.items())) for x in result})]
@@ -39,6 +55,7 @@ def compare_v2(sessions, activities, user, *, confirmed=None, reserved=None, oth
         if key in confirmed:
             continue
         day = date.fromisoformat(s["date"])
+        scheduled_at = planned_start(s, user)
         rows = []
         for a in activities:
             aid = str(a.id)
@@ -50,26 +67,29 @@ def compare_v2(sessions, activities, user, *, confirmed=None, reserved=None, oth
                 continue
             minutes = a.duration_seconds / 60 if a.duration_seconds else None
             ratio = abs(minutes - s["duration_min"]) / s["duration_min"] if minutes is not None else None
+            stamp = a.started_at if a.started_at.tzinfo else a.started_at.replace(tzinfo=timezone.utc)
+            hours = (stamp-scheduled_at).total_seconds()/3600 if scheduled_at else None
+            within = abs(hours) <= 4 if hours is not None else delta == 0 and not s.get("start_time")
             score = round(max(0, 100 - abs(delta) * 18 - (min(60, ratio * 80) if ratio is not None else 30)))
-            rows.append({"id": aid, "name": a.name or a.sport_type, "date": actual_day.isoformat(), "minutes": round(minutes, 1) if minutes is not None else None, "day_difference": delta, "duration_difference": round(minutes-s["duration_min"], 1) if minutes is not None else None, "score": score, "same_day": delta == 0, "duration_close": ratio is not None and ratio <= .25})
-        candidates[key] = sorted(rows, key=lambda r: (-r["score"], r["id"]))[:12]
+            rows.append({"id": aid, "name": a.name or a.sport_type, "date": actual_day.isoformat(), "minutes": round(minutes, 1) if minutes is not None else None, "day_difference": delta, "duration_difference": round(minutes-s["duration_min"], 1) if minutes is not None else None, "score": score, "same_day": delta == 0, "within_window": within, "hours_difference": round(hours, 2) if hours is not None else None, "duration_close": ratio is not None and ratio <= .25})
+        candidates[key] = sorted(rows, key=lambda r: (not r["within_window"], abs(r["hours_difference"]) if r["hours_difference"] is not None else 0, -r["score"], r["id"]))[:12]
     same_day_uses = {}
     for rows in candidates.values():
         for r in rows:
-            if r["same_day"]:
+            if r["within_window"]:
                 same_day_uses[r["id"]] = same_day_uses.get(r["id"], 0) + 1
     by_id = {str(a.id): a for a in activities}
     result = []
     for s in sessions:
         rows = candidates.get(s["id"], [])
         manual = confirmed.get(s["id"])
-        same = [r for r in rows if r["same_day"]]
-        automatic = same[0] if len(same) == 1 and same[0]["duration_close"] and same_day_uses[same[0]["id"]] == 1 else None
+        same = [r for r in rows if r["within_window"]]
+        automatic = same[0] if len(same) == 1 and (bool(s.get("start_time")) or same[0]["duration_close"]) and same_day_uses[same[0]["id"]] == 1 else None
         aid = str(manual.activity_id) if manual and manual.activity_id else automatic["id"] if automatic and not manual else None
         a = by_id.get(aid)
         status = "matched" if a else "unmatched" if manual and manual.state == "missed" else "ambiguous" if rows else "pending" if date.fromisoformat(s["date"]) < user_today(user) else "planned"
         actual = round(a.duration_seconds/60, 1) if a and a.duration_seconds is not None else None
-        result.append({**s, "status": status, "activity_id": aid if a else None, "actual_date": local_day(a, user).isoformat() if a else None, "actual_minutes": actual, "difference_minutes": round(actual-s["duration_min"], 1) if actual is not None else None, "candidates": rows, "candidate_ids": [r["id"] for r in rows], "match_basis": "user_confirmed" if manual and a else "same_local_day_sport_duration" if a else None, "manual_state": manual.state if manual else None, "planned_targets": targets(s.get("steps")), "avg_hr": a.avg_hr if a else None, "avg_power": a.avg_power if a else None, "intensity_comparison": "actual_sensor_values_only; average values cannot verify intervals or time in zones"})
+        result.append({**s, "status": status, "activity_id": aid if a else None, "actual_date": local_day(a, user).isoformat() if a else None, "actual_minutes": actual, "difference_minutes": round(actual-s["duration_min"], 1) if actual is not None else None, "candidates": rows, "candidate_ids": [r["id"] for r in rows], "match_basis": "user_confirmed" if manual and a else "within_four_hours_sport" if a and s.get("start_time") else "same_local_day_sport_duration" if a else None, "manual_state": manual.state if manual else None, "planned_targets": targets(s.get("steps")), "avg_hr": a.avg_hr if a else None, "avg_power": a.avg_power if a else None, "intensity_comparison": "actual_sensor_values_only; average values cannot verify intervals or time in zones"})
     return result
 
 

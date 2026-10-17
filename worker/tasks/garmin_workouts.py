@@ -220,6 +220,8 @@ async def _delete_plan_from_garmin(
         ).order_by(GarminWorkoutExport.scheduled_date, GarminWorkoutExport.session_id))).all()
         remote = [row for row in exports if row.workout_id or row.scheduled_workout_id]
         if not remote:
+            from pengucoach.coach.execution import remove_plan_analyses
+            await remove_plan_analyses(db, run.user_id, run.id)
             await db.delete(run)
             await db.commit()
             return {"plan_run_id": str(run_id), "deleted": True, "garmin_deleted": 0, "failed": 0}
@@ -283,6 +285,8 @@ async def _delete_plan_from_garmin(
 
         run = await db.get(AiRun, run_id)
         if run:
+            from pengucoach.coach.execution import remove_plan_analyses
+            await remove_plan_analyses(db, run.user_id, run.id)
             await db.delete(run)
         await db.commit()
         return {"plan_run_id": str(run_id), "deleted": True, "garmin_deleted": deleted, "failed": 0}

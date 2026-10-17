@@ -480,6 +480,7 @@ def _bounded_context(context: dict[str, Any], max_chars: int) -> tuple[str, dict
                     "to": working.get("lookback", {}).get("to"),
                     "selected_data": working.get("lookback", {}).get("selected_data"),
                     "scope": working.get("lookback", {}).get("scope"),
+                    "training_execution": working.get("lookback", {}).get("training_execution"),
                     "health": (working.get("lookback", {}).get("health") or [])[-7:],
                     "body_profile": working.get("lookback", {}).get("body_profile"),
                     "summary_period": working.get("lookback", {}).get("summary_period"),
@@ -553,6 +554,9 @@ async def chat(
     cancel_check: CancelCheck | None = None,
     response_format_schema: dict[str, Any] | None = None,
     quality_profile: str = "standard",
+    recover_limit: bool = False,
+    continuation_mode: bool = False,
+    minimum_output_tokens: int | None = None,
 ) -> dict[str, Any]:
     config = await task_settings(db, task, locale)
     selected = await resolve_model(db, task, local_only=local_only, model_id=model_id)
@@ -605,12 +609,21 @@ async def chat(
     if context_window_tokens < framing_reserve_tokens + 512:
         raise RuntimeError("CONTEXT_TOO_SMALL_FOR_INSTRUCTIONS")
     minimum_input_tokens = min(minimum_input_tokens, max(256, context_window_tokens - framing_reserve_tokens - 128))
+    if continuation_mode:
+        required_messages = sum(len(str(m.get("content", ""))) for m in messages[-12:])//3 + 400
+        minimum_input_tokens = max(minimum_input_tokens, required_messages + 1024)
+        if minimum_input_tokens + framing_reserve_tokens + 128 > context_window_tokens:
+            raise RuntimeError("CONTINUATION_CONTEXT_FULL")
     max_output_that_fits = max(128, context_window_tokens - minimum_input_tokens - framing_reserve_tokens)
     max_tokens = min(max_tokens, max_output_that_fits)
+    if minimum_output_tokens is not None and max_tokens < minimum_output_tokens:
+        raise RuntimeError("CONTINUATION_MODEL_LIMIT")
     output_budget_adjusted = max_tokens < requested_output_tokens
     # Leave room for system/task instructions and chat framing. The remaining budget is shared by JSON context and messages.
     usable_input_tokens = max(minimum_input_tokens, context_window_tokens - max_tokens - framing_reserve_tokens)
     context_budget_tokens = max(128, int(usable_input_tokens * 0.72))
+    if continuation_mode:
+        context_budget_tokens = max(128, usable_input_tokens-required_messages)
     message_budget_tokens = max(64, usable_input_tokens - context_budget_tokens)
     max_context_chars = min(int(config["max_context_chars"]), context_budget_tokens * 3)
     context_json, context_meta = bounded_personal_context(context, max_context_chars)
@@ -879,11 +892,18 @@ async def chat(
         raise AiGenerationCancelled("AI_JOB_CANCELLED")
 
     text = visible_answer(text)
-    if not text:
-        # Never persist a blank assistant message as a successful answer.
-        raise RuntimeError("AI_EMPTY_RESPONSE_THINKING_LIMIT" if stop_reason in {"length", "max_tokens"} else "AI_EMPTY_RESPONSE")
     output_tokens = usage.get("output_tokens")
     truncated = response_truncated(stop_reason, output_tokens, max_tokens)
+    if not text and not (recover_limit and truncated):
+        # A recoverable limit stores a draft with its retry snapshot, not a fabricated answer.
+        raise RuntimeError("AI_EMPTY_RESPONSE_THINKING_LIMIT" if stop_reason in {"length", "max_tokens"} else "AI_EMPTY_RESPONSE")
+    resume = None
+    if recover_limit and truncated:
+        from pengucoach.llm.continuation import json_value
+        resume = json_value({"context": context, "messages": messages, "task": task, "locale": locale,
+            "instruction_prompt": instruction_prompt or config["default_prompt"], "model_id": str(model.id),
+            "quality_profile": quality_profile, "context_window_tokens": context_window_tokens,
+            "max_output_tokens": max_tokens, "response_format_schema": response_format_schema})
     pricing = model_pricing(model.metadata_json if isinstance(model.metadata_json, dict) else {})
     cost_eur = calculate_cost_eur(usage, pricing)
     elapsed_seconds = round(max(0.0, time.monotonic() - request_started), 3)
@@ -891,6 +911,9 @@ async def chat(
     tokens_per_second = round(float(output_count) / elapsed_seconds, 3) if isinstance(output_count, int) and output_count >= 0 and elapsed_seconds > 0 else None
     return {
         "content": text,
+        **({"_resume": resume} if resume is not None else {}),
+        "empty_due_to_limit": bool(not text and truncated),
+        "continuation": {"available": bool(truncated and recover_limit), "revision": 0, "additional_tokens": 8000},
         "evidence": context_evidence(json.loads(context_json)),
         "provider": provider.name,
         "model": model.display_name,
@@ -991,7 +1014,7 @@ def _shrink_json(value, maximum):
         visit(result)
         if not candidates:
             # Keep the data inventory/range even at very small budgets.
-            result = {k: result[k] for k in ("data_inventory", "period_days", "from", "to", "goal", "activity", "personal_coaching", "conversation_summary", "weather_forecast") if k in result}
+            result = {k: result[k] for k in ("data_inventory", "period_days", "from", "to", "goal", "activity", "personal_coaching", "conversation_summary", "weather_forecast", "planned_training_review", "training_execution") if k in result}
             if len(_json_size(result)[0]) > maximum:
                 result = {"context_note": "Context could not fit; do not infer missing facts."}
             break
@@ -1002,7 +1025,7 @@ def _shrink_json(value, maximum):
 
 def bounded_personal_context(context, maximum):
     data = copy.deepcopy(context)
-    personal = {key: data.pop(key) for key in ("personal_coaching", "conversation_summary") if key in data}
+    personal = {key: data.pop(key) for key in ("personal_coaching", "conversation_summary", "planned_training_review", "training_execution") if key in data}
     if personal:
         personal = _shrink_json(personal, min(6500, max(250, maximum // 3)))
     reserved = len(_json_size(personal)[0]) if personal else 0
@@ -1044,6 +1067,8 @@ def context_evidence(context):
         "personal_context": bool(personal),
         "conversation_summary": bool(context.get("conversation_summary")),
         "training_zones": bool(context.get("training_zones")),
+        "training_execution": {"reviewed_sessions": len((lookback.get("training_execution") or {}).get("items") or [])},
+        "planned_session_review": bool(context.get("planned_training_review")),
         "upcoming_sessions": len(personal.get("upcoming_sessions") or []),
         "readiness": {
             "score": readiness.get("score"),

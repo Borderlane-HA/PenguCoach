@@ -30,11 +30,17 @@ class PlanTarget(BaseModel):
         return self
 
 
+class PowerWattTarget(BaseModel):
+    type: Literal["power_watts"]
+    watts: float = Field(gt=0, le=3000, allow_inf_nan=False)
+    tolerance_pct: float = Field(default=5, ge=0, le=25, allow_inf_nan=False)
+
+
 class PlanStep(BaseModel):
     type: StepKind
     duration_seconds: int | None = Field(default=None, ge=1, le=86400)
     distance_meters: float | None = Field(default=None, gt=0, le=500000)
-    target: PlanTarget = Field(default_factory=PlanTarget)
+    target: PlanTarget | PowerWattTarget = Field(default_factory=PlanTarget)
     repeat: int | None = Field(default=None, ge=2, le=100)
     steps: list["PlanStep"] = Field(default_factory=list)
     description: str = Field(default="", max_length=500)
@@ -69,6 +75,7 @@ class TrainingSession(BaseModel):
     name: str = Field(min_length=1, max_length=120)
     sport: Sport
     duration_min: int = Field(ge=5, le=480)
+    start_time: str | None = Field(default=None, pattern=r"^([01][0-9]|2[0-3]):[0-5][0-9]$")
     optional: bool = False
     notes: str = Field(default="", max_length=1500)
     steps: list[PlanStep] = Field(default_factory=list)
@@ -116,7 +123,7 @@ JSON schema/semantics:
   warmup, work, interval, recovery, cooldown, rest, repeat.
 - a normal step has duration_seconds OR distance_meters and optional target.
 - target is {{"type":"none"}} or {{"type":"heart_rate_zone","zone":1..5}} or
-  {{"type":"power_zone","zone":1..7}}. Prefer the user's Garmin zones from context when available.
+  {{"type":"power_zone","zone":1..7}} or {{"type":"power_watts","watts":250,"tolerance_pct":5}}. Use watts only when supported by measured FTP/power context, never invent FTP. Prefer the user's Garmin zones from context when available.
 - a repeat step has repeat>=2 and nested steps. Example: 6 x (3 min interval + 2 min recovery).
 - strength sessions should populate strength_exercises with canonical plain English Garmin exercise names plus sets/reps/rest_seconds;
   prefer simple catalogue names such as Squat, Push-up, Lunge, Plank, Side Plank, Deadlift, Row, Leg Press, Bench Press,
@@ -157,7 +164,9 @@ def extract_structured_plan(content: str) -> tuple[TrainingPlanDocument | None, 
         return None, f"STRUCTURED_PLAN_INVALID: {type(exc).__name__}: {str(exc)[:500]}"
 
 
-def _target_label(target: PlanTarget, de: bool) -> str:
+def _target_label(target: PlanTarget | PowerWattTarget, de: bool) -> str:
+    if target.type == "power_watts":
+        return f"{target.watts:g} W (±{target.tolerance_pct:g}%)"
     if target.type == "heart_rate_zone" and target.zone:
         return f"HF Z{target.zone}" if de else f"HR Z{target.zone}"
     if target.type == "power_zone" and target.zone:

@@ -309,6 +309,7 @@ async def build_coach_context(db: AsyncSession, user: User, days: int = 7, **sel
         "summary_28d": summary,  # Legacy key; days/from/to declare actual selected range.
         "health_30d": health, "sleep_30d": sleeps, "hrv_30d": hrv,
         "recent_activities": list(reversed(acts)),
+        "training_execution": lookback.get("training_execution"),
         "sparkyfitness_sessions": lookback.get("sparkyfitness_sessions", []),
         "body_profile": lookback.get("body_profile"), "training_zones": result.get("training_zones"),
     }
@@ -503,6 +504,9 @@ async def build_training_plan_context(
             daily.append(item)
         lookback["daily_health"] = daily
 
+    if include_training:
+        from pengucoach.coach.execution import execution_context
+        lookback["training_execution"] = await execution_context(db, user, days, include_zones=include_zones)
     zones = await training_zone_snapshot(db, user.id) if include_zones else None
     return {
         "source_notice": SOURCE_NOTICE,

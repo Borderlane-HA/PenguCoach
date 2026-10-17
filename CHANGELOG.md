@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.0-alpha.61 — Train, review, improve
+
+- Adds an explicit +8,000-token continuation action to coach chat, activity analysis, training-plan drafts and planned-session reviews. Partial text stays visible; token/cost usage is aggregated. Empty token-limit responses retain a retry snapshot rather than becoming blank successful messages. Each continuation rechecks ownership, model availability and current cloud permission.
+- Incomplete segmented plans retain already validated sections. Continuing retries the pending section with more budget, then completes the remaining sections; incomplete drafts cannot be scheduled or exported. Repeated clicks are revision guarded and deduplicated, and cancellation preserves the prior text.
+- Optional local start times enable matching within ±4 hours, including midnight boundaries. Without a start time, existing same-day/sport/duration matching remains. Ambiguous recordings require a choice; manual assignment and correction are available directly inside the session dialog.
+- Adds interval-level Plan vs Actual review with recorded time weighting, sensor coverage, average work-step values, duration comparison, personal feedback and measured FTP/zone provenance. Exact watt targets are supported in structured plans, editing, review and Garmin payloads.
+- A dedicated AI review compares planned targets with the actual recording and feedback. Reliable local reviews are cached, refreshed hourly and before relevant AI generation, and included in future coach/plan context within the selected data window.
+- Reviewed adaptation can reduce a comparable future workout after measured difficulty plus hard feedback, or cautiously progress after two measured successes, easy feedback and green current readiness. Warmup/recovery/cooldown, completed sessions, exported Garmin workouts and FTP remain protected. Stale previews are rejected, and the same source session cannot repeatedly change future workouts.
+- Adds migration `0015_training_reviews`. The normal Docker API startup and Proxmox updater apply migrations. Restart API, web and workers together after updating. No new runtime dependency is required.
+
 ## 0.1.0-alpha.60 — OpenRouter integration
 
 - Adds OpenRouter as a native cloud provider for coach chat, activity analysis and training planning, addressing [request #1](https://github.com/Borderlane-HA/PenguCoach/issues/1). Existing installations can keep their current provider configuration.

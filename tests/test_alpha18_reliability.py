@@ -42,6 +42,6 @@ def test_training_plan_output_is_not_capped_by_task_default_and_large_plans_chun
     assert "min(\n        configured_max" not in llm
     assert "chunked = expected_sessions > 12" in worker
     assert "merge_plan_segments" in worker
-    assert "TRAINING_PLAN_SEGMENT_TRUNCATED" in worker
+    assert "_save_plan_draft" in worker
     assert "modelOutMax" in ui
     assert "Wochenblöcke" in ui

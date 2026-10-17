@@ -13,7 +13,7 @@ from pengucoach.coach.companion import add_personal_context, conversation_excerp
 from pengucoach.coach.context import SOURCE_NOTICE, build_activity_analysis_context, build_coach_context, build_training_plan_context
 from pengucoach.db.models import AiRun, BackgroundJob, Conversation, GarminWorkoutExport, Message, User, UserPreference
 from pengucoach.db.session import get_db
-from pengucoach.llm.service import chat, eligible_models, resolve_model, task_settings
+from pengucoach.llm.service import chat, eligible_models, resolve_model, task_settings, provider_is_local
 from pengucoach.llm.usage import normalize_quality, quality_options
 from pengucoach.training_plan.generation import normalize_training_plan_answer, training_plan_instruction
 from pengucoach.weather.service import build_coach_weather_context, build_training_weather_context
@@ -116,7 +116,7 @@ def _run_payload(row: AiRun) -> dict:
         "lookback_days": row.lookback_days,
         "max_output_tokens": row.max_output_tokens,
         "content": row.content,
-        "metadata": row.metadata_json,
+        "metadata": {k: v for k, v in (row.metadata_json or {}).items() if not k.startswith("_")},
         "created_at": row.created_at,
     }
 
@@ -168,7 +168,7 @@ async def capabilities(
             "default_model_id": str(selected[1].id) if selected else None,
             "default_model": selected[1].display_name if selected else None,
             "default_provider": selected[0].name if selected else None,
-            "local": selected[0].is_local if selected else None,
+            "local": provider_is_local(selected[0]) if selected else None,
             **config,
             "quality_profile": normalize_quality(saved_profiles.get(task, "standard")),
             "quality_profiles": quality_options(task, int(config["max_output_tokens"])),
@@ -504,6 +504,8 @@ async def delete_training_plan_local(
     run = await db.get(AiRun, run_id)
     if not run or run.user_id != user.id or run.task_type != "training_plan":
         raise HTTPException(status_code=404, detail="TRAINING_PLAN_NOT_FOUND")
+    from pengucoach.coach.execution import remove_plan_analyses
+    await remove_plan_analyses(db, user.id, run.id)
     await db.delete(run)
     await db.commit()
     return {"deleted": True, "plan_run_id": str(run_id), "garmin_untouched": True}

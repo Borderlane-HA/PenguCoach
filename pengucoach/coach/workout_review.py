@@ -96,6 +96,9 @@ def evaluate_goals(series, session, profiles, *, offset_s=0):
             result["reason"] = reason
             break  # Subsequent interval boundaries cannot be known.
         bounds = next((z for z in profiles.get(kind, []) if z.get("zone") == zone), None)
+        if kind == "power_watts" and number(target.get("watts")) is not None:
+            watts, tolerance = number(target["watts"]), number(target.get("tolerance_pct", 5))
+            bounds = {"low": watts*(1-tolerance/100), "high": watts*(1+tolerance/100)}
         low, high = (number(bounds.get("low", bounds.get("low_bpm", bounds.get("low_w")))), number(bounds.get("high", bounds.get("high_bpm", bounds.get("high_w"))))) if bounds else (None, None)
         if kind != "none":
             result["planned_seconds"] += end-cursor
@@ -106,6 +109,7 @@ def evaluate_goals(series, session, profiles, *, offset_s=0):
         else:
             metric = "heart_rate" if kind == "heart_rate_zone" else "power"
             buckets = {"below": 0.0, "in": 0.0, "above": 0.0}
+            weighted = 0.0
             for i in range(bisect.bisect_right(times, cursor)-1, min(len(series)-1, bisect.bisect_left(times, end)+1)):
                 if i < 0:
                     continue
@@ -119,9 +123,11 @@ def evaluate_goals(series, session, profiles, *, offset_s=0):
                     continue
                 bucket = "below" if low is not None and value < low else "above" if high is not None and value > high else "in"
                 buckets[bucket] += overlap
+                weighted += value * overlap
             observed = sum(buckets.values())
             planned = end-cursor
             row.update(low=low, high=high, observed_seconds=round(observed, 1), coverage_pct=round(100*observed/planned, 1) if planned else 0)
+            row["avg_value"] = round(weighted/observed, 1) if observed else None
             if observed:
                 row.update(below_pct=round(100*buckets["below"]/observed, 1), in_target_pct=round(100*buckets["in"]/observed, 1), above_pct=round(100*buckets["above"]/observed, 1))
             row["status"] = "unassessed" if row["coverage_pct"] < 70 else _outcome(buckets)
