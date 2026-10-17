@@ -752,3 +752,10 @@ dialog.training-session-dialog{width:min(540px,calc(100vw - 28px));max-height:ca
 @media(max-width:760px){.strength-exercise-editor{grid-template-columns:repeat(2,minmax(0,1fr))}}
 
 .strength-exercise-editor label{color:var(--text)}
+
+/* Per-attempt diagnostics stay inside the existing collapsed technical details. */
+.training-generation-summary{margin:0 0 10px;font-size:.76rem;line-height:1.6}
+.training-generation-calls{display:grid;gap:8px}.training-generation-call{min-width:0;padding:12px;border:1px solid var(--border);border-radius:12px;background:var(--panel2);font-size:.74rem;line-height:1.6;overflow-wrap:anywhere}
+.training-generation-call-head{display:flex;gap:8px;justify-content:space-between;flex-wrap:wrap}.training-generation-call-head span{color:var(--muted)}.training-generation-call p{margin:5px 0 0}.training-generation-timing{color:var(--muted)}
+.training-generation-error{margin-top:7px}.training-generation-error summary{cursor:pointer;color:var(--text);font-weight:700}.training-generation-error pre{margin:8px 0 0;white-space:pre-wrap;font-family:inherit;font-size:.72rem;color:var(--text)}
+.training-generation-summary,.training-generation-call-head span,.training-generation-timing{color:var(--text)}

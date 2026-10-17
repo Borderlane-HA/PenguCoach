@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import copy
 import json
+import math
 import re
 import time
 import uuid
@@ -21,6 +22,21 @@ from pengucoach.security.crypto import SecretBox
 
 class AiGenerationCancelled(RuntimeError):
     """Raised when the user cancels a cooperative AI generation."""
+
+
+def ollama_timing(final: dict[str, Any]) -> dict[str, float]:
+    """Retain native durations separately from end-to-end request throughput."""
+    timing = {}
+    for source, key in (("total_duration", "total_seconds"), ("load_duration", "load_seconds"),
+                        ("prompt_eval_duration", "prompt_seconds"), ("eval_duration", "generation_seconds")):
+        value = final.get(source)
+        if isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value) and value >= 0:
+            timing[key] = round(value / 1_000_000_000, 6)
+    count = final.get("eval_count")
+    duration = final.get("eval_duration")
+    if isinstance(count, int) and not isinstance(count, bool) and count >= 0 and timing.get("generation_seconds", 0) > 0:
+        timing["generation_tokens_per_second"] = round(count / (duration / 1_000_000_000), 3)
+    return timing
 
 
 ProgressCallback = Callable[[dict[str, Any]], None]
@@ -495,6 +511,8 @@ def _bounded_context(context: dict[str, Any], max_chars: int) -> tuple[str, dict
                     "hrv": (working.get("lookback", {}).get("hrv") or [])[-7:],
                 },
                 "goal": working.get("goal"),
+                "previous_plan_segment": working.get("previous_plan_segment"),
+                "weather_forecast": working.get("weather_forecast"),
                 "training_zones": working.get("training_zones"),
                 "context_truncated": True,
             }
@@ -640,7 +658,8 @@ async def chat(
         expected_sessions = max(1, weeks * days_per_week)
         per_session = max(55, int(max(256, output_target - 450) / expected_sessions))
         budget_notice += (
-            f" The requested plan is approximately {expected_sessions} sessions ({weeks} weeks × {days_per_week}/week). "
+            f" The requested plan needs at least {expected_sessions} actual sessions ({weeks} weeks × {days_per_week}/week), "
+            f"with at least {days_per_week} in EACH week. "
             f"Budget the JSON at roughly {per_session} tokens per session on average. "
             "If space becomes tight, shorten summary, notes, names and descriptions first; use repeat groups for intervals; "
             "omit optional/default JSON fields when they add no information. NEVER omit requested weeks/sessions merely to save tokens. "
@@ -692,6 +711,7 @@ async def chat(
     else:
         timeout = httpx.Timeout(float(settings.ai_request_timeout_seconds))
     usage: dict[str, Any] = {}
+    provider_timing: dict[str, float] = {}
     stop_reason: str | None = None
     request_started = time.monotonic()
 
@@ -868,6 +888,7 @@ async def chat(
                 raise RuntimeError("OLLAMA_STREAM_INCOMPLETE")
             text = "".join(parts)
             stop_reason = final_chunk.get("done_reason")
+            provider_timing = ollama_timing(final_chunk)
             usage = {
                 "input_tokens": final_chunk.get("prompt_eval_count"),
                 "output_tokens": final_chunk.get("eval_count"),
@@ -931,6 +952,7 @@ async def chat(
         "quality_profile": quality_profile,
         "elapsed_seconds": elapsed_seconds,
         "tokens_per_second": tokens_per_second,
+        "provider_timing": provider_timing,
         "stop_reason": stop_reason,
         "truncated": truncated,
         "message_chars": used_message_chars,

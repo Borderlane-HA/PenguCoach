@@ -19,7 +19,7 @@ Morning, workout preparation and daily reflection; larger readiness lamps with a
 Reviewed time-budget variants, confirmed training experiences, recorded 1/5/20-minute best efforts, calendar-draft load checks and a route briefing with climbs, sustained fast passages, personal GPS notes and timed-plan orientation. All calculations use available recorded data; no extra AI calls or API keys are required. See [calculation rules and workflow](docs/LOCAL_TRAINING_FEATURES.md).
 
 
-**Alpha.65 maintenance update:** accepts clearly identified repeated interval blocks returned by local models with an interval/work label. Also includes the Alpha.64 fixes: fixes strength-plan generation for ranges/timed holds and Garmin sync result serialization; preserves valid plan sections on validation failure; adds SparkyFitness 1.8.0 GPS/sensor series, laps and HR zones via its separate read endpoints. See [SparkyFitness setup](docs/SPARKYFITNESS.md) for API-key read permissions and the historical resync procedure.
+**Alpha.66 maintenance update:** strengthens generation-time schemas for requested session counts, local week numbers, executable/repeat steps and strength targets. Segmented-plan technical details now retain every validation reason and show total/retry time, plus separate native Ollama loading, input and generation timings when provided. Live progress identifies retries. These changes aim to reduce unnecessary regeneration; actual savings depend on the model. Existing saved plans remain compatible. Includes the Alpha.64/65 Sparky GPS, numeric-input and training-format fixes. See [SparkyFitness setup](docs/SPARKYFITNESS.md).
 
 ## Current alpha scope
 

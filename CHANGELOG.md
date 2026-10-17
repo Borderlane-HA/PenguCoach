@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.0-alpha.66
+
+- Align generation-time JSON schemas with the existing validators: requested minimum session count, local week limits, executable timed/distance steps versus repeat containers, mandatory zones for zone targets and mutually exclusive strength prescriptions. Continue validating every answer and checking session counts per week; do not accept incomplete plans to hide retries. Stored plan format and legacy normalization remain compatible.
+- Preserve validation outcome/reason, context truncation and native provider timings per segmented-plan attempt, including attempts replaced by successful repairs. Technical details show call/retry count and time, expandable validation reasons and separate Ollama model loading, prompt evaluation, generation duration and generation-only token speed. Older plans show only facts actually recorded.
+- Identify repeated attempts in live progress, including the last section. Do not silently increase the number of automatic attempts or change the requested token budget.
+- Preserve the structured-output contract and segment/repair instructions with long custom prompts. Keep previous-segment progression and supplied weather in compacted planning context.
+- No database migration or runtime dependency added. JSON Schema validation is a development/test dependency. Update API, web and workers together. Actual speed improvements require a new run on the configured model; historical successful runs cannot recover discarded validation reasons.
+
 
 ## 0.1.0-alpha.65
 

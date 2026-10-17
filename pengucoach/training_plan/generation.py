@@ -5,9 +5,12 @@ from typing import Any
 from .structured import STRUCTURED_PLAN_INSTRUCTION, TrainingPlanDocument, extract_structured_plan, render_plan_markdown
 
 
-def training_plan_instruction(base_prompt: str) -> str:
-    base = (base_prompt or "").strip()
-    return f"{base}\n\n{STRUCTURED_PLAN_INSTRUCTION}".strip()
+def training_plan_instruction(base_prompt: str, extra: str = "") -> str:
+    # chat() caps the task instruction at 16,000 characters. Reserve the output
+    # contract first so a long custom prompt cannot cut it off entirely.
+    contract = f"{STRUCTURED_PLAN_INSTRUCTION}\n\n{extra}".strip()
+    base = (base_prompt or "").strip()[:max(0, 16000 - len(contract) - 2)]
+    return f"{base}\n\n{contract}".strip()
 
 
 def normalize_training_plan_answer(answer: dict[str, Any], locale: str) -> tuple[str, dict[str, Any]]:

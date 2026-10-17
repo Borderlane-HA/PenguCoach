@@ -20,6 +20,7 @@ from pengucoach.llm.service import AiGenerationCancelled, chat, task_settings
 from pengucoach.llm.continuation import public, json_value
 from pengucoach.training_plan.generation import merge_plan_segments, normalize_training_plan_answer, training_plan_instruction
 from pengucoach.training_plan.structured import TrainingPlanDocument, extract_structured_plan, render_plan_markdown
+from pengucoach.training_plan.schema import generation_schema
 from pengucoach.weather.service import build_coach_weather_context, build_training_weather_context
 from worker.celery_app import app
 
@@ -71,6 +72,9 @@ def _progress_callback(task, payload: dict[str, Any], kind: str) -> ProgressCall
         chunk_index = meta.get("chunk_index")
         chunk_count = meta.get("chunk_count")
         chunk = f" · Teil {chunk_index}/{chunk_count}" if de and chunk_index and chunk_count else (f" · part {chunk_index}/{chunk_count}" if chunk_index and chunk_count else "")
+        attempt = meta.get("attempt")
+        if isinstance(attempt, int) and attempt > 1:
+            chunk += f" · Versuch {attempt} (erneut)" if de else f" · attempt {attempt} (retry)"
         if stage == "connecting":
             message = (f"{base}{chunk} · Modell wird vorbereitet" if de else f"{base}{chunk} · preparing model")
         elif stage == "finalizing":
@@ -402,7 +406,7 @@ async def _training_plan(
                 requested_context_window_tokens=payload.get("context_window_tokens"),
                 progress_callback=progress_callback,
                 cancel_check=cancel_check,
-                response_format_schema=plan_schema,
+                response_format_schema=generation_schema(total_weeks, days_per_week, plan_schema),
                 quality_profile=str(payload.get("quality_profile") or "standard"),
             recover_limit=True,
                 minimum_output_tokens=payload.get("_minimum_retry_output"),
@@ -439,6 +443,7 @@ async def _training_plan(
                 start_week = chunk_index * chunk_weeks + 1
                 end_week = min(total_weeks, start_week + chunk_weeks - 1)
                 local_weeks = end_week - start_week + 1
+                segment_schema = generation_schema(local_weeks, days_per_week, plan_schema)
                 segment_context = copy.deepcopy(context)
                 segment_goal = dict(g)
                 segment_goal.update({
@@ -450,12 +455,15 @@ async def _training_plan(
                 segment_context["goal"] = segment_goal
                 if previous_outline:
                     segment_context["previous_plan_segment"] = previous_outline[-12:]
-                segment_instruction = training_plan_instruction(prompt) + (
+                segment_rules = (
                     f"\n\nSEGMENT GENERATION: This is overall weeks {start_week}-{end_week} of a {total_weeks}-week plan. "
                     f"Return only these {local_weeks} weeks. In the JSON use local week numbers 1..{local_weeks}; "
                     "PenguCoach will remap them to the absolute calendar weeks. Preserve sensible progression from the "
-                    "previous_plan_segment context when supplied. Do not repeat earlier weeks."
+                    "previous_plan_segment context when supplied. Do not repeat earlier weeks. "
+                    f"Return at least {days_per_week} actual training sessions in EACH local week "
+                    f"and at least {local_weeks * days_per_week} sessions in total. Count them before finishing."
                 )
+                segment_instruction = training_plan_instruction(prompt, segment_rules)
                 if locale.startswith("de"):
                     segment_message = base_message(local_weeks) + (
                         f" Erzeuge jetzt ausschließlich den Abschnitt für Gesamtwoche {start_week} bis {end_week} von {total_weeks}. "
@@ -473,9 +481,13 @@ async def _training_plan(
                 # fails, the retry below uses the user's full per-call budget.
                 compact_budget = requested_max if payload.get("_continue_run_id") else min(requested_max, max(3500, segment_sessions * 420 + 800))
 
+                segment_attempt = 1
+                retry_reason = None
+
                 def segment_progress(meta: dict[str, Any], *, ci=chunk_index + 1, cc=chunk_count) -> None:
                     if progress_callback:
-                        progress_callback({**meta, "chunk_index": ci, "chunk_count": cc})
+                        progress_callback({**meta, "chunk_index": ci, "chunk_count": cc,
+                            "attempt": segment_attempt, "retry_reason": retry_reason})
 
                 answer_part = await chat(
                     db,
@@ -490,12 +502,12 @@ async def _training_plan(
                     requested_context_window_tokens=payload.get("context_window_tokens"),
                     progress_callback=segment_progress,
                     cancel_check=cancel_check,
-                    response_format_schema=plan_schema,
+                    response_format_schema=segment_schema,
                     quality_profile=str(payload.get("quality_profile") or "standard"),
             recover_limit=True,
                 minimum_output_tokens=payload.get("_minimum_retry_output"),
                 )
-                def account_call(candidate: dict[str, Any], attempt: int) -> None:
+                def account_call(candidate: dict[str, Any], attempt: int, error: str | None) -> None:
                     nonlocal total_cost_eur, total_elapsed_seconds, timed_output_tokens, priced_calls
                     call_usage = candidate.get("usage") if isinstance(candidate.get("usage"), dict) else {}
                     for key in usage_totals:
@@ -524,26 +536,35 @@ async def _training_plan(
                         "tokens_per_second": candidate.get("tokens_per_second"),
                         "stop_reason": candidate.get("stop_reason"),
                         "truncated": bool(candidate.get("truncated")),
+                        "validation_valid": error is None,
+                        "validation_error": error,
+                        "context_truncated": candidate.get("context_truncated", False),
+                        "provider_timing": candidate.get("provider_timing"),
                     })
 
-                account_call(answer_part, 1)
                 def parse_segment(candidate: dict[str, Any]):
                     parsed, parsed_error = extract_structured_plan(str(candidate.get("content") or ""))
                     if parsed is not None and parsed.weeks != local_weeks:
                         return None, f"SEGMENT_WEEK_COUNT:{parsed.weeks}!={local_weeks}"
                     if parsed is not None and len(parsed.sessions) < segment_sessions:
                         return None, f"SEGMENT_SESSION_COUNT:{len(parsed.sessions)}<{segment_sessions}"
-                    if parsed is not None and any(sum(s.week == w for s in parsed.sessions) < days_per_week for w in range(1, local_weeks + 1)):
-                        return None, "SEGMENT_WEEK_SESSION_COUNT:each week needs all requested sessions"
+                    if parsed is not None:
+                        missing = [f"{w}:{sum(s.week == w for s in parsed.sessions)}/{days_per_week}"
+                            for w in range(1, local_weeks + 1) if sum(s.week == w for s in parsed.sessions) < days_per_week]
+                        if missing:
+                            return None, "SEGMENT_WEEK_SESSION_COUNT:" + ",".join(missing)
                     return parsed, parsed_error
 
                 # Parse before treating an exact token-cap finish as a failure: a
                 # model can land exactly on its cap after already closing valid JSON.
                 segment, segment_error = parse_segment(answer_part)
+                account_call(answer_part, 1, segment_error)
                 # Retry only when the plan is incomplete/invalid. A valid schema
                 # document is accepted even if Ollama reports a length boundary.
                 needs_retry = segment is None
                 if needs_retry:
+                    segment_attempt = 2
+                    retry_reason = segment_error
                     retry_budget = requested_max
                     answer_part = await chat(
                         db,
@@ -553,8 +574,8 @@ async def _training_plan(
                         task="training_plan",
                         local_only=local_only,
                         model_id=_u(payload.get("model_id")),
-                        instruction_prompt=(
-                            segment_instruction
+                        instruction_prompt=training_plan_instruction(
+                            prompt, segment_rules
                             + "\nThe previous attempt was incomplete or invalid. Return only one compact, complete JSON object; "
                               "shorten wording aggressively before omitting any requested session."
                             + f"\nValidation feedback: {segment_error}. Use local week numbers and all requested sessions. "
@@ -567,13 +588,13 @@ async def _training_plan(
                         requested_context_window_tokens=payload.get("context_window_tokens"),
                         progress_callback=segment_progress,
                         cancel_check=cancel_check,
-                        response_format_schema=plan_schema,
+                        response_format_schema=segment_schema,
                         quality_profile=str(payload.get("quality_profile") or "standard"),
             recover_limit=True,
                 minimum_output_tokens=payload.get("_minimum_retry_output"),
                     )
-                    account_call(answer_part, 2)
                     segment, segment_error = parse_segment(answer_part)
+                    account_call(answer_part, 2, segment_error)
                 if segment is None:
                     return await _save_plan_draft(db, user, payload, context, answer_part, segments, locale,
                         generation_calls, usage_totals, round(total_cost_eur, 8) if priced_calls else None,
