@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.0-alpha.62 — Reliable number entry
+
+- Fixes number editing across all 44 numeric controls in training, Coach, activity review, check-in, goals, health metrics and AI administration. Clearing an existing number no longer inserts a minimum between keystrokes. A local text draft preserves caret position and decimal separators; only complete, valid values reach application state.
+- Supports both German decimal commas and decimal points. Optional numbers can be cleared without becoming zero. Required blanks restore the last accepted value after leaving the field; numeric bounds apply when editing finishes. Keyboard arrows remain supported, while context-window increments do not prevent entering values such as 8,000 tokens.
+- Corrects the failed training-plan status: stale preparation text is cleared, and an invalid segment no longer claims that an automatic retry always happened or that generation is still running. This fixes the input mechanism; it does not assume that every invalid model response was caused by a token setting.
+- No database migration or runtime dependency is added. Update ZIP is relative to alpha.61. See `docs/NUMBER_INPUT.md` for behavior and validation.
+
 ## 0.1.0-alpha.61 — Train, review, improve
 
 - Adds an explicit +8,000-token continuation action to coach chat, activity analysis, training-plan drafts and planned-session reviews. Partial text stays visible; token/cost usage is aggregated. Empty token-limit responses retain a retry snapshot rather than becoming blank successful messages. Each continuation rechecks ownership, model availability and current cloud permission.

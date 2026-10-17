@@ -1,12 +1,13 @@
 {
   "name": "pengucoach-web",
-  "version": "0.1.0-alpha.61",
+  "version": "0.1.0-alpha.62",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "test:explorer": "node --test tests/activityExplorer.test.cjs"
+    "test:explorer": "node --test tests/activityExplorer.test.cjs",
+    "test:numbers": "node --test tests/numberInput.test.cjs"
   },
   "dependencies": {
     "leaflet": "1.9.4",

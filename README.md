@@ -20,7 +20,9 @@ Reviewed time-budget variants, confirmed training experiences, recorded 1/5/20-m
 
 ## Current alpha scope
 
-`v0.1.0-alpha.61` is the current end-to-end alpha baseline:
+`v0.1.0-alpha.62` is the current end-to-end alpha baseline:
+
+- **Reliable mobile number entry:** freely clear and retype weeks, training days, token limits and other numbers without jumping to a minimum. Decimal commas, optional empty values and cursor edits work consistently across the app. Failed plan generation also clears stale progress text. See [Number entry](docs/NUMBER_INPUT.md).
 
 - **Train, review, improve:** recorded interval-level plan execution, optional ±4-hour matching, manual activity assignment, AI session reviews and reviewed adjustments for a comparable future session. Evidence also informs future AI plans. Explicit +8,000-token continuation preserves partial text and valid plan segments. See [Execution review and continuation](docs/TRAINING_EXECUTION.md).
 

@@ -1,4 +1,5 @@
 "use client";
+import NumberInput from "./NumberInput";
 import {useEffect,useState} from "react";
 import {ExperienceManager} from "./TrainingExperience";
 import {api} from "../lib/api";
@@ -16,7 +17,7 @@ export default function CoachPersonal(){
  <label>{bi(lang,"Mein Ziel","My goal")}<textarea maxLength={1000} value={profile.goal||""} onChange={e=>setProfile({...profile,goal:e.target.value})} placeholder={bi(lang,"Zum Beispiel: wieder regelmäßig Rad fahren","For example: cycle regularly again")}/></label>
  <label>{bi(lang,"Zieldatum / Wettkampf (optional)","Target / event date (optional)")}<input type="date" value={profile.target_date||""} onChange={e=>setProfile({...profile,target_date:e.target.value||null})}/></label>
  <label>{bi(lang,"Sportarten","Sports")}<input maxLength={300} value={profile.preferred_sports||""} onChange={e=>setProfile({...profile,preferred_sports:e.target.value})}/></label>
- <label>{bi(lang,"Typische Dauer (Minuten)","Usual duration (minutes)")}<input type="number" min={5} max={480} value={profile.session_minutes??45} onChange={e=>setProfile({...profile,session_minutes:Number(e.target.value)})}/></label>
+ <label>{bi(lang,"Typische Dauer (Minuten)","Usual duration (minutes)")}<NumberInput min={5} max={480} value={profile.session_minutes??45} onValueChange={raw=>setProfile({...profile,session_minutes:Number(raw)})}/></label>
  <label>{bi(lang,"Ausrüstung","Equipment")}<input maxLength={600} value={profile.equipment||""} onChange={e=>setProfile({...profile,equipment:e.target.value})}/></label>
  <label>{bi(lang,"Einschränkungen & Alltag","Constraints & routines")}<textarea maxLength={1000} value={profile.constraints||""} onChange={e=>setProfile({...profile,constraints:e.target.value})}/></label>
  <label>{bi(lang,"Trainingspräferenzen","Training preferences")}<textarea maxLength={1000} value={profile.preferences||""} onChange={e=>setProfile({...profile,preferences:e.target.value})} placeholder={bi(lang,"z. B. bei Regen lieber Smarttrainer, lange Ausfahrt am Wochenende","e.g. prefer indoor trainer in rain, long ride on weekends")}/></label>
