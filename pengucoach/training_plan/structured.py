@@ -37,16 +37,22 @@ class PowerWattTarget(BaseModel):
 
 
 class PlanStep(BaseModel):
-    type: StepKind
+    type: StepKind = Field(description="Use repeat for a block with a repetition count and child steps. interval/work are single executable steps without children.")
     duration_seconds: int | None = Field(default=None, ge=1, le=86400)
     distance_meters: float | None = Field(default=None, gt=0, le=500000)
     target: PlanTarget | PowerWattTarget = Field(default_factory=PlanTarget)
-    repeat: int | None = Field(default=None, ge=2, le=100)
-    steps: list["PlanStep"] = Field(default_factory=list)
+    repeat: int | None = Field(default=None, ge=2, le=100, description="Number of repetitions of the complete child-step sequence; use only on type=repeat.")
+    steps: list["PlanStep"] = Field(default_factory=list, description="Child steps belong only to type=repeat; use an empty list or omit on all executable steps.")
     description: str = Field(default="", max_length=500)
 
     @model_validator(mode="after")
     def validate_shape(self) -> "PlanStep":
+        # Some models label the whole repeated interval block as "interval"
+        # (or "work"). A typed, valid count plus nonempty validated children
+        # unambiguously identifies a repeat group. Never infer missing counts,
+        # relax child validation or discard a target that Garmin cannot export.
+        if self.type in {"interval", "work"} and self.repeat is not None and self.steps and self.target.type == "none":
+            self.type = "repeat"
         if self.type == "repeat":
             if not self.repeat or not self.steps:
                 raise ValueError("repeat steps require repeat and nested steps")
@@ -171,6 +177,11 @@ JSON schema/semantics:
 - target is {{"type":"none"}} or {{"type":"heart_rate_zone","zone":1..5}} or
   {{"type":"power_zone","zone":1..7}} or {{"type":"power_watts","watts":250,"tolerance_pct":5}}. Use watts only when supported by measured FTP/power context, never invent FTP. Prefer the user's Garmin zones from context when available.
 - a repeat step has repeat>=2 and nested steps. Example: 6 x (3 min interval + 2 min recovery).
+  A complete interval BLOCK must have type="repeat", not type="interval" or type="work".
+  Example: {{"type":"repeat","repeat":6,"steps":[{{"type":"interval","duration_seconds":180}},{{"type":"recovery","duration_seconds":120}}]}}.
+  Keep warmup/cooldown outside that block. Every child interval/recovery is a single timed/distance step.
+  Do not add repeat counts or child steps to executable interval/work/recovery/warmup/cooldown steps.
+  Put intensity targets on the executable child steps, never on the repeat container.
 - strength sessions should populate strength_exercises with canonical plain English Garmin exercise names plus sets/reps/rest_seconds;
   use integer reps (e.g. 8), or reps=8 and reps_max=10 for a range. For timed holds use
   duration_seconds=45 and reps=null; never write "45s" in reps. For max minus two reps use

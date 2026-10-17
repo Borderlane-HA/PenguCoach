@@ -1,6 +1,13 @@
 # Changelog
 
 
+## 0.1.0-alpha.65
+
+- Fix local/Ollama plans rejected with `only repeat steps may contain nested steps`: an interval/work block with a valid explicit repeat count, validated child steps and no ambiguous group intensity is normalized to a repeat group. Preserve count, child order, work/recovery durations, targets and descriptions. Incomplete/invalid groups still require repair; no count or child target is invented.
+- Clarify repeat-block vs executable-step semantics in the JSON schema field descriptions, training instructions with a complete example, and repair feedback. The same normalization applies to generation, saved drafts, edits, Garmin export and execution evaluation.
+- No changes to Sparky GPS/telemetry or numeric entry. No new dependencies or database migration.
+
+
 ## 0.1.0-alpha.64
 
 - Fix IONOS/Qwen training-plan failures caused by strength prescriptions such as `8-10`, `45s` and `max-2`. Preserve repetition ranges, timed holds and repetitions in reserve as distinct, validated targets. Invalid zero reps remain invalid and trigger a targeted repair request.

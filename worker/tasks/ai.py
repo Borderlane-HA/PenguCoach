@@ -558,6 +558,8 @@ async def _training_plan(
                             + "\nThe previous attempt was incomplete or invalid. Return only one compact, complete JSON object; "
                               "shorten wording aggressively before omitting any requested session."
                             + f"\nValidation feedback: {segment_error}. Use local week numbers and all requested sessions. "
+                              "Interval blocks: type=repeat with an explicit repeat count >=2 and child steps; "
+                              "single interval/work/recovery steps have no repeat count or children. Put targets on children. "
                               "Strength: integer reps; a range uses reps plus reps_max; holds use duration_seconds with reps=null; "
                               "max-N uses reps_in_reserve=N with reps=null. Never use zero or free text in numeric fields."
                         ),
