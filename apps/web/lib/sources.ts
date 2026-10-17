@@ -7,3 +7,13 @@ export function measuredLabel(value?:string,lang="de"){
   return value?new Date(value).toLocaleString(lang==="de"?"de-DE":"en-GB",{dateStyle:"short",timeStyle:"short"}):"";
 }
 export function localDate(){const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`}
+
+export function activityTimeLabel(activity:{started_at?:string;time_precision?:string;activity_date?:string},lang="de"){
+  const locale=lang==="de"?"de-DE":"en-GB";
+  if(activity.time_precision==="date"){
+    const day=activity.activity_date;
+    const date=day?new Date(`${day}T12:00:00`).toLocaleDateString(locale):"—";
+    return `${date} · ${lang==="de"?"Uhrzeit unbekannt":"Time unknown"}`;
+  }
+  return activity.started_at?new Date(activity.started_at).toLocaleString(locale):"";
+}

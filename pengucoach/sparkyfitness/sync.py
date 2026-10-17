@@ -3,6 +3,7 @@ from __future__ import annotations
 from pengucoach.health.provenance import merge_metric
 
 import hashlib
+import math
 import json
 import uuid
 from datetime import date, datetime, time, timedelta, timezone
@@ -12,8 +13,9 @@ from urllib.parse import quote
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from pengucoach.db.models import Activity, BodyMeasurement, DailyHealth, HrvDaily, SleepSession, SourceRecord, SparkyFitnessConnection
+from pengucoach.db.models import Activity, BodyMeasurement, DailyHealth, HrvDaily, SleepSession, SourceRecord, SparkyFitnessConnection, User
 from pengucoach.security.crypto import SecretBox
+from pengucoach.sparkyfitness.activity_time import resolve_activity_time
 from pengucoach.sparkyfitness.client import SparkyFitnessClient, SparkyFitnessError
 
 
@@ -51,9 +53,10 @@ def _as_dt(value: Any) -> datetime | None:
 
 def _num(value: Any) -> float | None:
     try:
-        if value is None or value == "":
+        if value is None or value == "" or isinstance(value, bool):
             return None
-        return float(value)
+        number = float(value)
+        return number if math.isfinite(number) else None
     except (TypeError, ValueError):
         return None
 
@@ -122,58 +125,8 @@ def _list_payload(payload: Any) -> list[dict[str, Any]]:
     return []
 
 
-def _source_recorded_dt(item: dict[str, Any]) -> datetime | None:
-    """Prefer the provider's original recorded timestamp over relational day fields.
-
-    HealthKit/Sparky rows can expose a convenience ``start_time`` at midnight
-    (derived from ``entry_date``) while ``raw_data.startTime`` contains the real
-    workout time. The source payload is therefore authoritative when present.
-    """
-    containers: list[dict[str, Any]] = []
-    for parent in (
-        item.get("exercise_entry_details"), item.get("exerciseEntryDetails"), item,
-        item.get("provider_activity_details"), item.get("providerActivityDetails"),
-        item.get("activity_details"), item.get("activityDetails"),
-    ):
-        if not isinstance(parent, dict):
-            continue
-        for raw_name in ("raw_data", "rawData"):
-            raw = _as_mapping(parent.get(raw_name))
-            if raw:
-                containers.append(raw)
-        telemetry = _as_mapping(parent.get("telemetry"))
-        if telemetry:
-            for raw_name in ("raw_data", "rawData"):
-                raw = _as_mapping(telemetry.get(raw_name))
-                if raw:
-                    containers.append(raw)
-    for raw in containers:
-        value = _first(
-            raw, "startTime", "started_at", "start_time", "startAt", "start_at",
-            "timestamp", "entry_timestamp", "entryTimestamp", "logged_at", "loggedAt",
-            "measured_at", "measuredAt",
-        )
-        dt = _as_dt(value)
-        if dt:
-            return dt
-    return None
-
-
-def _session_date(item: dict[str, Any]) -> date | None:
-    # The original provider payload wins over relational convenience fields.
-    # This matters when Sparky represents entry_date as midnight while
-    # HealthKit raw_data still contains the exact workout start time.
-    recorded = _source_recorded_dt(item) or _as_dt(_nested_first(
-        item, "started_at", "start_time", "startTime", "start_at", "startAt",
-        "timestamp", "entry_timestamp", "entryTimestamp", "logged_at", "loggedAt",
-        "measured_at", "measuredAt",
-    ))
-    if recorded:
-        return recorded.date()
-    explicit = _as_date(_nested_first(item, "entry_date", "entryDate", "date"))
-    if explicit:
-        return explicit
-    return _as_date(_nested_first(item, "created_at", "createdAt"))
+def _session_date(item: dict[str, Any], default_timezone: str = "UTC") -> date | None:
+    return resolve_activity_time(item, default_timezone).local_date
 
 
 def _session_id(item: dict[str, Any], index: int) -> str:
@@ -304,6 +257,8 @@ def _avg_speed_mps(item: dict[str, Any]) -> float | None:
 
 def _sport(item: dict[str, Any]) -> str:
     raw = str(_nested_first(item, "sport_type", "sportType", "activity_type", "activityType", "type", "exercise_type", "exerciseType", "category") or "other").strip().lower()
+    if raw in {"individual", "preset", "workout", "exercise", "cardio", "other"} or raw.isdigit():
+        raw = _session_name(item).lower()
     normalized = raw.replace("-", "_").replace(" ", "_")
     if any(token in normalized for token in ("road_bik", "cycling", "biking", "bicycle", "bike")):
         return "cycling"
@@ -345,21 +300,8 @@ def _sport_family(value: str | None) -> str:
     return v or "other"
 
 
-def _session_started_at(item: dict[str, Any]) -> datetime | None:
-    # Prefer provider raw_data first: Sparky can expose a relational midnight
-    # start_time derived from entry_date while HealthKit raw_data.startTime has
-    # the exact recorded time.
-    recorded = _source_recorded_dt(item) or _as_dt(_nested_first(
-        item, "started_at", "start_time", "startTime", "start_at", "startAt",
-        "timestamp", "entry_timestamp", "entryTimestamp", "logged_at", "loggedAt",
-        "measured_at", "measuredAt",
-    ))
-    if recorded:
-        return recorded
-    recorded_day = _as_dt(_nested_first(item, "entry_date", "entryDate", "date"))
-    if recorded_day:
-        return recorded_day
-    return _as_dt(_nested_first(item, "created_at", "createdAt"))
+def _session_started_at(item: dict[str, Any], default_timezone: str = "UTC") -> datetime | None:
+    return resolve_activity_time(item, default_timezone).timestamp
 
 
 def _session_name(item: dict[str, Any]) -> str:
@@ -418,6 +360,7 @@ def _activity_detail_missing(item: dict[str, Any]) -> bool:
         _duration_seconds(item),
         _num(_nested_first(item, "calories_burned", "caloriesBurned", "calories", "active_calories", "activeCalories", "totalEnergyBurned")),
         _num(_nested_first(item, "avg_heart_rate", "avgHeartRate", "averageHeartRate", "average_hr", "avg_hr")),
+        _num(_nested_first(item, "min_heart_rate", "minHeartRate", "minimum_heart_rate", "minimumHeartRate", "min_hr", "heart_rate_min")),
         _num(_nested_first(item, "elevation_gain_meters", "elevationGainMeters", "elevation_gain", "elevationGain", "totalAscent")),
         _num(_nested_first(item, "elevation_loss_meters", "elevationLossMeters", "elevation_loss", "elevationLoss", "totalDescent")),
         _num(_nested_first(item, "min_elevation_meters", "minElevationMeters", "min_elevation", "minElevation", "minimumElevation")),
@@ -450,8 +393,8 @@ def _unwrap_detail_payload(payload: Any) -> dict[str, Any] | None:
     return payload
 
 
-async def _enrich_activity_item(client: SparkyFitnessClient, item: dict[str, Any]) -> tuple[dict[str, Any], int]:
-    if not _activity_candidate(item) or not _activity_detail_missing(item):
+async def _enrich_activity_item(client: SparkyFitnessClient, item: dict[str, Any], default_timezone: str = "UTC") -> tuple[dict[str, Any], int]:
+    if not _activity_candidate(item) or not (_activity_detail_missing(item) or resolve_activity_time(item, default_timezone).precision != "second"):
         return item, 0
     entry_id = _activity_entry_id(item)
     if not entry_id:
@@ -474,7 +417,7 @@ async def _enrich_activity_item(client: SparkyFitnessClient, item: dict[str, Any
     # relational row.  Quality is more important here than saving one request:
     # fetch them whenever *any* useful activity detail is still missing.
     provider = _provider(enriched)
-    if provider and _activity_detail_missing(enriched):
+    if provider and (_activity_detail_missing(enriched) or resolve_activity_time(enriched, default_timezone).precision != "second"):
         try:
             payload = await client.request(
                 f"/exercises/activity-details/{quote(entry_id, safe='')}/{quote(provider, safe='')}"
@@ -500,8 +443,9 @@ def _close_number(a: float | int | None, b: float | int | None, *, absolute: flo
     return abs(aa - bb) <= max(absolute, max(abs(aa), abs(bb)) * relative)
 
 
-async def _merge_activity(db: AsyncSession, user_id: uuid.UUID, item: dict[str, Any], external_id: str) -> tuple[str, uuid.UUID | None]:
-    started_at = _session_started_at(item)
+async def _merge_activity(db: AsyncSession, user_id: uuid.UUID, item: dict[str, Any], external_id: str, default_timezone: str = "UTC") -> tuple[str, uuid.UUID | None]:
+    time_info = resolve_activity_time(item, default_timezone)
+    started_at = time_info.timestamp
     if started_at is None:
         return "skipped", None
     duration = _duration_seconds(item)
@@ -524,7 +468,7 @@ async def _merge_activity(db: AsyncSession, user_id: uuid.UUID, item: dict[str, 
         Activity.garmin_activity_id > 0,
         Activity.started_at >= window_start,
         Activity.started_at <= window_end,
-    ))).all()
+    ))).all() if time_info.precision == "second" else []
     for candidate in candidates:
         if _sport_family(candidate.sport_type) != _sport_family(sport):
             continue
@@ -556,6 +500,7 @@ async def _merge_activity(db: AsyncSession, user_id: uuid.UUID, item: dict[str, 
         if existing and str((existing.raw or {}).get("sparkyfitness_external_id")) == external_id:
             raw = dict(existing.raw or {})
             raw["sparkyfitness"] = item
+            raw["_sparkyfitness_time"] = time_info.metadata()
             if provider:
                 raw["sparkyfitness_provider"] = provider
             existing.raw = raw
@@ -564,7 +509,7 @@ async def _merge_activity(db: AsyncSession, user_id: uuid.UUID, item: dict[str, 
                 "sport_type": sport,
                 "started_at": started_at,
                 "duration_seconds": duration,
-                "moving_seconds": duration,
+                "moving_seconds": _int(_nested_first(item, "moving_time_seconds", "movingTimeSeconds", "moving_seconds", "movingSeconds")),
                 "distance_m": distance,
                 "calories": _num(_nested_first(item, "calories_burned", "caloriesBurned", "calories", "active_calories", "activeCalories", "total_calories", "totalCalories", "totalEnergyBurned")),
                 "avg_hr": _int(_nested_first(item, "avg_heart_rate", "avgHeartRate", "avg_hr", "average_hr", "averageHeartRate", "heart_rate_avg")),
@@ -589,7 +534,7 @@ async def _merge_activity(db: AsyncSession, user_id: uuid.UUID, item: dict[str, 
         sport_type=sport,
         started_at=started_at,
         duration_seconds=duration,
-        moving_seconds=duration,
+        moving_seconds=_int(_nested_first(item, "moving_time_seconds", "movingTimeSeconds", "moving_seconds", "movingSeconds")),
         distance_m=distance,
         calories=_num(_nested_first(item, "calories_burned", "caloriesBurned", "calories", "active_calories", "activeCalories", "total_calories", "totalCalories", "totalEnergyBurned")),
         avg_hr=_int(_nested_first(item, "avg_heart_rate", "avgHeartRate", "avg_hr", "average_hr", "averageHeartRate", "heart_rate_avg")),
@@ -601,7 +546,7 @@ async def _merge_activity(db: AsyncSession, user_id: uuid.UUID, item: dict[str, 
         training_load=_num(_nested_first(item, "training_load", "trainingLoad")),
         fit_status="unavailable",
         raw={
-            "source": "sparkyfitness",
+            "source": "sparkyfitness", "_sparkyfitness_time": time_info.metadata(),
             "sparkyfitness_external_id": external_id,
             "sparkyfitness_provider": provider,
             "sparkyfitness": item,
@@ -1128,6 +1073,36 @@ async def _merge_active_calories_metric(
     return False
 
 
+async def _repair_activity_times(db: AsyncSession, user_id: uuid.UUID, default_timezone: str) -> int:
+    """Repair old standalone imports from their saved source payload, once.
+
+    Keep IDs/feedback/assignments. Garmin's own recording time is never changed.
+    A full source sync can subsequently fill details absent from older payloads.
+    """
+    rows = (await db.scalars(select(Activity).where(
+        Activity.user_id == user_id,
+        Activity.garmin_activity_id < 0,
+        Activity.raw["source"].as_string() == "sparkyfitness",
+        Activity.raw["_sparkyfitness_time"]["version"].as_integer().is_distinct_from(1),
+    ))).all()
+    count = 0
+    for row in rows:
+        raw = dict(row.raw or {})
+        item = raw.get("sparkyfitness")
+        if not isinstance(item, dict):
+            continue
+        info = resolve_activity_time(item, default_timezone)
+        if info.timestamp:
+            row.started_at = info.timestamp
+        row.moving_seconds = _int(_nested_first(item, "moving_time_seconds", "movingTimeSeconds", "moving_seconds", "movingSeconds"))
+        raw["_sparkyfitness_time"] = info.metadata()
+        if row.sport_type in {"individual", "preset", "workout", "exercise", "cardio", "other"} or (row.sport_type or "").isdigit():
+            row.sport_type = _sport(item)
+        row.raw = raw
+        count += 1
+    return count
+
+
 async def _sync_activities(
     db: AsyncSession,
     client: SparkyFitnessClient,
@@ -1136,6 +1111,10 @@ async def _sync_activities(
     *,
     progress=None,
 ) -> dict[str, int]:
+    user = await db.get(User, user_id)
+    default_timezone = (user.timezone if user else None) or "UTC"
+    repaired_times = await _repair_activity_times(db, user_id, default_timezone)
+
     page = 1
     pages = 0
     seen = 0
@@ -1159,7 +1138,7 @@ async def _sync_activities(
         reached_older = False
         for index, item in enumerate(items):
             if _is_daily_metric_entry(item):
-                day = _session_date(item)
+                day = _session_date(item, default_timezone)
                 if day and (oldest is None or day < oldest):
                     oldest = day
                 if start is not None and day and day < start:
@@ -1176,11 +1155,12 @@ async def _sync_activities(
                 daily_metrics_filtered += 1
                 continue
             original_item = item
-            item, detail_count = await _enrich_activity_item(client, item)
+            item, detail_count = await _enrich_activity_item(client, item, default_timezone)
             detail_requests += detail_count
             if item is not original_item:
                 enriched_sessions += 1
-            day = _session_date(item)
+            session_time = resolve_activity_time(item, default_timezone)
+            day = session_time.local_date
             if day and (oldest is None or day < oldest):
                 oldest = day
             if start is not None and day and day < start:
@@ -1190,14 +1170,14 @@ async def _sync_activities(
             external_id = _session_id(item, index)
             if await _upsert_source_record(
                 db, user_id, domain="exercise_session", external_id=external_id, record_date=day,
-                observed_at=_session_started_at(item), payload=item,
+                observed_at=session_time.timestamp if session_time.precision == "second" else None, payload=item,
             ):
                 changed += 1
             activity_key = str(_nested_first(
                 item, "session_id", "sessionId", "workout_session_id", "workoutSessionId",
                 "workout_id", "workoutId", "exercise_preset_entry_id", "exercisePresetEntryId",
             ) or external_id)
-            outcome, activity_id = await _merge_activity(db, user_id, item, activity_key)
+            outcome, activity_id = await _merge_activity(db, user_id, item, activity_key, default_timezone)
             if activity_id is not None:
                 materialized = await db.get(Activity, activity_id)
                 if materialized is not None:
@@ -1237,7 +1217,7 @@ async def _sync_activities(
         "pages": pages, "sessions": seen, "changed": changed,
         "activities_created": created, "activities_merged": merged,
         "activities_updated": updated, "activities_skipped": skipped,
-        "activities_enriched": enriched_sessions, "detail_requests": detail_requests,
+        "activities_enriched": enriched_sessions, "activity_times_repaired": repaired_times, "detail_requests": detail_requests,
         "daily_metrics_filtered": daily_metrics_filtered,
         "daily_metrics_materialized": daily_metrics_materialized,
         "legacy_daily_metric_activities_removed": legacy_cleanup["activities_removed"],

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.0-alpha.63 — Sparky recording times and available readings
+
+- Reads separate `entry_date`/`entry_time` with the recording timezone, using the PenguCoach user's timezone if no recording zone is supplied. Original HealthKit/provider timestamps retain priority, including nested JSON-string payloads. Summer/winter offsets follow the recorded date; invalid or ambiguous local clocks remain date-only unless an explicit timestamp resolves them.
+- Marks day-only recordings as time unknown instead of displaying synthetic 02:00. They do not qualify for automatic ±4-hour matching; manual assignment and conservative day-based matching remain possible. Coach context carries the time precision too.
+- The next Sparky activity sync repairs existing standalone imports from their saved payloads once, preserving IDs, feedback and assignments. Garmin times stay protected. A historical/full sync can fetch details absent from older saved payloads.
+- Minimum HR and additional supported readings accept numeric strings, nested telemetry and JSON-string raw data. Named HR statistics are supported without borrowing unrelated minimum values. Additional stride, ground-contact, oscillation, temperature and swimming readings appear when supplied, with explicit unit conversions. Garmin remains primary on merged recordings.
+- Missing activity detail values no longer become zero. Moving time is only copied from an explicit moving-time field; missing coverage stays unknown. Additional readings use a collapsed section. Generic entry kind `individual` falls back to a recognized workout name for sport classification.
+- No new migration or runtime dependency. Update API, web and workers together, then run Sparky sync; select All data if older recordings need source details. See `docs/SPARKYFITNESS.md`.
+
 ## 0.1.0-alpha.62 — Reliable number entry
 
 - Fixes number editing across all 44 numeric controls in training, Coach, activity review, check-in, goals, health metrics and AI administration. Clearing an existing number no longer inserts a minimum between keystrokes. A local text draft preserves caret position and decimal separators; only complete, valid values reach application state.

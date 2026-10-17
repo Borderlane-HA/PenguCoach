@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from pengucoach.sparkyfitness.activity_time import containers
+
 import numpy as np
 import pandas as pd
 
@@ -336,7 +338,7 @@ def selected_garmin_extras(raw: dict[str, Any] | None) -> dict[str, Any]:
     for output_name, keys in GARMIN_EXTRA_FIELDS.items():
         for key in keys:
             value = raw.get(key)
-            if isinstance(value, (int, float)):
+            if isinstance(value, (int, float)) and not isinstance(value, bool) and np.isfinite(value):
                 result[output_name] = value
                 break
     return result
@@ -344,7 +346,10 @@ def selected_garmin_extras(raw: dict[str, Any] | None) -> dict[str, Any]:
 
 SPARKY_EXTRA_FIELDS: dict[str, tuple[str, ...]] = {
     "elapsed_duration_s": ("elapsed_time_seconds", "elapsedTimeSeconds", "elapsed_seconds", "elapsedSeconds"),
-    "min_hr_bpm": ("min_heart_rate", "minHeartRate", "min_hr", "heart_rate_min"),
+    "min_hr_bpm": ("min_heart_rate", "minHeartRate", "minimum_heart_rate", "minimumHeartRate", "min_hr", "min_hr_bpm", "heart_rate_min", "heartRateMin"),
+    "avg_hr_bpm": ("avg_heart_rate", "avgHeartRate", "averageHeartRate", "avg_hr"),
+    "max_hr_bpm": ("max_heart_rate", "maxHeartRate", "maximumHeartRate", "max_hr"),
+    "moving_duration_s": ("moving_time_seconds", "movingTimeSeconds", "moving_seconds"),
     "elevation_gain_m": ("elevation_gain_meters", "elevationGainMeters", "elevation_gain", "elevationGain", "totalAscent"),
     "max_speed_mps": ("max_speed_mps", "maxSpeedMps", "max_speed", "maxSpeed", "maximumSpeed"),
     "elevation_loss_m": ("elevation_loss_meters", "elevationLossMeters", "elevation_loss", "elevationLoss", "totalDescent"),
@@ -353,31 +358,38 @@ SPARKY_EXTRA_FIELDS: dict[str, tuple[str, ...]] = {
     "max_power_w": ("max_power_watts", "maxPowerWatts", "max_power", "maxPower"),
     "normalized_power_w": ("normalized_power_watts", "normalizedPowerWatts", "normalized_power", "normalizedPower", "normPower"),
     "max_cadence": ("max_cadence", "maxCadence", "maximumCadence"),
+    "avg_stride_length_cm": ("stride_length_cm", "avg_stride_length_cm", "avgStrideLength"),
+    "avg_ground_contact_time_ms": ("ground_contact_time_ms", "avg_ground_contact_time_ms", "avgGroundContactTime"),
+    "avg_vertical_ratio_pct": ("vertical_ratio_pct", "avg_vertical_ratio_pct", "avgVerticalRatio"),
+    "avg_ground_contact_balance_pct": ("ground_contact_balance_pct", "avg_ground_contact_balance_pct", "avgGroundContactBalance"),
+    "avg_swolf": ("avg_swolf", "avgSwolf", "swolf"),
+    "pool_length_m": ("pool_length_meters", "pool_length_m", "poolLength"),
+    "stroke_count": ("stroke_count", "strokeCount", "total_strokes"),
+    "temperature_avg_c": ("avg_temperature_celsius", "avg_temperature", "avgTemperature"),
+    "temperature_min_c": ("min_temperature_celsius", "min_temperature", "minTemperature"),
+    "temperature_max_c": ("max_temperature_celsius", "max_temperature", "maxTemperature"),
+
 }
 
 
-def _nested_numeric(mapping: dict[str, Any], keys: tuple[str, ...]) -> float | int | None:
-    """Find a numeric metric in Sparky's relational/provider/telemetry payloads."""
-    queue: list[dict[str, Any]] = [mapping]
-    seen: set[int] = set()
-    while queue:
-        current = queue.pop(0)
-        marker = id(current)
-        if marker in seen:
-            continue
-        seen.add(marker)
+def _metric_number(value: Any) -> float | None:
+    if isinstance(value, dict):
+        value = value.get("quantity")
+    if value is None or isinstance(value, bool) or not isinstance(value, (int, float, str)) or str(value).strip() == "":
+        return None
+    try:
+        number = float(value)
+        return number if np.isfinite(number) else None
+    except ValueError:
+        return None
+
+
+def _nested_numeric(payload: dict[str, Any] | list[dict], keys: tuple[str, ...], *, heart_rate: bool = False) -> float | None:
+    for row in payload if isinstance(payload, list) else containers(payload):
         for key in keys:
-            value = current.get(key)
-            if isinstance(value, (int, float)) and not isinstance(value, bool):
+            value = _metric_number(row.get(key))
+            if value is not None and (not heart_rate or 0 < value <= 300):
                 return value
-        for key in (
-            "telemetry", "raw_data", "rawData", "exercise_entry_details", "exerciseEntryDetails",
-            "provider_activity_details", "providerActivityDetails", "activity_details", "activityDetails",
-            "activity", "details", "entry", "data", "workout", "session",
-        ):
-            value = current.get(key)
-            if isinstance(value, dict):
-                queue.append(value)
     return None
 
 
@@ -391,10 +403,29 @@ def selected_activity_extras(raw: dict[str, Any] | None) -> dict[str, Any]:
     result = selected_garmin_extras(raw)
     sparky = raw.get("sparkyfitness")
     if isinstance(sparky, dict):
+        rows = containers(sparky)
         for output_name, keys in SPARKY_EXTRA_FIELDS.items():
             if output_name in result:
                 continue
-            value = _nested_numeric(sparky, keys)
+            value = _nested_numeric(rows, keys, heart_rate=output_name == "min_hr_bpm")
+            if output_name == "min_hr_bpm" and value is not None and not 0 < value <= 300:
+                value = None
             if value is not None:
                 result[output_name] = value
+        if "min_hr_bpm" not in result:
+            for row in rows:
+                for key in ("heart_rate", "heartRate", "heart_rate_summary", "heartRateStatistics"):
+                    stats = row.get(key)
+                    if isinstance(stats, dict):
+                        value = next((n for k in ("min", "minimum", "min_bpm") if (n := _metric_number(stats.get(k))) is not None and 0 < n <= 300), None)
+                        if value is not None:
+                            result["min_hr_bpm"] = value
+                            break
+                if "min_hr_bpm" in result:
+                    break
+        if "avg_vertical_oscillation_cm" not in result:
+            mm = _nested_numeric(rows, ("vertical_oscillation_mm", "avg_vertical_oscillation_mm"))
+            cm = _nested_numeric(rows, ("vertical_oscillation_cm", "avg_vertical_oscillation_cm"))
+            if cm is not None or mm is not None:
+                result["avg_vertical_oscillation_cm"] = cm if cm is not None else mm / 10
     return result

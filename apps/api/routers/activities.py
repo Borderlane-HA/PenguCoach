@@ -10,6 +10,7 @@ from pengucoach.auth.dependencies import safety_confirmed_user
 from pengucoach.db.models import Activity, ActivityMetric, FitFile, GarminConnection, User
 from pengucoach.db.session import get_db
 from pengucoach.fit.activity_detail import selected_activity_extras, selected_garmin_extras
+from pengucoach.sparkyfitness.activity_time import stored_time_info
 from pengucoach.fit.service import load_activity_detail, load_activity_series
 from pengucoach.imports.manual_activity import MAX_UPLOAD_BYTES, import_manual_activity
 from worker.tasks.fit import analyze_fit
@@ -77,6 +78,7 @@ def _activity_sources(x: Activity) -> list[str]:
 def _summary(x: Activity) -> dict:
     raw = x.raw or {}
     sources = _activity_sources(x)
+    activity_time = stored_time_info(x)
     return {
         "id": str(x.id),
         "garmin_activity_id": x.garmin_activity_id,
@@ -84,6 +86,9 @@ def _summary(x: Activity) -> dict:
         "sport_type": x.sport_type,
         "subsport_type": x.subsport_type,
         "started_at": x.started_at,
+        "time_precision": activity_time.get("precision", "second"),
+        "activity_date": activity_time.get("local_date"),
+        "record_timezone": activity_time.get("timezone"),
         "duration_seconds": x.duration_seconds,
         "moving_seconds": x.moving_seconds,
         "distance_m": x.distance_m,

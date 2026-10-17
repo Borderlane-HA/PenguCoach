@@ -20,7 +20,9 @@ Reviewed time-budget variants, confirmed training experiences, recorded 1/5/20-m
 
 ## Current alpha scope
 
-`v0.1.0-alpha.62` is the current end-to-end alpha baseline:
+`v0.1.0-alpha.63` is the current end-to-end alpha baseline:
+
+- **Sparky recording times and readings:** separate local clocks and recording zones, historical timestamp correction on sync, explicit time-unknown display, better minimum-HR/telemetry extraction and missing values shown as missing. See [SparkyFitness](docs/SPARKYFITNESS.md).
 
 - **Reliable mobile number entry:** freely clear and retype weeks, training days, token limits and other numbers without jumping to a minimum. Decimal commas, optional empty values and cursor edits work consistently across the app. Failed plan generation also clears stale progress text. See [Number entry](docs/NUMBER_INPUT.md).
 

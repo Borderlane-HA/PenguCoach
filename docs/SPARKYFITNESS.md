@@ -1,5 +1,19 @@
 # SparkyFitness connection
 
+## Recording time and additional readings (alpha.63)
+
+Sparky may return a day in `entry_date`, a separate local clock in `entry_time` and an IANA `record_timezone`. PenguCoach combines these into a UTC recording instant and displays it in the browser's local timezone. If no recording zone is supplied, it uses the PenguCoach user's configured timezone. Original provider timestamps (`raw_data.startTime`, including JSON-string/wrapped raw payloads) take precedence. The recorded date determines the summer/winter offset.
+
+A bare day or relational UTC-midnight placeholder is not treated as a proven recording time. Such activities show **Uhrzeit unbekannt / Time unknown**. Native Garmin midnight timestamps and explicit original-provider midnight recordings remain valid. Invalid timezone names, malformed local clocks, DST gaps and repeated local hours without an explicit offset remain date-only. Only recordings with a known time qualify for the automatic ±4-hour plan match; manual assignment and conservative untimed same-day matching remain available. The AI receives the same precision instead of an invented clock time.
+
+On the next activity sync, old standalone Sparky rows without the new parser marker are repaired from their saved payloads. Their IDs, feedback and plan assignments remain. Garmin recording timestamps are never rewritten from Sparky. If older saved payloads lack the true clock or additional readings, choose **Alle Daten / All data**, save the connection settings and run **Jetzt synchronisieren / Sync now** to fetch available historical details. Deleting activities is unnecessary. The automatic incremental sync still fetches only today and yesterday; the local historical timestamp repair is independent of that fetch window.
+
+Minimum HR accepts supported direct aliases, named heart-rate statistics and nested/JSON-string raw data, including numeric strings. Boolean, empty, non-finite and impossible minimum-HR values are not measurements. Additional supported stride, ground-contact, vertical-ratio/oscillation, swimming and temperature readings are shown in a collapsed section only when available. Oscillation supplied in millimetres is explicitly converted to centimetres. Garmin remains the first source for merged readings. The parser does not infer a minimum from an average, arbitrary unrelated minimum fields or incomplete chart samples.
+
+Missing training load, aerobic effect, HR, movement time and coverage remain unknown rather than becoming zero. Real reported zeros remain visible. A session's duration is not silently duplicated as movement time. Additional fields must actually be returned by the permitted Sparky API; a value visible in Sparky's own charts is not necessarily exposed in the summary endpoint. No FIT time series or interval adherence is fabricated from averages.
+
+There is no new migration or dependency. Rebuild/restart API, web and workers together, then synchronize Sparky. Automated validation uses recorded-shape fixtures, real temporary databases, simulated endpoints and browser checks; it does not access the user's live Sparky installation.
+
 PenguCoach supports SparkyFitness as an optional **read-only** health and training source alongside the direct Garmin connection.
 
 ## Supported baseline

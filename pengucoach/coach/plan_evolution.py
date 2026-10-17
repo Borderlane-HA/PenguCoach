@@ -10,9 +10,13 @@ from pengucoach.db.models import Activity, ActivityFeedback, ActivityMetric, AiR
 from pengucoach.common.dates import day_start, user_today, user_zone
 from pengucoach.coach.training_intelligence import _is_hard_session, sport_family, weather_assessment
 from pengucoach.training_plan.structured import TrainingSession
+from pengucoach.sparkyfitness.activity_time import stored_time_info
 
 
 def local_day(activity, user):
+    info = stored_time_info(activity)
+    if info.get("precision") == "date" and info.get("local_date"):
+        return date.fromisoformat(info["local_date"])
     stamp = activity.started_at
     if stamp is None:
         return None
@@ -68,7 +72,8 @@ def compare_v2(sessions, activities, user, *, confirmed=None, reserved=None, oth
             minutes = a.duration_seconds / 60 if a.duration_seconds else None
             ratio = abs(minutes - s["duration_min"]) / s["duration_min"] if minutes is not None else None
             stamp = a.started_at if a.started_at.tzinfo else a.started_at.replace(tzinfo=timezone.utc)
-            hours = (stamp-scheduled_at).total_seconds()/3600 if scheduled_at else None
+            known_time = stored_time_info(a).get("precision") != "date"
+            hours = (stamp-scheduled_at).total_seconds()/3600 if scheduled_at and known_time else None
             within = abs(hours) <= 4 if hours is not None else delta == 0 and not s.get("start_time")
             score = round(max(0, 100 - abs(delta) * 18 - (min(60, ratio * 80) if ratio is not None else 30)))
             rows.append({"id": aid, "name": a.name or a.sport_type, "date": actual_day.isoformat(), "minutes": round(minutes, 1) if minutes is not None else None, "day_difference": delta, "duration_difference": round(minutes-s["duration_min"], 1) if minutes is not None else None, "score": score, "same_day": delta == 0, "within_window": within, "hours_difference": round(hours, 2) if hours is not None else None, "duration_close": ratio is not None and ratio <= .25})

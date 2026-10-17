@@ -73,7 +73,7 @@ def test_alpha32_sparky_data_quality_surfaces_are_shipped():
     page = Path("apps/web/app/settings/sparkyfitness/page.tsx").read_text()
     assert 'domain="daily_metric_active_calories"' in sync
     assert '_merge_active_calories_metric' in sync
-    assert 'observed_at=_session_started_at(item)' in sync
+    assert 'observed_at=session_time.timestamp if session_time.precision == "second" else None' in sync
     assert 'delete_local_sparkyfitness_data' in sync
     assert '@router.delete("/local-data")' in api
     assert 'Alle SparkyFitness-Daten löschen' in page

@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from pengucoach.db.models import Activity, ActivityMetric, BodyMeasurement, DailyHealth, FitFile, HrvDaily, SleepSession, SourceRecord, User
 from pengucoach.fit.activity_detail import selected_activity_extras
+from pengucoach.sparkyfitness.activity_time import stored_time_info
 from pengucoach.fit.service import load_activity_detail
 from pengucoach.garmin.zones import activity_zone_time, training_zone_snapshot
 
@@ -46,6 +47,7 @@ def _activity_garmin(a: Activity) -> dict[str, Any]:
     if source == "garmin" and "sparkyfitness" in raw:
         source = "garmin+sparkyfitness"
     extra = selected_activity_extras(raw)
+    activity_time = stored_time_info(a)
     return {
         "activity_id": str(a.id),
         "metric_sources": raw.get("_metric_sources", {}),
@@ -53,15 +55,17 @@ def _activity_garmin(a: Activity) -> dict[str, Any]:
         "name": a.name,
         "sport": a.sport_type,
         "subsport": a.subsport_type,
-        "started_at": a.started_at,
+        "started_at": a.started_at if activity_time.get("precision") != "date" else None,
+        "time_precision": activity_time.get("precision", "second"),
+        "activity_date": activity_time.get("local_date"),
         "duration_s": a.duration_seconds,
         "moving_s": a.moving_seconds,
         "distance_m": a.distance_m,
         "calories_kcal": a.calories,
         "heart_rate": {
             "min_bpm": extra.get("min_hr_bpm"),
-            "avg_bpm": a.avg_hr,
-            "max_bpm": a.max_hr,
+            "avg_bpm": a.avg_hr if a.avg_hr is not None else extra.get("avg_hr_bpm"),
+            "max_bpm": a.max_hr if a.max_hr is not None else extra.get("max_hr_bpm"),
         },
         "speed": {
             "avg_mps": a.avg_speed,

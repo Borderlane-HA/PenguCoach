@@ -1,5 +1,6 @@
 """Plan-to-recording review, local start times and explicit adaptive approval."""
 import uuid
+from pengucoach.sparkyfitness.activity_time import stored_time_info
 from datetime import date, datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -78,7 +79,7 @@ async def candidates(run_id: uuid.UUID, session_id: str, user=Depends(safety_con
         Activity.started_at >= day_start(day-timedelta(days=7), user),
         Activity.started_at < day_start(day+timedelta(days=8), user),
         Activity.started_at <= datetime.now(timezone.utc)).order_by(Activity.started_at.desc()))).all()
-    return {'items': [{'id': str(a.id), 'name': a.name, 'started_at': a.started_at,
+    return {'items': [{'id': str(a.id), 'name': a.name, 'started_at': a.started_at, 'time_precision': stored_time_info(a).get('precision'), 'activity_date': stored_time_info(a).get('local_date'),
             'minutes': round(a.duration_seconds/60, 1) if a.duration_seconds is not None else None}
         for a in rows if a.id not in reserved and sport_family(a.sport_type) == sport_family(session['sport'])]}
 
