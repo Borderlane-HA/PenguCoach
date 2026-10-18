@@ -40,9 +40,9 @@ def test_cost_and_quality_are_snapshotted_on_ai_runs_and_coach_is_counted():
     assert '"pricing": pricing' in service
     assert '"cost_eur": cost_eur' in service
     assert '"elapsed_seconds": elapsed_seconds' in service
-    assert '"generation_calls": generation_calls' in worker
+    assert "generation_calls=generation_calls" in worker
     assert "db.add(AiRun(" in worker
-    assert "db.add(AiRun(" in coach
+    assert "from worker.tasks.ai import _coach_chat" in coach
 
 
 def test_all_three_ai_surfaces_offer_quality_profile_and_cost_feedback():

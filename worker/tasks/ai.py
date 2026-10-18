@@ -6,6 +6,8 @@ import math
 import uuid
 from datetime import date, datetime, timezone
 from collections.abc import Callable
+from contextlib import asynccontextmanager
+import time
 from typing import Any
 
 import httpx
@@ -16,9 +18,10 @@ from pengucoach.coach.context import SOURCE_NOTICE, build_activity_analysis_cont
 from pengucoach.db.models import AiRun, Conversation, Message, User, UserPreference
 from pengucoach.db.session import SessionLocal
 from pengucoach.llm.job_control import cancel_requested, clear_cancel
-from pengucoach.llm.service import AiGenerationCancelled, chat, task_settings
+from pengucoach.llm.service import AiGenerationCancelled, AiProviderResponseError, OpenRouterError, chat, task_settings, resolve_model
 from pengucoach.llm.continuation import public, json_value
-from pengucoach.training_plan.generation import merge_plan_segments, normalize_training_plan_answer, training_plan_instruction
+from pengucoach.llm.usage import quality_budget, model_pricing, calculate_cost_eur
+from pengucoach.training_plan.generation import merge_plan_segments, training_plan_instruction
 from pengucoach.training_plan.structured import TrainingPlanDocument, extract_structured_plan, render_plan_markdown
 from pengucoach.training_plan.schema import generation_schema
 from pengucoach.weather.service import build_coach_weather_context, build_training_weather_context
@@ -26,6 +29,45 @@ from worker.celery_app import app
 
 ProgressCallback = Callable[[dict[str, Any]], None]
 CancelCheck = Callable[[], bool]
+
+
+@asynccontextmanager
+async def _session(db_override=None):
+    if db_override is not None:
+        yield db_override
+    else:
+        async with SessionLocal() as db:
+            yield db
+
+
+async def _tracked_chat(db, messages, context, locale, **kwargs):
+    """Record unreported/billable interruptions as unknown, never zero-cost success."""
+    try:
+        return await chat(db, messages, context, locale, **kwargs)
+    except (httpx.HTTPError, AiGenerationCancelled, AiProviderResponseError, OpenRouterError) as exc:
+        if isinstance(exc, AiGenerationCancelled) and not exc.request_sent:
+            raise
+        selected = await resolve_model(db, kwargs.get("task", "coach_chat"),
+            local_only=kwargs.get("local_only", False), model_id=kwargs.get("model_id"))
+        if selected:
+            provider, model = selected
+            user_id = db.info.get("ai_user_id")
+            if user_id:
+                reported = exc.answer if isinstance(exc, AiGenerationCancelled) and exc.answer else {}
+                if isinstance(exc, AiProviderResponseError) and exc.usage:
+                    reported = {"usage": exc.usage, "usage_complete": all(isinstance(exc.usage.get(k), int) for k in ("input_tokens", "output_tokens"))}
+                pricing = model_pricing(model.metadata_json or {})
+                details = dict(user_id=user_id, task_type=kwargs.get("task", "coach_chat"), model_id=model.id,
+                    provider_name=provider.name, model_name=model.display_name, prompt="Interrupted AI request", content="",
+                    max_output_tokens=kwargs.get("requested_max_tokens"), metadata_json={"usage": reported.get("usage") or {
+                        "input_tokens": None, "output_tokens": None, "total_tokens": None},
+                        "usage_complete": reported.get("usage_complete", False), "pricing": pricing,
+                        "cost_eur": reported.get("cost_eur", calculate_cost_eur(reported.get("usage"), pricing)), "request_status": "cancelled" if isinstance(exc, AiGenerationCancelled) else "failed",
+                        "_usage_only": True, "error_code": type(exc).__name__})
+                await db.rollback()
+                db.add(AiRun(**details))
+                await db.commit()
+        raise
 
 
 def _u(value: str | None) -> uuid.UUID | None:
@@ -96,6 +138,9 @@ def _answer_metadata(answer: dict[str, Any], locale: str, quality_profile: str, 
         "continuation": answer.get("continuation", {"available": False, "revision": 0}),
         "empty_due_to_limit": answer.get("empty_due_to_limit", False),
         "usage": answer.get("usage", {}),
+        "usage_complete": answer.get("usage_complete", True),
+        "messages_truncated": answer.get("messages_truncated", False),
+        "provider_timing": answer.get("provider_timing", {}),
         "context_chars": answer.get("context_chars"),
         "context_estimated_tokens": answer.get("context_estimated_tokens"),
         "context_window_tokens": answer.get("context_window_tokens"),
@@ -122,8 +167,10 @@ async def _activity_analysis(
     *,
     progress_callback: ProgressCallback | None = None,
     cancel_check: CancelCheck | None = None,
+    db_override=None,
 ) -> dict[str, Any]:
-    async with SessionLocal() as db:
+    async with _session(db_override) as db:
+        db.info["ai_user_id"] = uuid.UUID(user_id)
         user = await db.get(User, uuid.UUID(user_id))
         if not user:
             raise RuntimeError("USER_NOT_FOUND")
@@ -135,7 +182,7 @@ async def _activity_analysis(
         config = await task_settings(db, "activity_analysis", locale)
         prompt = str(payload.get("prompt") or config["default_prompt"]).strip()
         user_message = _analysis_scope_message(activity_id, lookback_days, locale)
-        answer = await chat(
+        answer = await _tracked_chat(
             db,
             [{"role": "user", "content": user_message}],
             context,
@@ -179,8 +226,10 @@ async def _coach_chat(
     *,
     progress_callback: ProgressCallback | None = None,
     cancel_check: CancelCheck | None = None,
+    db_override=None,
 ) -> dict[str, Any]:
-    async with SessionLocal() as db:
+    async with _session(db_override) as db:
+        db.info["ai_user_id"] = uuid.UUID(user_id)
         user = await db.get(User, uuid.UUID(user_id))
         if not user:
             raise RuntimeError("USER_NOT_FOUND")
@@ -219,7 +268,7 @@ async def _coach_chat(
         if weather_context is not None:
             context["weather_forecast"] = weather_context
         local_only = await _privacy(db, user)
-        answer = await chat(
+        answer = await _tracked_chat(
             db,
             messages,
             context,
@@ -267,22 +316,29 @@ async def _coach_chat(
 async def _persist_plan(db, user, payload, answer, content, metadata, locale):
     from pengucoach.llm.continuation import total_usage
     root_id = _u(payload.get("_continue_run_id"))
-    run = await db.get(AiRun, root_id) if root_id else None
+    run = await db.scalar(select(AiRun).where(AiRun.id == root_id, AiRun.user_id == user.id)
+        .with_for_update().execution_options(populate_existing=True)) if root_id else None
     if root_id and (not run or run.user_id != user.id or run.task_type != "training_plan"):
         raise RuntimeError("AI_RUN_NOT_FOUND")
     if run:
-        old = run.metadata_json or {}
-        metadata["usage"] = total_usage(old.get("usage") or {}, metadata.get("usage") or {})
-        a, b = old.get("cost_eur"), metadata.get("cost_eur")
+        old = payload.get("_persistence_base", run.metadata_json or {})
+        if (run.metadata_json.get("continuation") or {}).get("revision", 0) != (old.get("continuation") or {}).get("revision", 0):
+            raise RuntimeError("AI_RUN_CHANGED_RELOAD")
+        new_usage = metadata.get("usage") or {}
+        metadata["usage"] = total_usage(old.get("usage") or {}, metadata.get("usage") or {}) if old else metadata.get("usage", {})
+        a, b = old.get("cost_eur") if old else 0, metadata.get("cost_eur")
         metadata["cost_eur"] = a+b if a is not None and b is not None else None
         metadata["continuation"]["revision"] = (old.get("continuation") or {}).get("revision", 0)
         metadata["generation_calls"] = [*(old.get("generation_calls") or []), *(metadata.get("generation_calls") or [])]
         metadata["elapsed_seconds"] = (old.get("elapsed_seconds") or 0)+(metadata.get("elapsed_seconds") or 0)
         tokens = metadata["usage"].get("output_tokens")
         metadata["tokens_per_second"] = round(tokens/metadata["elapsed_seconds"], 3) if isinstance(tokens, int) and metadata["elapsed_seconds"] > 0 else None
-        metadata["continuation_calls"] = [*(old.get("continuation_calls") or []), {"usage": answer.get("usage"), "max_output_tokens": answer.get("max_output_tokens")}]
-        if old.get("_continuation_job"):
-            metadata["_continuation_job"] = old["_continuation_job"]
+        if old:
+            metadata["continuation_calls"] = [*(old.get("continuation_calls") or []), {"usage": new_usage, "max_output_tokens": answer.get("max_output_tokens")}]
+        current = run.metadata_json or {}
+        if current.get("_continuation_job"):
+            metadata["_continuation_job"] = current["_continuation_job"]
+        metadata["usage_complete"] = old.get("usage_complete", True) and metadata.get("usage_complete", True)
         run.content, run.metadata_json, run.max_output_tokens = content, metadata, answer["max_output_tokens"]
     else:
         run = AiRun(user_id=user.id, task_type="training_plan", model_id=uuid.UUID(answer["model_id"]),
@@ -297,15 +353,17 @@ async def _persist_plan(db, user, payload, answer, content, metadata, locale):
         "continuation": metadata.get("continuation"), "goal": metadata.get("goal"), "created_at": run.created_at.isoformat()}
 
 
-async def _save_plan_draft(db, user, payload, context, answer, segments, locale, calls=None, usage=None, cost=None, validation_error=None):
+async def _save_plan_draft(db, user, payload, context, answer, segments, locale, calls=None, usage=None, cost=None, validation_error=None, reason=None):
     state = {"context": context, "segments": [{**p.model_dump(mode="json"), "weeks": context["goal"]["weeks"]} for p in segments]}
     metadata = _answer_metadata(answer, locale, str(payload.get("quality_profile") or "standard"),
         goal=context["goal"], structured_plan=None, structured_plan_valid=False,
         structured_plan_error=validation_error or "TOKEN_LIMIT_DRAFT", draft=True, _request={**public(payload), "prompt": payload.get("_base_prompt") or payload.get("prompt")}, _plan_state=json_value(state))
     metadata["truncated"] = bool(answer.get("truncated"))
-    metadata["continuation"] = {"available": True, "revision": 0,
-        "reason": "invalid_plan" if validation_error and not answer.get("truncated") else "token_limit",
-        "additional_tokens": 0 if validation_error and not answer.get("truncated") else 8000}
+    reason = reason or ("invalid_plan" if validation_error and not answer.get("truncated") else "token_limit")
+    metadata["generation_in_progress"] = reason == "in_progress"
+    metadata["usage_complete"] = all(isinstance((usage or answer.get("usage") or {}).get(k), int) for k in ("input_tokens", "output_tokens"))
+    metadata["continuation"] = {"available": reason != "in_progress", "revision": 0,
+        "reason": reason, "additional_tokens": 0 if reason in {"invalid_plan", "interrupted", "in_progress"} else 8000}
     metadata["validated_weeks"] = max((s.week for p in segments for s in p.sessions), default=0)
     if usage is not None:
         metadata["usage"] = usage
@@ -319,362 +377,202 @@ async def _save_plan_draft(db, user, payload, context, answer, segments, locale,
     return await _persist_plan(db, user, payload, answer, content, metadata, locale)
 
 
-async def _training_plan(
-    user_id: str,
-    payload: dict[str, Any],
-    *,
-    progress_callback: ProgressCallback | None = None,
-    cancel_check: CancelCheck | None = None,
-) -> dict[str, Any]:
-    async with SessionLocal() as db:
+async def _training_plan(user_id: str, payload: dict[str, Any], *, progress_callback=None, cancel_check=None, db_override=None):
+    async with _session(db_override) as db:
         user = await db.get(User, uuid.UUID(user_id))
         if not user:
             raise RuntimeError("USER_NOT_FOUND")
         locale = str(payload.get("locale") or user.locale or "de")
         context_days = int(payload.get("context_days") or 7)
-        context_data = payload.get("context_data") if isinstance(payload.get("context_data"), dict) else {}
-        if _context_selection(payload).get("include_training", True):
-            from worker.tasks.execution import refresh_user
-            await refresh_user(db, user)
-        context = await build_training_plan_context(db, user, days=context_days, **_context_selection(payload))
-        await add_personal_context(db, user, context, payload)
-        start_date = date.fromisoformat(str(payload["start_date"])) if payload.get("start_date") else None
-        context["goal"] = {
-            "goal_type": payload.get("goal_type", "hybrid"),
-            "goal_text": payload.get("goal_text", ""),
-            "experience": payload.get("experience", "intermediate"),
-            "weeks": int(payload.get("weeks", 8)),
-            "days_per_week": int(payload.get("days_per_week", 4)),
-            "session_minutes": int(payload.get("session_minutes", 60)),
-            "equipment": payload.get("equipment", ""),
-            "constraints": payload.get("constraints", ""),
-            "start_date": start_date.isoformat() if start_date else None,
-            "source": "user",
-        }
-        weather_context = await build_training_weather_context(
-            db, user, include=payload.get("include_weather"), plan_start_date=start_date
-        )
-        if weather_context is not None:
-            context["weather_forecast"] = weather_context
-        if payload.get("_resume_plan", {}).get("context"):
-            context = payload["_resume_plan"]["context"]
+        resume = payload.get("_resume_plan") or {}
+        if resume.get("context"):
+            context = copy.deepcopy(resume["context"])
+            weather_context = context.get("weather_forecast")
+        else:
+            if _context_selection(payload).get("include_training", True):
+                from worker.tasks.execution import refresh_user
+                await refresh_user(db, user)
+            context = await build_training_plan_context(db, user, days=context_days, **_context_selection(payload))
+            await add_personal_context(db, user, context, payload)
+            start_date = date.fromisoformat(str(payload["start_date"])) if payload.get("start_date") else None
+            context["goal"] = {"goal_type": payload.get("goal_type", "hybrid"), "goal_text": payload.get("goal_text", ""),
+                "experience": payload.get("experience", "intermediate"), "weeks": int(payload.get("weeks", 8)),
+                "days_per_week": int(payload.get("days_per_week", 4)), "session_minutes": int(payload.get("session_minutes", 60)),
+                "equipment": payload.get("equipment", ""), "constraints": payload.get("constraints", ""),
+                "start_date": start_date.isoformat() if start_date else None, "source": "user"}
+            weather_context = await build_training_weather_context(db, user, include=payload.get("include_weather"), plan_start_date=start_date)
+            if weather_context is not None:
+                context["weather_forecast"] = weather_context
         local_only = await _privacy(db, user)
         config = await task_settings(db, "training_plan", locale)
         prompt = str(payload.get("prompt") or config["default_prompt"]).strip()
         payload = {**payload, "_base_prompt": prompt}
+        root = await db.get(AiRun, _u(payload.get("_continue_run_id"))) if payload.get("_continue_run_id") else None
+        if payload.get("_continue_run_id") and (not root or root.user_id != user.id or root.task_type != "training_plan"):
+            raise RuntimeError("AI_RUN_NOT_FOUND")
+        payload["_persistence_base"] = copy.deepcopy(root.metadata_json or {}) if root else {}
         g = context["goal"]
-        total_weeks = int(g["weeks"])
-        days_per_week = int(g["days_per_week"])
-        expected_sessions = max(1, total_weeks * days_per_week)
-        requested_max = int(payload.get("max_tokens") or config["max_output_tokens"])
+        total_weeks, days_per_week = int(g["weeks"]), int(g["days_per_week"])
+        expected_sessions = total_weeks * days_per_week
+        quality = str(payload.get("quality_profile") or "standard")
+        requested_max = int(payload.get("max_tokens") or quality_budget("training_plan", config["max_output_tokens"], quality))
+        selected = await resolve_model(db, "training_plan", local_only=local_only, model_id=_u(payload.get("model_id")))
+        if not selected:
+            raise RuntimeError("NO_ELIGIBLE_LLM_MODEL_CONFIGURED")
+        provider, model = selected
+        payload["model_id"] = str(model.id)
         plan_schema = TrainingPlanDocument.model_json_schema()
+        chunk_weeks = int(resume.get("chunk_weeks") or (max(1, min(3, 10 // days_per_week)) if expected_sessions > 12 else total_weeks))
+        chunk_count = math.ceil(total_weeks / chunk_weeks)
+        segments = [TrainingPlanDocument.model_validate(x) for x in resume.get("segments", [])]
+        initial_segment_count = len(segments)
+        usage_totals = {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}
+        generation_calls = []
+        total_cost, elapsed_total = 0.0, 0.0
+        costs_complete = True
+        last_answer = {"content": "", "model_id": str(model.id), "provider": provider.name, "model": model.display_name,
+            "max_output_tokens": requested_max, "continuation": {"available": False, "revision": 0}, "usage": {}}
+        previous_outline = [{"week": s.week, "day": s.day, "sport": s.sport, "name": s.name, "duration_min": s.duration_min} for p in segments for s in p.sessions]
+        any_adjusted, any_context_truncated = False, False
 
-        def base_message(weeks: int) -> str:
-            if locale.startswith("de"):
-                return (
-                    f"Erstelle einen {weeks}-Wochen-Trainingsplan für '{g['goal_type']}', "
-                    f"{days_per_week} Trainingstage pro Woche, etwa {g['session_minutes']} Minuten pro Einheit. "
-                    f"Ziel: {g['goal_text'] or 'keine Zusatzangabe'}. Equipment: {g['equipment'] or 'nicht angegeben'}. "
-                    f"Einschränkungen: {g['constraints'] or 'keine'}. Erfahrung: {g['experience']}. "
-                    f"Nutze ausschließlich den ausgewählten Trainingskontext der letzten {context_days} Tage. "
-                    f"Planstart: {g.get('start_date') or 'nicht festgelegt'}."
-                )
-            return (
-                f"Create a {weeks}-week training plan for goal '{g['goal_type']}', "
-                f"{days_per_week} training days per week and about {g['session_minutes']} minutes per session. "
-                f"Goal details: {g['goal_text'] or 'none supplied'}. Equipment: {g['equipment'] or 'not specified'}. "
-                f"Constraints: {g['constraints'] or 'none supplied'}. Experience: {g['experience']}. "
-                f"Use only the selected training context from the last {context_days} days. "
-                f"Plan start: {g.get('start_date') or 'not set'}."
-            )
-
-        # Large structured plans are generated in small week segments. This keeps
-        # local models from spending the entire output budget on a single huge JSON
-        # document. PenguCoach validates every segment and merges it deterministically.
-        chunked = expected_sessions > 12
-        if not chunked:
-            answer = await chat(
-                db,
-                [{"role": "user", "content": base_message(total_weeks)}],
-                context,
-                locale,
-                task="training_plan",
-                local_only=local_only,
-                model_id=_u(payload.get("model_id")),
-                instruction_prompt=training_plan_instruction(prompt),
-                requested_max_tokens=requested_max,
-                requested_context_window_tokens=payload.get("context_window_tokens"),
-                progress_callback=progress_callback,
-                cancel_check=cancel_check,
-                response_format_schema=generation_schema(total_weeks, days_per_week, plan_schema),
-                quality_profile=str(payload.get("quality_profile") or "standard"),
-            recover_limit=True,
-                minimum_output_tokens=payload.get("_minimum_retry_output"),
-            )
-            if cancel_check and cancel_check():
-                raise AiGenerationCancelled("AI_JOB_CANCELLED")
-            content, plan_meta = normalize_training_plan_answer(answer, locale)
-            if not plan_meta.get("structured_plan_valid"):
-                return await _save_plan_draft(db, user, payload, context, answer, [], locale,
-                    validation_error=plan_meta.get("structured_plan_error"))
-            if plan_meta.get("structured_plan_valid"):
-                answer["continuation"] = {"available": False, "revision": 0}
-            generation_chunks = 1
-        else:
-            chunk_weeks = max(1, min(3, 10 // max(1, days_per_week)))
-            chunk_count = math.ceil(total_weeks / chunk_weeks)
-            segments = [TrainingPlanDocument.model_validate(x) for x in payload.get("_resume_plan", {}).get("segments", [])]
-            usage_totals = {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}
-            generation_calls: list[dict[str, Any]] = []
-            total_cost_eur = 0.0
-            total_elapsed_seconds = 0.0
-            timed_output_tokens = 0
-            priced_calls = 0
-            last_answer: dict[str, Any] | None = None
-            previous_outline: list[dict[str, Any]] = [{"week": s.week, "day": s.day, "sport": s.sport, "name": s.name, "duration_min": s.duration_min} for p in segments for s in p.sessions]
-            any_budget_adjusted = False
-            any_context_truncated = False
-
-            for chunk_index in range(chunk_count):
-                if chunk_index < len(payload.get("_resume_plan", {}).get("segments", [])):
-                    continue
-                if cancel_check and cancel_check():
-                    raise AiGenerationCancelled("AI_JOB_CANCELLED")
-                start_week = chunk_index * chunk_weeks + 1
-                end_week = min(total_weeks, start_week + chunk_weeks - 1)
-                local_weeks = end_week - start_week + 1
-                segment_schema = generation_schema(local_weeks, days_per_week, plan_schema)
-                segment_context = copy.deepcopy(context)
-                segment_goal = dict(g)
-                segment_goal.update({
-                    "weeks": local_weeks,
-                    "plan_total_weeks": total_weeks,
-                    "plan_week_start": start_week,
-                    "plan_week_end": end_week,
-                })
-                segment_context["goal"] = segment_goal
-                if previous_outline:
-                    segment_context["previous_plan_segment"] = previous_outline[-12:]
-                segment_rules = (
-                    f"\n\nSEGMENT GENERATION: This is overall weeks {start_week}-{end_week} of a {total_weeks}-week plan. "
-                    f"Return only these {local_weeks} weeks. In the JSON use local week numbers 1..{local_weeks}; "
-                    "PenguCoach will remap them to the absolute calendar weeks. Preserve sensible progression from the "
-                    "previous_plan_segment context when supplied. Do not repeat earlier weeks. "
-                    f"Return at least {days_per_week} actual training sessions in EACH local week "
-                    f"and at least {local_weeks * days_per_week} sessions in total. Count them before finishing."
-                )
-                segment_instruction = training_plan_instruction(prompt, segment_rules)
-                if locale.startswith("de"):
-                    segment_message = base_message(local_weeks) + (
-                        f" Erzeuge jetzt ausschließlich den Abschnitt für Gesamtwoche {start_week} bis {end_week} von {total_weeks}. "
-                        f"Im JSON nummerierst du diese Abschnittswochen lokal von 1 bis {local_weeks}."
-                    )
+        def account_call(candidate, attempt, error, start_week, end_week, chunk_index):
+            nonlocal total_cost, elapsed_total, costs_complete
+            usage = candidate.get("usage") or {}
+            for key in usage_totals:
+                value = usage.get(key)
+                if isinstance(value, int) and isinstance(usage_totals[key], int):
+                    usage_totals[key] += value
                 else:
-                    segment_message = base_message(local_weeks) + (
-                        f" Generate only the segment for overall weeks {start_week} through {end_week} of {total_weeks}. "
-                        f"Number these segment weeks locally from 1 through {local_weeks} in the JSON."
-                    )
-                segment_sessions = max(1, local_weeks * days_per_week)
-                # Max. Antwort is a per-call ceiling, not a total budget shared
-                # across all plan chunks. Give each segment enough room for a
-                # complete structured document; if that compact attempt still
-                # fails, the retry below uses the user's full per-call budget.
-                compact_budget = requested_max if payload.get("_continue_run_id") else min(requested_max, max(3500, segment_sessions * 420 + 800))
+                    usage_totals[key] = None
+            cost = candidate.get("cost_eur")
+            costs_complete = costs_complete and isinstance(cost, (int, float))
+            if isinstance(cost, (int, float)):
+                total_cost += cost
+            elapsed_total += candidate.get("elapsed_seconds") or 0
+            generation_calls.append({"chunk_index": chunk_index + 1, "chunk_count": chunk_count, "week_start": start_week,
+                "week_end": end_week, "attempt": attempt, "max_output_tokens": candidate.get("max_output_tokens"),
+                "usage": usage, "cost_eur": cost, "elapsed_seconds": candidate.get("elapsed_seconds"),
+                "tokens_per_second": candidate.get("tokens_per_second"), "provider_timing": candidate.get("provider_timing"),
+                "stop_reason": candidate.get("stop_reason"), "truncated": bool(candidate.get("truncated")),
+                "context_truncated": candidate.get("context_truncated", False), "validation_valid": error is None,
+                "validation_error": error, "usage_complete": all(isinstance(usage.get(k), int) for k in ("input_tokens", "output_tokens"))})
 
-                segment_attempt = 1
-                retry_reason = None
+        async def save_draft(answer, error, reason=None):
+            result = await _save_plan_draft(db, user, payload, context, answer, segments, locale,
+                generation_calls, usage_totals, round(total_cost, 8) if costs_complete else None,
+                validation_error=error, reason=reason)
+            payload["_continue_run_id"] = result["run_id"]
+            run = await db.get(AiRun, uuid.UUID(result["run_id"]))
+            meta = dict(run.metadata_json)
+            meta["_plan_state"] = {**meta["_plan_state"], "chunk_weeks": chunk_weeks}
+            run.metadata_json = meta
+            await db.commit()
+            return result
 
-                def segment_progress(meta: dict[str, Any], *, ci=chunk_index + 1, cc=chunk_count) -> None:
+        for chunk_index in range(len(segments), chunk_count):
+            if cancel_check and cancel_check():
+                if segments:
+                    await save_draft({**last_answer, "content": ""}, "AI_JOB_CANCELLED", "interrupted")
+                raise AiGenerationCancelled()
+            start_week = chunk_index * chunk_weeks + 1
+            end_week = min(total_weeks, start_week + chunk_weeks - 1)
+            local_weeks = end_week - start_week + 1
+            segment_sessions = local_weeks * days_per_week
+            segment_context = copy.deepcopy(context)
+            segment_context["goal"] = {**g, "weeks": local_weeks, "plan_total_weeks": total_weeks,
+                "plan_week_start": start_week, "plan_week_end": end_week}
+            if previous_outline:
+                segment_context["previous_plan_segment"] = previous_outline[-12:]
+            # Keep the instruction/data prefix stable for provider prefix caches.
+            segment_message = (f"Generate overall weeks {start_week}-{end_week} of {total_weeks}. "
+                f"Use local week numbers 1..{local_weeks}; return at least {days_per_week} actual training sessions in EACH week, "
+                f"{segment_sessions} total. Follow goal and previous_plan_segment in the supplied context. "
+                "Do not repeat earlier weeks. Count sessions before finishing.")
+            compact_budget = requested_max if root or expected_sessions <= 12 else min(requested_max, max(3500, segment_sessions * 420 + 800))
+            segment_error = None
+            segment = None
+            for segment_attempt in (1, 2):
+                def segment_progress(meta):
                     if progress_callback:
-                        progress_callback({**meta, "chunk_index": ci, "chunk_count": cc,
-                            "attempt": segment_attempt, "retry_reason": retry_reason})
+                        progress_callback({**meta, "chunk_index": chunk_index + 1, "chunk_count": chunk_count,
+                            "attempt": segment_attempt, "retry_reason": segment_error})
+                retry_budget = requested_max
+                instruction = training_plan_instruction(prompt)
+                message = segment_message
+                if segment_attempt == 2:
+                    message += (f" Previous attempt was invalid: {segment_error}. Correct that error. "
+                        "Return compact, complete JSON. Interval blocks use type=repeat and explicit repetitions plus timed/distance children. "
+                        "Strength uses numeric reps, duration_seconds or reps_in_reserve, never conflicting targets or zero reps.")
+                started = time.monotonic()
+                try:
+                    answer_part = await chat(db, [{"role": "user", "content": message}], segment_context, locale,
+                        task="training_plan", local_only=local_only, model_id=model.id, instruction_prompt=instruction,
+                        requested_max_tokens=compact_budget if segment_attempt == 1 else retry_budget,
+                        requested_context_window_tokens=payload.get("context_window_tokens"), progress_callback=segment_progress,
+                        cancel_check=cancel_check, response_format_schema=generation_schema(local_weeks, days_per_week, plan_schema),
+                        quality_profile=quality, recover_limit=True, minimum_output_tokens=payload.get("_minimum_retry_output"))
+                except (httpx.HTTPError, AiGenerationCancelled, RuntimeError) as exc:
+                    if isinstance(exc, RuntimeError) and str(exc).startswith(("CONTINUATION_", "CONTEXT_TOO_SMALL", "USER_MESSAGE_TOO_LONG", "NO_ELIGIBLE_")):
+                        if len(segments) > initial_segment_count:
+                            return await save_draft({**last_answer, "content": ""}, str(exc), "interrupted")
+                        raise
+                    failed = {**last_answer, "content": "", "usage": {}, "cost_eur": None,
+                        "max_output_tokens": compact_budget if segment_attempt == 1 else retry_budget,
+                        "elapsed_seconds": round(time.monotonic()-started, 3), "truncated": False,
+                        "stop_reason": "cancelled" if isinstance(exc, AiGenerationCancelled) else "request_failed"}
+                    if isinstance(exc, AiGenerationCancelled) and exc.answer:
+                        failed = {**failed, **exc.answer, "stop_reason": "cancelled"}
+                    elif isinstance(exc, AiProviderResponseError) and exc.usage:
+                        failed["usage"] = exc.usage
+                    account_call(failed, segment_attempt, type(exc).__name__, start_week, end_week, chunk_index)
+                    error_code = "AI_JOB_CANCELLED" if isinstance(exc, AiGenerationCancelled) else (
+                        f"AI_HTTP_ERROR_{exc.response.status_code}" if isinstance(exc, httpx.HTTPStatusError) else
+                        str(exc) if isinstance(exc, (OpenRouterError, AiProviderResponseError)) else "AI_REQUEST_INTERRUPTED:"+type(exc).__name__)
+                    result = await save_draft(failed, error_code, "interrupted")
+                    if isinstance(exc, AiGenerationCancelled):
+                        raise
+                    return result
 
-                answer_part = await chat(
-                    db,
-                    [{"role": "user", "content": segment_message}],
-                    segment_context,
-                    locale,
-                    task="training_plan",
-                    local_only=local_only,
-                    model_id=_u(payload.get("model_id")),
-                    instruction_prompt=segment_instruction,
-                    requested_max_tokens=compact_budget,
-                    requested_context_window_tokens=payload.get("context_window_tokens"),
-                    progress_callback=segment_progress,
-                    cancel_check=cancel_check,
-                    response_format_schema=segment_schema,
-                    quality_profile=str(payload.get("quality_profile") or "standard"),
-            recover_limit=True,
-                minimum_output_tokens=payload.get("_minimum_retry_output"),
-                )
-                def account_call(candidate: dict[str, Any], attempt: int, error: str | None) -> None:
-                    nonlocal total_cost_eur, total_elapsed_seconds, timed_output_tokens, priced_calls
-                    call_usage = candidate.get("usage") if isinstance(candidate.get("usage"), dict) else {}
-                    for key in usage_totals:
-                        value = call_usage.get(key)
-                        if isinstance(value, int):
-                            usage_totals[key] += value
-                    call_cost = candidate.get("cost_eur")
-                    if call_cost is not None:
-                        total_cost_eur += float(call_cost)
-                        priced_calls += 1
-                    elapsed = candidate.get("elapsed_seconds")
-                    if isinstance(elapsed, (int, float)) and float(elapsed) >= 0:
-                        total_elapsed_seconds += float(elapsed)
-                        if isinstance(call_usage.get("output_tokens"), int):
-                            timed_output_tokens += int(call_usage["output_tokens"])
-                    generation_calls.append({
-                        "chunk_index": chunk_index + 1,
-                        "chunk_count": chunk_count,
-                        "week_start": start_week,
-                        "week_end": end_week,
-                        "attempt": attempt,
-                        "max_output_tokens": candidate.get("max_output_tokens"),
-                        "usage": call_usage,
-                        "cost_eur": call_cost,
-                        "elapsed_seconds": candidate.get("elapsed_seconds"),
-                        "tokens_per_second": candidate.get("tokens_per_second"),
-                        "stop_reason": candidate.get("stop_reason"),
-                        "truncated": bool(candidate.get("truncated")),
-                        "validation_valid": error is None,
-                        "validation_error": error,
-                        "context_truncated": candidate.get("context_truncated", False),
-                        "provider_timing": candidate.get("provider_timing"),
-                    })
-
-                def parse_segment(candidate: dict[str, Any]):
-                    parsed, parsed_error = extract_structured_plan(str(candidate.get("content") or ""))
-                    if parsed is not None and parsed.weeks != local_weeks:
-                        return None, f"SEGMENT_WEEK_COUNT:{parsed.weeks}!={local_weeks}"
-                    if parsed is not None and len(parsed.sessions) < segment_sessions:
-                        return None, f"SEGMENT_SESSION_COUNT:{len(parsed.sessions)}<{segment_sessions}"
+                def parse_segment(candidate):
+                    from pengucoach.training_plan.generation import validate_plan_completeness
+                    parsed, error = extract_structured_plan(str(candidate.get("content") or ""))
                     if parsed is not None:
-                        missing = [f"{w}:{sum(s.week == w for s in parsed.sessions)}/{days_per_week}"
-                            for w in range(1, local_weeks + 1) if sum(s.week == w for s in parsed.sessions) < days_per_week]
-                        if missing:
-                            return None, "SEGMENT_WEEK_SESSION_COUNT:" + ",".join(missing)
-                    return parsed, parsed_error
+                        error = validate_plan_completeness(parsed, local_weeks, days_per_week)
+                    return (None, error) if error else (parsed, None)
 
-                # Parse before treating an exact token-cap finish as a failure: a
-                # model can land exactly on its cap after already closing valid JSON.
                 segment, segment_error = parse_segment(answer_part)
-                account_call(answer_part, 1, segment_error)
-                # Retry only when the plan is incomplete/invalid. A valid schema
-                # document is accepted even if Ollama reports a length boundary.
-                needs_retry = segment is None
-                if needs_retry:
-                    segment_attempt = 2
-                    retry_reason = segment_error
-                    retry_budget = requested_max
-                    answer_part = await chat(
-                        db,
-                        [{"role": "user", "content": segment_message}],
-                        segment_context,
-                        locale,
-                        task="training_plan",
-                        local_only=local_only,
-                        model_id=_u(payload.get("model_id")),
-                        instruction_prompt=training_plan_instruction(
-                            prompt, segment_rules
-                            + "\nThe previous attempt was incomplete or invalid. Return only one compact, complete JSON object; "
-                              "shorten wording aggressively before omitting any requested session."
-                            + f"\nValidation feedback: {segment_error}. Use local week numbers and all requested sessions. "
-                              "Interval blocks: type=repeat with an explicit repeat count >=2 and child steps; "
-                              "single interval/work/recovery steps have no repeat count or children. Put targets on children. "
-                              "Strength: integer reps; a range uses reps plus reps_max; holds use duration_seconds with reps=null; "
-                              "max-N uses reps_in_reserve=N with reps=null. Never use zero or free text in numeric fields."
-                        ),
-                        requested_max_tokens=retry_budget,
-                        requested_context_window_tokens=payload.get("context_window_tokens"),
-                        progress_callback=segment_progress,
-                        cancel_check=cancel_check,
-                        response_format_schema=segment_schema,
-                        quality_profile=str(payload.get("quality_profile") or "standard"),
-            recover_limit=True,
-                minimum_output_tokens=payload.get("_minimum_retry_output"),
-                    )
-                    segment, segment_error = parse_segment(answer_part)
-                    account_call(answer_part, 2, segment_error)
-                if segment is None:
-                    return await _save_plan_draft(db, user, payload, context, answer_part, segments, locale,
-                        generation_calls, usage_totals, round(total_cost_eur, 8) if priced_calls else None,
-                        validation_error=f"TRAINING_PLAN_SEGMENT_INVALID:{start_week}-{end_week}:{segment_error}")
-                for session in segment.sessions:
-                    session.week += start_week - 1
-                segments.append(segment)
-                payload.pop("_minimum_retry_output", None)
-                previous_outline.extend({
-                    "week": session.week,
-                    "day": session.day,
-                    "sport": session.sport,
-                    "name": session.name,
-                    "duration_min": session.duration_min,
-                } for session in segment.sessions)
-                any_budget_adjusted = any_budget_adjusted or bool(answer_part.get("output_budget_adjusted"))
-                any_context_truncated = any_context_truncated or bool(answer_part.get("context_truncated"))
+                account_call(answer_part, segment_attempt, segment_error, start_week, end_week, chunk_index)
                 last_answer = answer_part
+                if segment is not None:
+                    break
+            if segment is None:
+                return await save_draft(answer_part, f"TRAINING_PLAN_SEGMENT_INVALID:{start_week}-{end_week}:{segment_error}")
+            for session in segment.sessions:
+                session.week += start_week - 1
+            segments.append(segment)
+            payload.pop("_minimum_retry_output", None)
+            previous_outline.extend({"week": s.week, "day": s.day, "sport": s.sport, "name": s.name, "duration_min": s.duration_min} for s in segment.sessions)
+            any_adjusted |= bool(answer_part.get("output_budget_adjusted"))
+            any_context_truncated |= bool(answer_part.get("context_truncated"))
+            if chunk_index < chunk_count - 1:
+                await save_draft({**answer_part, "content": ""}, "PLAN_GENERATION_IN_PROGRESS", "in_progress")
 
-            merged = merge_plan_segments(segments, total_weeks)
-            content = render_plan_markdown(merged, locale)
-            plan_meta = {
-                "structured_plan": merged.model_dump(mode="json"),
-                "structured_plan_valid": True,
-                "structured_plan_error": None,
-            }
-            assert last_answer is not None
-            answer = {
-                **last_answer,
-                "content": content,
-                "usage": usage_totals,
-                "cost_eur": round(total_cost_eur, 8) if priced_calls else None,
-                "elapsed_seconds": round(total_elapsed_seconds, 3),
-                "tokens_per_second": round(timed_output_tokens / total_elapsed_seconds, 3) if total_elapsed_seconds > 0 else None,
-                "generation_calls": generation_calls,
-                "max_output_tokens": requested_max,
-                "requested_max_output_tokens": requested_max,
-                "output_budget_adjusted": any_budget_adjusted,
-                "context_truncated": any_context_truncated,
-                "truncated": False,
-                "continuation": {"available": False, "revision": 0},
-                "stop_reason": "chunked_complete",
-                "generation_chunks": chunk_count,
-            }
-            generation_chunks = chunk_count
-
-        metadata = {
-            "_resume": answer.get("_resume"),
-            "continuation": answer.get("continuation", {"available": False, "revision": 0}),
-            "goal": context["goal"],
-            "training_context": {
-                "days": context_days,
-                "data": context_data,
-                "weather": weather_context is not None and bool(weather_context.get("available")),
-                "weather_location": weather_context.get("location") if weather_context else None,
-            },
-            "usage": answer.get("usage", {}),
-            "context_chars": answer.get("context_chars"),
-            "context_estimated_tokens": answer.get("context_estimated_tokens"),
-            "context_window_tokens": answer.get("context_window_tokens"),
-            "context_budget_tokens": answer.get("context_budget_tokens"),
-            "requested_max_output_tokens": answer.get("requested_max_output_tokens"),
-            "output_budget_adjusted": answer.get("output_budget_adjusted", False),
-            "context_truncated": answer.get("context_truncated", False),
-            "stop_reason": answer.get("stop_reason"),
-            "truncated": answer.get("truncated", False),
-            "generation_chunks": generation_chunks,
-            "local": answer.get("local"),
-            "locale": locale,
-            "quality_profile": str(payload.get("quality_profile") or "standard"),
-            "pricing": answer.get("pricing"),
-            "cost_eur": answer.get("cost_eur"),
-            "elapsed_seconds": answer.get("elapsed_seconds"),
-            "tokens_per_second": answer.get("tokens_per_second"),
-            "generation_calls": answer.get("generation_calls", []),
-            **plan_meta,
-        }
-        metadata["_request"] = {**public(payload), "prompt": prompt}
-        if not metadata.get("truncated"):
-            metadata.pop("_resume", None)
+        merged = merge_plan_segments(segments, total_weeks)
+        content = render_plan_markdown(merged, locale)
+        answer = {**last_answer, "content": content, "usage": usage_totals,
+            "usage_complete": all(isinstance(usage_totals[k], int) for k in ("input_tokens", "output_tokens")),
+            "cost_eur": round(total_cost, 8) if costs_complete else None, "elapsed_seconds": round(elapsed_total, 3),
+            "tokens_per_second": round(usage_totals["output_tokens"]/elapsed_total, 3) if isinstance(usage_totals["output_tokens"], int) and elapsed_total > 0 else None,
+            "max_output_tokens": requested_max, "requested_max_output_tokens": requested_max,
+            "output_budget_adjusted": any_adjusted, "context_truncated": any_context_truncated,
+            "truncated": False, "continuation": {"available": False, "revision": 0},
+            "stop_reason": "chunked_complete" if chunk_count > 1 else last_answer.get("stop_reason"), "generation_chunks": chunk_count}
+        metadata = _answer_metadata(answer, locale, quality, goal=g, structured_plan=merged.model_dump(mode="json"),
+            structured_plan_valid=True, structured_plan_error=None, generation_chunks=chunk_count, generation_calls=generation_calls,
+            training_context={"days": context_days, "data": payload.get("context_data") or {},
+                "weather": bool(weather_context and weather_context.get("available")), "weather_location": (weather_context or {}).get("location")},
+            _request={**public(payload), "prompt": prompt})
+        metadata.pop("_resume", None)
         return await _persist_plan(db, user, payload, answer, content, metadata, locale)
 
 
@@ -693,7 +591,7 @@ def _run_task(self, payload: dict[str, Any], kind: str, coro_factory):
             "AI_TIMEOUT: Das Modell hat zu lange keine Daten geliefert. Bei Ollama wird die Ausgabe gestreamt; "
             "prüfe Modell/Server, wenn dieser Fehler erneut auftritt."
         ) from exc
-    except (httpx.ConnectError, httpx.ConnectTimeout, httpx.RemoteProtocolError) as exc:
+    except (httpx.ConnectError, httpx.ConnectTimeout) as exc:
         if self.request.retries < 1 and not payload.get("_no_auto_retry") and not check_cancel():
             progress({"stage": "retry", "message": "AI endpoint interrupted · retrying once", "output_tokens_estimate": 0})
             raise self.retry(exc=exc, countdown=5, max_retries=1)
@@ -746,6 +644,7 @@ async def _session_analysis(user_id, payload, *, progress_callback=None, cancel_
     from pengucoach.coach.execution import review_session
     from pengucoach.db.models import PlanSchedule, TrainingReview
     async with SessionLocal() as db:
+        db.info["ai_user_id"] = uuid.UUID(user_id)
         user = await db.get(User, uuid.UUID(user_id))
         run = await db.get(AiRun, uuid.UUID(payload['plan_id']))
         schedule = await db.get(PlanSchedule, uuid.UUID(payload['plan_id']))
@@ -769,7 +668,7 @@ async def _session_analysis(user_id, payload, *, progress_callback=None, cancel_
             'Give specific improvements and explain whether a similar future session should stay, be easier or cautiously progress. '
             'Changes are proposals requiring user approval. Never claim you changed a plan. '
             'Use sections: Goal and completion; Intervals and evidence; What went well; What to improve; Next session.')
-        answer = await chat(db, [{'role': 'user', 'content': 'Analyse this planned workout and its matched activity.'}],
+        answer = await _tracked_chat(db, [{'role': 'user', 'content': 'Analyse this planned workout and its matched activity.'}],
             context, locale, task='activity_analysis', local_only=await _privacy(db, user),
             model_id=_u(payload.get('model_id')), instruction_prompt=prompt, requested_max_tokens=payload.get('max_tokens'),
             requested_context_window_tokens=payload.get('context_window_tokens'), progress_callback=progress_callback,

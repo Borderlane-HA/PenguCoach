@@ -46,8 +46,8 @@ def test_training_plan_model_receives_effective_hard_output_budget():
     structured = Path("pengucoach/training_plan/structured.py").read_text()
     worker = Path("worker/tasks/ai.py").read_text()
     assert "HARD OUTPUT BUDGET" in llm
-    assert "expected_sessions" in llm
-    assert "NEVER omit requested weeks/sessions" in llm
+    assert "expected_sessions" in worker
+    assert "All requested weeks and training days must be present" in structured
     assert "Close the JSON object" in structured
     assert '"requested_max_output_tokens": answer.get("requested_max_output_tokens")' in worker
     assert "self.retry" in worker

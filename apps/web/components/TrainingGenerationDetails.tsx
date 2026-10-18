@@ -20,9 +20,9 @@ export default function TrainingGenerationDetails({calls,lang}:{calls:Call[];lan
       const timing=c.provider_timing??{};
       return <article className="training-generation-call" key={i}>
         <div className="training-generation-call-head"><strong>{bi(lang,"Teil","Part")} {c.chunk_index}/{c.chunk_count} · {bi(lang,"Versuch","attempt")} {c.attempt}</strong>
-          {typeof c.validation_valid==="boolean"&&<span>{c.validation_valid?bi(lang,"Gültig","Valid"):bi(lang,"Prüfung fehlgeschlagen","Validation failed")}</span>}
+          {typeof c.validation_valid==="boolean"&&<span>{c.validation_valid?bi(lang,"Gültig","Valid"):c.stop_reason==="request_failed"||c.stop_reason==="cancelled"?bi(lang,"Anfrage unterbrochen","Request interrupted"):bi(lang,"Prüfung fehlgeschlagen","Validation failed")}</span>}
         </div>
-        <p>{Number(c.usage?.input_tokens??0).toLocaleString()} in · {Number(c.usage?.output_tokens??0).toLocaleString()} out
+        <p>{c.usage?.input_tokens==null?"—":Number(c.usage.input_tokens).toLocaleString()} in · {c.usage?.output_tokens==null?"—":Number(c.usage.output_tokens).toLocaleString()} out
           {c.elapsed_seconds!=null?` · ${Number(c.elapsed_seconds).toFixed(1)}s`:""}
           {c.tokens_per_second!=null?` · ${Number(c.tokens_per_second).toFixed(1)} ${bi(lang,"out/s gesamt","out/s overall")}`:""}
           {c.cost_eur!=null?` · ${euro(Number(c.cost_eur))}`:""}

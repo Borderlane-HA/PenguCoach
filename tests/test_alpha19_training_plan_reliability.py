@@ -13,7 +13,7 @@ def test_ollama_structured_training_plan_uses_schema_and_disables_thinking():
     worker = Path("worker/tasks/ai.py").read_text()
     structured = Path("pengucoach/training_plan/structured.py").read_text()
     assert 'response_format_schema: dict[str, Any] | None = None' in llm
-    assert 'ollama_payload["think"] = False' in llm
+    assert "await ollama_think(" in llm
     assert 'ollama_payload["format"] = response_format_schema' in llm
     assert "TrainingPlanDocument.model_json_schema()" in worker
     assert "wrapper is optional" in structured
@@ -24,10 +24,10 @@ def test_training_segments_get_generous_budget_and_full_budget_retry():
     assert "max(3500, segment_sessions * 420 + 800)" in worker
     assert "retry_budget = requested_max" in worker
     assert "def parse_segment" in worker
-    assert "SEGMENT_SESSION_COUNT" in worker
+    assert "validate_plan_completeness" in worker
     # Validate JSON before saving a recoverable incomplete-plan draft.
     parse_pos = worker.index("segment, segment_error = parse_segment(answer_part)")
-    fail_pos = worker.index("return await _save_plan_draft(db, user, payload, context, answer_part")
+    fail_pos = worker.index("return await save_draft(answer_part")
     assert parse_pos < fail_pos
 
 

@@ -92,6 +92,8 @@ def calculate_cost_eur(usage: dict[str, Any] | None, pricing: dict[str, Any] | N
     if p_in is None and p_out is None:
         return None
     try:
+        if (p_in is not None and not isinstance(usage.get("input_tokens"), int)) or (p_out is not None and not isinstance(usage.get("output_tokens"), int)):
+            return None
         input_tokens = int(usage.get("input_tokens") or 0)
         output_tokens = int(usage.get("output_tokens") or 0)
         cost = input_tokens * float(p_in or 0) / 1_000_000 + output_tokens * float(p_out or 0) / 1_000_000

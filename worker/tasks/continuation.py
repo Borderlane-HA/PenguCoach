@@ -6,11 +6,11 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 
 from worker.celery_app import app
-from worker.tasks.ai import _privacy, _run_task, _training_plan
+from worker.tasks.ai import _privacy, _run_task, _training_plan, _tracked_chat
 from pengucoach.db.models import AiRun, BackgroundJob, Conversation, LlmModel, Message, User
 from pengucoach.db.session import SessionLocal
 from pengucoach.llm.continuation import append_text, merge_metadata, public
-from pengucoach.llm.service import AiGenerationCancelled, chat
+from pengucoach.llm.service import AiGenerationCancelled
 
 
 async def unlock(user_id, run_id, task_id, status):
@@ -45,7 +45,7 @@ async def _continue(user_id, payload, progress_callback=None, cancel_check=None,
                 raise RuntimeError('NO_ELIGIBLE_LLM_MODEL_CONFIGURED')
             snapshot = meta.get('_resume') or {}
             previous = run.content
-            format_retry = run.task_type == 'training_plan' and (meta.get('continuation') or {}).get('reason') == 'invalid_plan'
+            format_retry = (meta.get('continuation') or {}).get('reason') in {'invalid_plan', 'interrupted'}
             ceiling = min(65536, (model.metadata_json or {}).get('provider_max_output_tokens') or 65536)
             output = min(ceiling, (run.max_output_tokens or 8000) if format_retry else
                 (run.max_output_tokens or 0)+8000 if not previous or run.task_type == 'training_plan' else 8000)
@@ -55,7 +55,11 @@ async def _continue(user_id, payload, progress_callback=None, cancel_check=None,
             if previous and run.task_type != 'training_plan':
                 messages += [{'role': 'assistant', 'content': previous}, {'role': 'user',
                     'content': 'Continue the previous answer exactly where it stopped. Do not repeat earlier text. Finish the remaining points concisely.'}]
-            needed = len(json.dumps(source_context, default=str))//3 + sum(len(m.get('content', '')) for m in messages[-12:])//3 + output+5000
+            # Size the request from context actually sent, not unbounded raw
+            # history. Oversizing num_ctx can allocate needless Ollama KV memory.
+            context_chars = min(len(json.dumps(source_context, default=str)), snapshot.get('context_chars') or meta.get('context_chars') or 24000)
+            instruction_chars = snapshot.get('instruction_chars') or len((meta.get('_request') or {}).get('prompt') or '')+3500
+            needed = (context_chars + sum(len(m.get('content', '')) for m in messages[-12:]) + instruction_chars)//3 + output+1800
             ctx = min(model.context_window or 1048576, max(ctx, needed))
             local_only = await _privacy(db, user)
             if run.task_type == 'training_plan':
@@ -69,7 +73,8 @@ async def _continue(user_id, payload, progress_callback=None, cancel_check=None,
                 return result
             if not snapshot:
                 raise RuntimeError('AI_RUN_NOT_CONTINUABLE')
-            answer = await chat(db, messages, source_context, snapshot.get('locale', user.locale), task=run.task_type,
+            db.info['ai_user_id'] = user.id
+            answer = await _tracked_chat(db, messages, source_context, snapshot.get('locale', user.locale), task=run.task_type,
                 local_only=local_only, model_id=run.model_id, instruction_prompt=snapshot.get('instruction_prompt'),
                 requested_max_tokens=output, requested_context_window_tokens=ctx, quality_profile=snapshot.get('quality_profile', 'standard'),
                 progress_callback=progress_callback, cancel_check=cancel_check, recover_limit=True, continuation_mode=True, minimum_output_tokens=(run.max_output_tokens or 0)+1 if not previous else None)

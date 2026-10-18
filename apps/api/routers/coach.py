@@ -9,21 +9,18 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from pengucoach.auth.dependencies import safety_confirmed_user
-from pengucoach.coach.companion import add_personal_context, conversation_excerpt
-from pengucoach.coach.context import SOURCE_NOTICE, build_activity_analysis_context, build_coach_context, build_training_plan_context
-from pengucoach.db.models import AiRun, BackgroundJob, Conversation, GarminWorkoutExport, Message, User, UserPreference
+from pengucoach.coach.context import build_training_plan_context
+from pengucoach.db.models import AiRun, BackgroundJob, Conversation, GarminWorkoutExport, User, UserPreference
 from pengucoach.db.session import get_db
-from pengucoach.llm.service import chat, eligible_models, resolve_model, task_settings, provider_is_local
-from pengucoach.llm.usage import normalize_quality, quality_options
-from pengucoach.training_plan.generation import normalize_training_plan_answer, training_plan_instruction
-from pengucoach.weather.service import build_coach_weather_context, build_training_weather_context
+from pengucoach.llm.service import eligible_models, resolve_model, task_settings, provider_is_local
+from pengucoach.llm.usage import normalize_quality, quality_options, quality_budget
 from worker.tasks.ai import activity_analysis as activity_analysis_task
 from worker.tasks.ai import coach_chat as coach_chat_task
 from worker.tasks.ai import training_plan as training_plan_task
 from worker.celery_app import app as celery_app
 
 router = APIRouter(prefix="/coach", tags=["coach"])
-from pengucoach.coach.selection import ContextSelection, auto_context_days, context_selection
+from pengucoach.coach.selection import ContextSelection, auto_context_days
 
 TASKS = ("coach_chat", "activity_analysis", "training_plan")
 
@@ -170,6 +167,10 @@ async def capabilities(
             "default_provider": selected[0].name if selected else None,
             "local": provider_is_local(selected[0]) if selected else None,
             **config,
+            "context_window_tokens": min(int(config["context_window_tokens"]), selected[1].context_window or 1048576) if selected else int(config["context_window_tokens"]),
+            "standard_max_output_tokens": int(config["max_output_tokens"]),
+            "max_output_tokens": min(quality_budget(task, int(config["max_output_tokens"]), saved_profiles.get(task, "standard")),
+                (selected[1].metadata_json or {}).get("provider_max_output_tokens") or 65536) if selected else quality_budget(task, int(config["max_output_tokens"]), saved_profiles.get(task, "standard")),
             "quality_profile": normalize_quality(saved_profiles.get(task, "standard")),
             "quality_profiles": quality_options(task, int(config["max_output_tokens"])),
         }
@@ -217,7 +218,7 @@ async def queue_training_plan(
             select(BackgroundJob)
             .where(
                 BackgroundJob.user_id == user.id,
-                BackgroundJob.job_type == "training_plan",
+                BackgroundJob.job_type.in_(["training_plan", "ai_continuation"]),
                 BackgroundJob.created_at >= cutoff,
             )
             .order_by(BackgroundJob.created_at.desc())
@@ -225,6 +226,10 @@ async def queue_training_plan(
         )
     ).all()
     for row in recent:
+        if row.job_type == "ai_continuation":
+            current = await db.get(AiRun, uuid.UUID(row.payload["run_id"]))
+            if not current or current.task_type != "training_plan":
+                continue
         if row.status in {"cancel_requested", "cancelled", "failed", "finished"}:
             continue
         existing = AsyncResult(str(row.id), app=celery_app)
@@ -252,95 +257,22 @@ async def queue_training_plan(
 # Synchronous compatibility endpoints remain available for API clients.
 @router.post("/chat")
 async def coach_chat(payload: ChatRequest, user: User = Depends(safety_confirmed_user), db: AsyncSession = Depends(get_db)):
-    locale = payload.locale or user.locale
-    conversation = await db.get(Conversation, payload.conversation_id) if payload.conversation_id else None
-    if payload.conversation_id and (not conversation or conversation.user_id != user.id):
-        raise HTTPException(status_code=404, detail="CONVERSATION_NOT_FOUND")
-    if not conversation:
-        conversation = Conversation(user_id=user.id, title=payload.message[:80])
-        db.add(conversation)
-        await db.flush()
-    db.add(Message(conversation_id=conversation.id, role="user", content=payload.message, created_at=datetime.now(timezone.utc)))
-    await db.flush()
-    rows = await conversation_excerpt(db, conversation)
-    messages = [{"role": x.role, "content": x.content} for x in rows]
-    if payload.context_mode == "none":
-        context_days = 0
-    elif payload.context_mode in {"3", "7", "14", "21", "28"}:
-        context_days = int(payload.context_mode)
-    else:
-        context_days = _auto_context_days(payload.message)
-    context = await build_coach_context(db, user, context_days, **context_selection(payload.model_dump())) if context_days else {
-        "source_notice": SOURCE_NOTICE, "period_days": 0, "note": "No training context required for this question."
-    }
-    await add_personal_context(db, user, context, payload.model_dump(), conversation)
-    weather_context = await build_coach_weather_context(db, user, payload.message)
-    if weather_context is not None:
-        context["weather_forecast"] = weather_context
-    _, local_only = await _privacy(db, user)
+    from worker.tasks.ai import _coach_chat
     try:
-        answer = await chat(
-            db, messages, context, locale, local_only=local_only,
-            model_id=payload.model_id, requested_max_tokens=payload.max_tokens,
-            requested_context_window_tokens=payload.context_window_tokens,
-            quality_profile=payload.quality_profile,
-        )
+        return await _coach_chat(str(user.id), {**payload.model_dump(mode="json"), "locale": payload.locale or user.locale}, db_override=db)
     except RuntimeError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
-    conversation.updated_at = datetime.now(timezone.utc)
-    db.add(Message(conversation_id=conversation.id, role="assistant", content=answer["content"], created_at=datetime.now(timezone.utc), model_id=uuid.UUID(answer["model_id"]), metadata_json={**_answer_metadata(answer, locale=str(locale)), "model": answer["model"], "evidence": answer.get("evidence", {})}))
-    db.add(AiRun(
-        user_id=user.id, task_type="coach_chat", model_id=uuid.UUID(answer["model_id"]),
-        provider_name=answer["provider"], model_name=answer["model"], prompt=payload.message,
-        lookback_days=context_days, max_output_tokens=answer["max_output_tokens"], content=answer["content"],
-        metadata_json={**_answer_metadata(answer, locale=str(locale)), "conversation_id": str(conversation.id)},
-    ))
-    await db.commit()
-    return {
-        "conversation_id": str(conversation.id), **answer,
-        "data_used": {
-            "context_days": context_days,
-            "health_days": len(context.get("health_30d", [])),
-            "sleep_days": len(context.get("sleep_30d", [])),
-            "hrv_days": len(context.get("hrv_30d", [])),
-            "activities": len(context.get("recent_activities", [])),
-            "weather": weather_context is not None and bool(weather_context.get("available")),
-            "weather_location": weather_context.get("location") if weather_context else None,
-        },
-    }
+        raise HTTPException(status_code=404 if str(exc) == "CONVERSATION_NOT_FOUND" else 409, detail=str(exc)) from exc
 
 
 @router.post("/activity-analysis")
 async def activity_analysis(payload: ActivityAnalysisRequest, user: User = Depends(safety_confirmed_user), db: AsyncSession = Depends(get_db)):
-    locale = payload.locale or user.locale
+    from worker.tasks.ai import _activity_analysis
     try:
-        context = await build_activity_analysis_context(db, user, payload.activity_id, payload.lookback_days)
+        return await _activity_analysis(str(user.id), {**payload.model_dump(mode="json"), "locale": payload.locale or user.locale}, db_override=db)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
-    _, local_only = await _privacy(db, user)
-    config = await task_settings(db, "activity_analysis", locale)
-    prompt = (payload.prompt or config["default_prompt"]).strip()
-    user_message = _analysis_scope_message(payload.activity_id, payload.lookback_days, str(locale))
-    try:
-        answer = await chat(
-            db, [{"role": "user", "content": user_message}], context, locale,
-            task="activity_analysis", local_only=local_only, model_id=payload.model_id,
-            instruction_prompt=prompt, requested_max_tokens=payload.max_tokens,
-            requested_context_window_tokens=payload.context_window_tokens,
-            quality_profile=payload.quality_profile,
-        )
     except RuntimeError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
-    run = AiRun(
-        user_id=user.id, task_type="activity_analysis", activity_id=payload.activity_id,
-        model_id=uuid.UUID(answer["model_id"]), provider_name=answer["provider"], model_name=answer["model"],
-        prompt=prompt, lookback_days=payload.lookback_days, max_output_tokens=answer["max_output_tokens"],
-        content=answer["content"], metadata_json=_answer_metadata(answer, locale=str(locale)),
-    )
-    db.add(run)
-    await db.commit()
-    await db.refresh(run)
-    return {"run_id": str(run.id), **answer, "lookback_days": payload.lookback_days, "created_at": run.created_at}
 
 
 @router.get("/activity-analysis/{activity_id}")
@@ -379,81 +311,11 @@ async def delete_ai_run(
 
 @router.post("/training-plan")
 async def training_plan(payload: TrainingPlanRequest, user: User = Depends(safety_confirmed_user), db: AsyncSession = Depends(get_db)):
-    locale = payload.locale or user.locale
-    context = await build_training_plan_context(
-        db,
-        user,
-        days=payload.context_days,
-        include_training=payload.context_data.training,
-        include_zones=payload.context_data.zones,
-        include_sleep_hrv=payload.context_data.sleep_hrv,
-        include_recovery=payload.context_data.recovery,
-        include_daily_activity=payload.context_data.daily_activity,
-        include_hydration=payload.context_data.hydration,
-        include_body=payload.context_data.body,
-    )
-    await add_personal_context(db, user, context, payload.model_dump())
-    context["goal"] = {
-        "goal_type": payload.goal_type, "goal_text": payload.goal_text, "experience": payload.experience,
-        "weeks": payload.weeks, "days_per_week": payload.days_per_week, "session_minutes": payload.session_minutes,
-        "equipment": payload.equipment, "constraints": payload.constraints,
-        "start_date": payload.start_date.isoformat() if payload.start_date else None, "source": "user",
-    }
-    weather_context = await build_training_weather_context(
-        db, user, include=payload.include_weather, plan_start_date=payload.start_date
-    )
-    if weather_context is not None:
-        context["weather_forecast"] = weather_context
-    _, local_only = await _privacy(db, user)
-    config = await task_settings(db, "training_plan", locale)
-    prompt = (payload.prompt or config["default_prompt"]).strip()
-    if str(locale).startswith("de"):
-        user_message = (
-            f"Erstelle einen {payload.weeks}-Wochen-Trainingsplan für '{payload.goal_type}', "
-            f"{payload.days_per_week} Trainingstage pro Woche, etwa {payload.session_minutes} Minuten pro Einheit. "
-            f"Ziel: {payload.goal_text or 'keine Zusatzangabe'}. Equipment: {payload.equipment or 'nicht angegeben'}. "
-            f"Einschränkungen: {payload.constraints or 'keine'}. Erfahrung: {payload.experience}. "
-            f"Planstart: {payload.start_date.isoformat() if payload.start_date else 'nicht festgelegt'}."
-        )
-    else:
-        user_message = (
-            f"Create a {payload.weeks}-week training plan for '{payload.goal_type}', "
-            f"{payload.days_per_week} training days per week and about {payload.session_minutes} minutes per session. "
-            f"Goal details: {payload.goal_text or 'none supplied'}. Equipment: {payload.equipment or 'not specified'}. "
-            f"Constraints: {payload.constraints or 'none supplied'}. Experience: {payload.experience}. "
-            f"Plan start: {payload.start_date.isoformat() if payload.start_date else 'not set'}."
-        )
+    from worker.tasks.ai import _training_plan
     try:
-        answer = await chat(
-            db, [{"role": "user", "content": user_message}], context, locale,
-            task="training_plan", local_only=local_only, model_id=payload.model_id,
-            instruction_prompt=training_plan_instruction(prompt), requested_max_tokens=payload.max_tokens,
-            requested_context_window_tokens=payload.context_window_tokens,
-            quality_profile=payload.quality_profile,
-        )
+        return await _training_plan(str(user.id), {**payload.model_dump(mode="json"), "locale": payload.locale or user.locale}, db_override=db)
     except RuntimeError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
-    content, plan_meta = normalize_training_plan_answer(answer, str(locale))
-    metadata = _answer_metadata(answer, locale=str(locale), goal=context["goal"])
-    metadata["training_context"] = {
-        "days": payload.context_days,
-        "data": payload.context_data.model_dump(),
-        "weather": weather_context is not None and bool(weather_context.get("available")),
-        "weather_location": weather_context.get("location") if weather_context else None,
-    }
-    metadata.update(plan_meta)
-    run = AiRun(
-        user_id=user.id, task_type="training_plan", model_id=uuid.UUID(answer["model_id"]),
-        provider_name=answer["provider"], model_name=answer["model"], prompt=prompt, lookback_days=payload.context_days,
-        max_output_tokens=answer["max_output_tokens"], content=content, metadata_json=metadata,
-    )
-    db.add(run)
-    await db.commit()
-    await db.refresh(run)
-    return {
-        "run_id": str(run.id), **answer, "content": content, "metadata": metadata,
-        "goal": context["goal"], "created_at": run.created_at,
-    }
 
 
 @router.get("/training-plans")

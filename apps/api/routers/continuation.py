@@ -53,7 +53,7 @@ async def continue_run(run_id: uuid.UUID, payload: ContinueIn, user=Depends(safe
     run = await owned_run(db, user, run_id, True)
     meta = dict(run.metadata_json or {})
     state = meta.get('continuation') or {}
-    format_retry = run.task_type == 'training_plan' and state.get('reason') == 'invalid_plan'
+    format_retry = state.get('reason') in {'invalid_plan', 'interrupted'}
     if payload.additional_tokens != (0 if format_retry else 8000):
         raise HTTPException(409, 'AI_RUN_CHANGED_RELOAD')
     claim = meta.get('_continuation_job')

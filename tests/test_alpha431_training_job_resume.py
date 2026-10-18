@@ -30,7 +30,7 @@ def test_training_page_restores_server_job_and_keeps_it_visible():
     assert 'training-running-job' in page
     assert 'PLANERSTELLUNG LÄUFT' in page
     assert 'showRunningJob' in page
-    assert 'disabled={busy||jobLookup||!model||!isMonday(planStart)}' in page
+    assert 'disabled={busy||continuing||jobLookup||!model||!isMonday(planStart)}' in page
 
 
 def test_running_job_has_mobile_layout():

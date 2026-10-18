@@ -115,4 +115,4 @@ def test_coach_ui_has_real_desktop_settings_toggle_and_weather_transparency():
     assert 'id="coach-ai-settings"' in page
     assert "message-context-chips" in page and "Wetterkontext" in page
     assert "include_in_coach" in settings
-    assert "build_coach_weather_context" in api and "build_coach_weather_context" in worker
+    assert "from worker.tasks.ai import _coach_chat" in api and "build_coach_weather_context" in worker

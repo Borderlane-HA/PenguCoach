@@ -16,12 +16,27 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from pengucoach.common.config import settings
 from pengucoach.db.models import LlmModel, LlmProvider, LlmRoute
+from pengucoach.llm.providers import (adapt_rejected_options, apply_cached_options, cancellable_post, ollama_think, request_options)
 from pengucoach.llm.usage import calculate_cost_eur, model_pricing, normalize_quality, quality_budget, quality_instruction
 from pengucoach.security.crypto import SecretBox
 
 
 class AiGenerationCancelled(RuntimeError):
     """Raised when the user cancels a cooperative AI generation."""
+
+    def __init__(self, message="AI_JOB_CANCELLED", *, request_sent=False, answer=None):
+        super().__init__(message)
+        self.request_sent = request_sent
+        self.answer = answer
+
+
+class AiProviderResponseError(RuntimeError):
+    """A request reached the provider but its response is unusable."""
+
+    def __init__(self, code="AI_INVALID_RESPONSE", *, usage=None):
+        super().__init__(code)
+        self.usage = usage or {}
+        self.request_sent = True
 
 
 def ollama_timing(final: dict[str, Any]) -> dict[str, float]:
@@ -556,6 +571,18 @@ def _system_prompt(locale: str) -> str:
     return SYSTEM_PROMPT_DE if _locale_key(locale) == "de" else SYSTEM_PROMPT_EN
 
 
+async def _provider_post(client, url, payload, headers, key, cancel_check):
+    payload = apply_cached_options(payload, key)
+    for attempt in range(5):
+        try:
+            response = await cancellable_post(client, url, headers=headers, json=payload, cancel_check=cancel_check)
+        except asyncio.CancelledError:
+            raise AiGenerationCancelled(request_sent=True) from None
+        if attempt == 4 or not adapt_rejected_options(response, payload, key):
+            return response
+    raise RuntimeError("AI_PARAMETER_NEGOTIATION_FAILED")
+
+
 async def chat(
     db: AsyncSession,
     messages: list[dict[str, str]],
@@ -627,8 +654,16 @@ async def chat(
     if context_window_tokens < framing_reserve_tokens + 512:
         raise RuntimeError("CONTEXT_TOO_SMALL_FOR_INSTRUCTIONS")
     minimum_input_tokens = min(minimum_input_tokens, max(256, context_window_tokens - framing_reserve_tokens - 128))
+    # Keep the complete latest request. Context and older turns yield first.
+    latest_message_chars = len(str(messages[-1].get("content", ""))) if messages else 0
+    required_messages = math.ceil(latest_message_chars / 3) + 32
+    goal_chars = len(_json_size(context.get("goal") or {})[0]) if task == "training_plan" else 0
+    required_context = max(128, math.ceil(goal_chars / 3) + 128)
+    minimum_input_tokens = max(minimum_input_tokens, required_messages + required_context)
+    if minimum_input_tokens + framing_reserve_tokens + 128 > context_window_tokens:
+        raise RuntimeError("USER_MESSAGE_TOO_LONG_FOR_CONTEXT")
     if continuation_mode:
-        required_messages = sum(len(str(m.get("content", ""))) for m in messages[-12:])//3 + 400
+        required_messages = math.ceil(sum(len(str(m.get("content", ""))) for m in messages[-12:])/3) + 400
         minimum_input_tokens = max(minimum_input_tokens, required_messages + 1024)
         if minimum_input_tokens + framing_reserve_tokens + 128 > context_window_tokens:
             raise RuntimeError("CONTINUATION_CONTEXT_FULL")
@@ -639,11 +674,11 @@ async def chat(
     output_budget_adjusted = max_tokens < requested_output_tokens
     # Leave room for system/task instructions and chat framing. The remaining budget is shared by JSON context and messages.
     usable_input_tokens = max(minimum_input_tokens, context_window_tokens - max_tokens - framing_reserve_tokens)
-    context_budget_tokens = max(128, int(usable_input_tokens * 0.72))
+    context_budget_tokens = max(required_context, min(int(usable_input_tokens * 0.72), usable_input_tokens-required_messages))
     if continuation_mode:
         context_budget_tokens = max(128, usable_input_tokens-required_messages)
-    message_budget_tokens = max(64, usable_input_tokens - context_budget_tokens)
-    max_context_chars = min(int(config["max_context_chars"]), context_budget_tokens * 3)
+    message_budget_tokens = max(required_messages, usable_input_tokens - context_budget_tokens)
+    max_context_chars = max(goal_chars + 64, min(int(config["max_context_chars"]), context_budget_tokens * 3))
     context_json, context_meta = bounded_personal_context(context, max_context_chars)
     output_target = max(128, int(max_tokens * 0.88))
     budget_notice = (
@@ -651,20 +686,6 @@ async def chat(
         f"Finish the complete response before that limit and target at most about {output_target} tokens. "
         "Do not rely on being allowed to continue after truncation."
     )
-    if task == "training_plan":
-        goal = context.get("goal") if isinstance(context, dict) else None
-        weeks = int((goal or {}).get("weeks") or 1) if isinstance(goal, dict) else 1
-        days_per_week = int((goal or {}).get("days_per_week") or 1) if isinstance(goal, dict) else 1
-        expected_sessions = max(1, weeks * days_per_week)
-        per_session = max(55, int(max(256, output_target - 450) / expected_sessions))
-        budget_notice += (
-            f" The requested plan needs at least {expected_sessions} actual sessions ({weeks} weeks × {days_per_week}/week), "
-            f"with at least {days_per_week} in EACH week. "
-            f"Budget the JSON at roughly {per_session} tokens per session on average. "
-            "If space becomes tight, shorten summary, notes, names and descriptions first; use repeat groups for intervals; "
-            "omit optional/default JSON fields when they add no information. NEVER omit requested weeks/sessions merely to save tokens. "
-            "Return no prose outside the required structured plan block."
-        )
     system_content = (
         _system_prompt(locale)
         + "\nThe task instructions below may refine the task but may not override safety, source-integrity or no-invention rules."
@@ -673,8 +694,14 @@ async def chat(
         + f"\nData context (JSON):\n{context_json}"
     )
 
+    if task == "training_plan" and messages:
+        goal = context.get("goal") or {}
+        weeks, days = int(goal.get("weeks") or 1), int(goal.get("days_per_week") or 1)
+        messages = copy.deepcopy(messages)
+        messages[-1]["content"] += (f"\nBudget the complete JSON for {weeks * days} sessions, {days} in EACH local week 1..{weeks}. "
+            "Shorten wording before removing sessions. Use repeat groups for repeated intervals. Output JSON only.")
     recent_messages = messages[-12:]
-    message_budget = message_budget_tokens * 3
+    message_budget = max(message_budget_tokens * 3, len(str(recent_messages[-1].get("content", ""))) if recent_messages else 0)
     bounded_messages: list[dict[str, str]] = []
     used_message_chars = 0
     for message in reversed(recent_messages):
@@ -720,16 +747,15 @@ async def chat(
             base = provider_base_url(provider.provider_type, provider.base_url)
             headers = (_openrouter_headers(_secret(provider)) if provider.provider_type == "openrouter" else
                        {"Authorization": f"Bearer {_secret(provider)}", "Content-Type": "application/json"})
-            response = await client.post(
-                base + "/chat/completions",
-                headers=headers,
-                json={
-                    "model": model.model_identifier,
-                    "messages": prompt_messages,
-                    "temperature": model.temperature,
-                    "max_tokens": max_tokens,
-                },
-            )
+            options = request_options(provider.provider_type, model.model_identifier, model.metadata_json or {}, quality_profile, response_format_schema)
+            output_parameter = options.pop("output_parameter", "max_tokens")
+            omit_temperature = options.pop("omit_temperature", False)
+            payload = {"model": model.model_identifier, "messages": prompt_messages,
+                       output_parameter: max_tokens, **options}
+            if not omit_temperature:
+                payload["temperature"] = model.temperature
+            response = await _provider_post(client, base + "/chat/completions", payload, headers,
+                (str(provider.id), base, model.model_identifier), cancel_check)
             if provider.provider_type == "openrouter":
                 body = _openrouter_body(response)
                 try:
@@ -746,39 +772,45 @@ async def chat(
                     raise OpenRouterError("OPENROUTER_INVALID_RESPONSE")
             else:
                 response.raise_for_status()
-                body = response.json()
-                choice = body["choices"][0]
-                text = choice["message"]["content"]
-                stop_reason = choice.get("finish_reason")
+                try:
+                    body = response.json()
+                    choice = body["choices"][0]
+                    text = choice["message"]["content"]
+                    stop_reason = choice.get("finish_reason")
+                    if text is not None and not isinstance(text, str):
+                        raise TypeError()
+                except (ValueError, KeyError, IndexError, TypeError, AttributeError):
+                    raise AiProviderResponseError() from None
             raw_usage = body.get("usage") or {}
             if provider.provider_type == "openrouter" and not isinstance(raw_usage, dict):
                 raise OpenRouterError("OPENROUTER_INVALID_RESPONSE")
+            if not isinstance(raw_usage, dict):
+                raise AiProviderResponseError()
             usage = {
                 "input_tokens": raw_usage.get("prompt_tokens"),
                 "output_tokens": raw_usage.get("completion_tokens"),
                 "total_tokens": raw_usage.get("total_tokens"),
+                **({"reasoning_tokens": raw_usage["completion_tokens_details"]["reasoning_tokens"]} if isinstance(raw_usage.get("completion_tokens_details"), dict) and isinstance(raw_usage["completion_tokens_details"].get("reasoning_tokens"), int) else {}),
+                **({"cached_input_tokens": raw_usage["prompt_tokens_details"]["cached_tokens"]} if isinstance(raw_usage.get("prompt_tokens_details"), dict) and isinstance(raw_usage["prompt_tokens_details"].get("cached_tokens"), int) else {}),
             }
         elif provider.provider_type == "anthropic":
             base = (provider.base_url or "https://api.anthropic.com/v1").rstrip("/")
             headers = {"x-api-key": _secret(provider) or "", "anthropic-version": "2023-06-01", "content-type": "application/json"}
-            response = await client.post(
-                base + "/messages",
-                headers=headers,
-                json={
-                    "model": model.model_identifier,
-                    "system": prompt_messages[0]["content"],
-                    "max_tokens": max_tokens,
-                    # Temperature is intentionally omitted. Current Claude models
-                    # accept provider defaults, and newer Opus generations reject
-                    # non-default sampling parameters.
-                    "messages": prompt_messages[1:],
-                },
-            )
+            payload = {"model": model.model_identifier, "system": prompt_messages[0]["content"],
+                "max_tokens": max_tokens, "messages": prompt_messages[1:],
+                **request_options("anthropic", model.model_identifier, model.metadata_json or {}, quality_profile, response_format_schema)}
+            response = await _provider_post(client, base + "/messages", payload, headers,
+                (str(provider.id), base, model.model_identifier), cancel_check)
             response.raise_for_status()
-            body = response.json()
-            text = "\n".join(x.get("text", "") for x in body.get("content", []) if x.get("type") == "text")
-            stop_reason = body.get("stop_reason")
-            raw_usage = body.get("usage") or {}
+            try:
+                body = response.json()
+                text = "\n".join(x.get("text", "") for x in body.get("content", []) if x.get("type") == "text")
+                stop_reason = body.get("stop_reason")
+                raw_usage = body.get("usage") or {}
+                if not isinstance(raw_usage, dict):
+                    raise TypeError()
+            except (ValueError, TypeError, AttributeError):
+                raise AiProviderResponseError() from None
             usage = {
                 "input_tokens": raw_usage.get("input_tokens"),
                 "output_tokens": raw_usage.get("output_tokens"),
@@ -794,11 +826,12 @@ async def chat(
             last_cancel_check = 0.0
             final_chunk: dict[str, Any] = {}
             started = request_started
+            think = await ollama_think(client, base, model.model_identifier, quality_profile, model.metadata_json or {})
             ollama_payload: dict[str, Any] = {
                 "model": model.model_identifier,
                 "messages": prompt_messages,
                 "stream": True,
-                "think": False,
+                "think": think,
                 "options": {
                     "temperature": min(float(model.temperature), 0.2) if task == "training_plan" else model.temperature,
                     "num_predict": max_tokens,
@@ -812,7 +845,7 @@ async def chat(
                 # Ollama supports disabling thinking and provider-enforced JSON
                 # schemas on /api/chat, which makes this path substantially more
                 # deterministic and preserves the configured budget for the plan.
-                ollama_payload["think"] = False
+                ollama_payload["think"] = think
                 if response_format_schema:
                     ollama_payload["format"] = response_format_schema
             async with client.stream(
@@ -838,11 +871,16 @@ async def chat(
                     async for line in response.aiter_lines():
                         now = time.monotonic()
                         if cancel_event.is_set() or (cancel_check and now - last_cancel_check >= 0.75 and cancel_check()):
-                            raise AiGenerationCancelled("AI_JOB_CANCELLED")
+                            raise AiGenerationCancelled(request_sent=True)
                         last_cancel_check = now
                         if not line:
                             continue
-                        chunk = json.loads(line)
+                        try:
+                            chunk = json.loads(line)
+                            if not isinstance(chunk, dict):
+                                raise ValueError()
+                        except ValueError:
+                            raise AiProviderResponseError("OLLAMA_STREAM_INVALID_RESPONSE") from None
                         if chunk.get("error"):
                             raise RuntimeError("OLLAMA_STREAM_ERROR: " + str(chunk["error"])[:300])
                         message_chunk = chunk.get("message") or {}
@@ -873,7 +911,7 @@ async def chat(
                             )
                 except httpx.HTTPError as exc:
                     if cancel_event.is_set() or (cancel_check and cancel_check()):
-                        raise AiGenerationCancelled("AI_JOB_CANCELLED") from exc
+                        raise AiGenerationCancelled(request_sent=True) from exc
                     raise
                 finally:
                     cancel_event.set()
@@ -882,8 +920,8 @@ async def chat(
                         await cancel_task
                     except asyncio.CancelledError:
                         pass
-            if cancel_check and cancel_check():
-                raise AiGenerationCancelled("AI_JOB_CANCELLED")
+            if not final_chunk and cancel_check and cancel_check():
+                raise AiGenerationCancelled(request_sent=True)
             if not final_chunk:
                 raise RuntimeError("OLLAMA_STREAM_INCOMPLETE")
             text = "".join(parts)
@@ -909,28 +947,28 @@ async def chat(
         else:
             raise RuntimeError("UNSUPPORTED_LLM_PROVIDER")
 
-    if cancel_check and cancel_check():
-        raise AiGenerationCancelled("AI_JOB_CANCELLED")
-
+    if usage.get("total_tokens") is None and all(isinstance(usage.get(k), int) for k in ("input_tokens", "output_tokens")):
+        usage["total_tokens"] = usage["input_tokens"] + usage["output_tokens"]
     text = visible_answer(text)
     output_tokens = usage.get("output_tokens")
     truncated = response_truncated(stop_reason, output_tokens, max_tokens)
     if not text and not (recover_limit and truncated):
         # A recoverable limit stores a draft with its retry snapshot, not a fabricated answer.
-        raise RuntimeError("AI_EMPTY_RESPONSE_THINKING_LIMIT" if stop_reason in {"length", "max_tokens"} else "AI_EMPTY_RESPONSE")
+        raise AiProviderResponseError("AI_EMPTY_RESPONSE_THINKING_LIMIT" if stop_reason in {"length", "max_tokens"} else "AI_EMPTY_RESPONSE", usage=usage)
     resume = None
     if recover_limit and truncated:
         from pengucoach.llm.continuation import json_value
         resume = json_value({"context": context, "messages": messages, "task": task, "locale": locale,
             "instruction_prompt": instruction_prompt or config["default_prompt"], "model_id": str(model.id),
             "quality_profile": quality_profile, "context_window_tokens": context_window_tokens,
-            "max_output_tokens": max_tokens, "response_format_schema": response_format_schema})
+            "max_output_tokens": max_tokens, "response_format_schema": response_format_schema,
+            "context_chars": context_meta["context_chars"], "instruction_chars": len(task_prompt)})
     pricing = model_pricing(model.metadata_json if isinstance(model.metadata_json, dict) else {})
     cost_eur = calculate_cost_eur(usage, pricing)
     elapsed_seconds = round(max(0.0, time.monotonic() - request_started), 3)
     output_count = usage.get("output_tokens")
     tokens_per_second = round(float(output_count) / elapsed_seconds, 3) if isinstance(output_count, int) and output_count >= 0 and elapsed_seconds > 0 else None
-    return {
+    result = {
         "content": text,
         **({"_resume": resume} if resume is not None else {}),
         "empty_due_to_limit": bool(not text and truncated),
@@ -956,8 +994,13 @@ async def chat(
         "stop_reason": stop_reason,
         "truncated": truncated,
         "message_chars": used_message_chars,
+        "messages_truncated": used_message_chars < sum(len(str(m.get("content", ""))) for m in messages),
+        "usage_complete": all(isinstance(usage.get(k), int) for k in ("input_tokens", "output_tokens")),
         **context_meta,
     }
+    if cancel_check and cancel_check():
+        raise AiGenerationCancelled(request_sent=True, answer=result)
+    return result
 
 
 async def test_provider(provider_type: str, base_url: str | None, api_key: str | None) -> dict[str, Any]:
@@ -1012,7 +1055,7 @@ def visible_answer(value) -> str:
 
 
 def response_truncated(reason, output_tokens, maximum):
-    if reason in {"length", "max_tokens"}:
+    if reason in {"length", "max_tokens", "model_context_window_exceeded", "max_output_tokens"}:
         return True
     if reason in {"stop", "end_turn", "stop_sequence", "eos"}:
         return False
@@ -1027,6 +1070,8 @@ def _shrink_json(value, maximum):
         def visit(node):
             if isinstance(node, dict):
                 for key, child in node.items():
+                    if key == "goal":
+                        continue  # Never abbreviate the user's planning constraints.
                     if isinstance(child, list) and child:
                         candidates.append((len(_json_size(child)[0]), node, key, child))
                     elif isinstance(child, str) and len(child) > 100:
@@ -1038,7 +1083,9 @@ def _shrink_json(value, maximum):
             # Keep the data inventory/range even at very small budgets.
             result = {k: result[k] for k in ("data_inventory", "period_days", "from", "to", "goal", "activity", "personal_coaching", "conversation_summary", "weather_forecast", "planned_training_review", "training_execution") if k in result}
             if len(_json_size(result)[0]) > maximum:
-                result = {"context_note": "Context could not fit; do not infer missing facts."}
+                goal = {"goal": result["goal"]} if "goal" in result else {}
+                result = goal if goal and len(_json_size(goal)[0]) <= maximum else {
+                    "context_note": "Context could not fit; do not infer missing facts."}
             break
         _, parent, key, child = max(candidates, key=lambda x: x[0])
         parent[key] = child[:max(0, len(child)//2)] if isinstance(child, list) else child[:max(80,len(child)//2)] + "…"
@@ -1046,7 +1093,13 @@ def _shrink_json(value, maximum):
 
 
 def bounded_personal_context(context, maximum):
-    data = copy.deepcopy(context)
+    def omit_unknown(value):
+        if isinstance(value, dict):
+            return {k: omit_unknown(v) for k, v in value.items() if v is not None}
+        if isinstance(value, list):
+            return [omit_unknown(v) for v in value]
+        return value
+    data = omit_unknown(context)
     personal = {key: data.pop(key) for key in ("personal_coaching", "conversation_summary", "planned_training_review", "training_execution") if key in data}
     if personal:
         personal = _shrink_json(personal, min(6500, max(250, maximum // 3)))

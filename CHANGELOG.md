@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.0-alpha.67
+
+- Correct saved response-profile budgets after reload across Coach, activity analysis and training planning. Preserve the complete latest question; reject a request that cannot fit before sending it to a model.
+- Share the recoverable engine between background jobs and compatibility APIs. Keep partial/empty-limit continuation, recognize Claude context-window limits, and distinguish same-budget format/network retries from explicit +8,000-token recovery. Restore continuation jobs after reload and prevent overlapping plan creation while a plan continuation runs.
+- Validate short and segmented plans against requested weeks and sessions per week. Save validated sections before the next model call. Connection errors retain a checkpoint and retry only the open section; successful prior sections and their accounting are preserved.
+- Use current OpenAI completion-token parameters, supported reasoning controls and discovered Ollama thinking levels. Send compact portable plan schemas to cloud providers, retain Ollama's specialized schema, and negotiate only explicit optional-parameter validation rejections with a bounded cached fallback. Existing stored plans remain compatible.
+- Reduce repeated prompt text, move variable segment controls after the stable system/data prefix and omit null context fields. Keep full goal constraints and measured/source facts; size continuation context from the transmitted context instead of raw history. Actual speed/token savings remain model-dependent.
+- Close pending cloud HTTP requests on cancellation; the remote provider controls whether work/billing stops. Preserve returned counts when available and show unknown/incomplete usage rather than a false zero. Keep known per-attempt counts in plan details and usage totals. Remove obsolete advice to restart an entire truncated activity analysis.
+- No database migration or runtime dependency added. Update API, web and workers together. Automated provider tests use simulated HTTP responses; no paid live model request or Garmin upload is required for the test suite.
+
+
 ## 0.1.0-alpha.66
 
 - Align generation-time JSON schemas with the existing validators: requested minimum session count, local week limits, executable timed/distance steps versus repeat containers, mandatory zones for zone targets and mutually exclusive strength prescriptions. Continue validating every answer and checking session counts per week; do not accept incomplete plans to hide retries. Stored plan format and legacy normalization remain compatible.

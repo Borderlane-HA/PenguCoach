@@ -5,6 +5,18 @@ from typing import Any
 from .structured import STRUCTURED_PLAN_INSTRUCTION, TrainingPlanDocument, extract_structured_plan, render_plan_markdown
 
 
+def validate_plan_completeness(plan: TrainingPlanDocument, weeks: int, days_per_week: int) -> str | None:
+    if plan.weeks != weeks:
+        return f"SEGMENT_WEEK_COUNT:{plan.weeks}!={weeks}"
+    if len(plan.sessions) < weeks * days_per_week:
+        return f"SEGMENT_SESSION_COUNT:{len(plan.sessions)}<{weeks * days_per_week}"
+    missing = [f"{w}:{sum(s.week == w for s in plan.sessions)}/{days_per_week}"
+               for w in range(1, weeks + 1) if sum(s.week == w for s in plan.sessions) < days_per_week]
+    if missing:
+        return "SEGMENT_WEEK_SESSION_COUNT:" + ",".join(missing)
+    return None
+
+
 def training_plan_instruction(base_prompt: str, extra: str = "") -> str:
     # chat() caps the task instruction at 16,000 characters. Reserve the output
     # contract first so a long custom prompt cannot cut it off entirely.

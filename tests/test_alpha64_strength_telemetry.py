@@ -133,7 +133,7 @@ async def test_invalid_plan_checkpoint_resumes_without_budget_increase(data,monk
     def doc(valid=True):
         return json.dumps({'title':'Plan','weeks':2,'sessions':[dict(session(id=f's{w}-{d}',week=w,day=d),strength_exercises=[{'name':'Squat','reps':8 if valid else 0}]) for w in [1,2] for d in [1,2,3,4]]})
     async def chat(db,messages,context,locale,**kw):
-        calls.append((context['goal']['plan_week_start'],kw['requested_max_tokens'],kw['instruction_prompt']))
+        calls.append((context['goal']['plan_week_start'],kw['requested_max_tokens'],kw['instruction_prompt']+' '.join(m['content'] for m in messages)))
         valid=len(calls)==1 or len(calls)>3
         return {'content':doc(valid),'model_id':str(mid),'provider':'IONOS','model':'Qwen','max_output_tokens':kw['requested_max_tokens'],
             'usage':{'input_tokens':10,'output_tokens':20,'total_tokens':30},'truncated':False,'stop_reason':'stop','cost_eur':.01}
@@ -141,7 +141,7 @@ async def test_invalid_plan_checkpoint_resumes_without_budget_increase(data,monk
     r=await ai._training_plan(str(uid),{'weeks':4,'days_per_week':4,'session_minutes':30,'max_tokens':3500,'model_id':str(mid),'use_personal_context':False})
     assert len(calls)==3 and r['metadata']['draft'] and r['metadata']['validated_weeks']==2
     assert not r['metadata']['truncated'] and r['continuation']['reason']=='invalid_plan'
-    assert 'Validation feedback:' in calls[-1][2] and r['usage']['total_tokens']==90
+    assert 'Previous attempt was invalid:' in calls[-1][2] and r['usage']['total_tokens']==90
     async with factory() as db:
         user=await db.get(User,uid)
         queued=await continuation_api.continue_run(uuid.UUID(r['run_id']),continuation_api.ContinueIn(revision=0,additional_tokens=0),user,db)

@@ -141,6 +141,6 @@ def test_training_planner_sends_plan_start_and_weather_and_requires_monday():
     assert "include_weather:includeWeather" in page
     assert "function isMonday" in page
     assert "PLAN_START_MUST_BE_MONDAY" in coach
-    assert '"weather_forecast"' in coach and '"weather_forecast"' in worker
+    assert "_training_plan" in coach and '"weather_forecast"' in worker
     assert "never invent weather for later plan weeks" in llm
     assert "goal.start_date" in llm

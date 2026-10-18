@@ -168,7 +168,7 @@ async def test_chat_all_tasks_preserve_model_id_budget_content_usage_and_local_o
         assert payload["model"] == "vendor/model:free"
         assert payload["max_tokens"] == 1024
         assert payload["messages"][0]["role"] == "system"
-        assert payload["messages"][-1]["content"] == "Please help"
+        assert payload["messages"][-1]["content"].startswith("Please help")
         return httpx.Response(200, json={"choices": [{"message": {"content": "<think>hidden</think>Useful answer"},
                                                      "finish_reason": "stop"}],
                                         "usage": {"prompt_tokens": 120, "completion_tokens": 50, "total_tokens": 170}})

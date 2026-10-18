@@ -153,48 +153,31 @@ class TrainingPlanDocument(BaseModel):
 
 STRUCTURED_PLAN_INSTRUCTION = f"""
 IMPORTANT OUTPUT CONTRACT FOR PENGUCOACH:
-Return the complete plan as one compact JSON object. Do not use Markdown fences and do not add prose before or after the JSON.
-PenguCoach still accepts the legacy {PLAN_OPEN} / {PLAN_CLOSE} wrapper, but the wrapper is optional; provider-enforced
-structured-output modes may return the bare JSON object. The API provides a hard output-token budget separately.
-Fit the WHOLE plan inside that budget: shorten wording before reducing structure. Keep summary to at most two short
-sentences, notes/descriptions to one short sentence when needed, use repeat groups instead of enumerating intervals,
-and omit fields that merely repeat schema defaults (for example optional=false, empty notes/steps/exercise lists,
-or target={{"type":"none"}}) when they add no information. Never sacrifice requested weeks or training sessions because
-of token pressure. Close the JSON object and the PENGUCOACH marker before the budget is exhausted.
+Return one compact, complete JSON object. No Markdown fences or prose outside JSON.
+The legacy {PLAN_OPEN} / {PLAN_CLOSE} wrapper is optional.
+Use the supplied schema. All requested weeks and training days must be present; shorten wording before removing sessions.
+Close the JSON object before the hard output-token budget. Keep summary to two short sentences and notes brief.
 
-JSON schema/semantics:
-- format_version: 1
-- title: short plan title
-- summary: concise coaching summary
-- weeks: requested number of weeks
-- sessions: only actual training sessions; do not create entries for rest days
-- every session: id (unique, e.g. w1-d2-run), week (1..weeks), day (ISO weekday Monday=1), name,
-  sport, duration_min, optional, notes, steps, strength_exercises
-- sport must be one of: running, cycling, swimming, walking, hiking, strength, cardio, mobility, yoga, pilates, hiit, other
-- steps are structured Garmin-style steps for endurance/cardio sessions. Step type must be one of:
-  warmup, work, interval, recovery, cooldown, rest, repeat.
-- a normal step has duration_seconds OR distance_meters and optional target.
-- target is {{"type":"none"}} or {{"type":"heart_rate_zone","zone":1..5}} or
-  {{"type":"power_zone","zone":1..7}} or {{"type":"power_watts","watts":250,"tolerance_pct":5}}. Use watts only when supported by measured FTP/power context, never invent FTP. Prefer the user's Garmin zones from context when available.
-- a repeat step has repeat>=2 and nested steps. Example: 6 x (3 min interval + 2 min recovery).
-  A complete interval BLOCK must have type="repeat", not type="interval" or type="work".
-  Example: {{"type":"repeat","repeat":6,"steps":[{{"type":"interval","duration_seconds":180}},{{"type":"recovery","duration_seconds":120}}]}}.
-  Keep warmup/cooldown outside that block. Every child interval/recovery is a single timed/distance step.
-  Do not add repeat counts or child steps to executable interval/work/recovery/warmup/cooldown steps.
-  Put intensity targets on the executable child steps, never on the repeat container.
-- strength sessions should populate strength_exercises with canonical plain English Garmin exercise names plus sets/reps/rest_seconds;
-  use integer reps (e.g. 8), or reps=8 and reps_max=10 for a range. For timed holds use
-  duration_seconds=45 and reps=null; never write "45s" in reps. For max minus two reps use
-  reps_in_reserve=2 and reps=null. Choose exactly one of reps, duration_seconds or reps_in_reserve.
-  Never use reps=0. Include the fields inside strength_exercises, not in the session's notes alone.
-  prefer simple catalogue names such as Squat, Push-up, Lunge, Plank, Side Plank, Deadlift, Row, Leg Press, Bench Press,
-  and Calf Raise instead of localized names or phrases like "or similar"; steps may be empty for strength. Each strength_exercises
-  item must be one concrete movement, never a circuit/block title, muscle-group label, superset name or descriptive session heading.
-- for every timed non-strength session, the durations of all steps (including repeat multiplicity) should add up to
-  duration_min * 60 within about 60 seconds. Do not duplicate a main/work step merely to fill text.
-- keep intensity conservative when source data is incomplete. Do not invent measured values.
-- honor fixed days/constraints and requested training days per week.
-- the structured plan is the source of truth; it must contain enough detail to render the human-readable plan.
+Plan fields: title, weeks, summary, sessions; format_version defaults to 1.
+Every session needs a unique id, local week, ISO weekday day (Monday=1), name, sport, duration_min;
+start_time is a local HH:MM or null. Only actual workouts, no rest-day placeholders. Honor fixed dates and constraints.
+Use sports: running, cycling, swimming, walking, hiking, strength, cardio, mobility, yoga, pilates, hiit, other.
+Endurance steps use warmup, work, interval, recovery, cooldown or rest, each with duration_seconds OR distance_meters.
+Targets are none, heart_rate_zone with zone, power_zone with zone, or power_watts with watts and tolerance_pct.
+Use only supplied Garmin zones and measured power/FTP context; do not invent thresholds or measured values.
+A repeated block MUST use type=repeat, an explicit repeat count >=2, and nested executable child steps:
+{{"type":"repeat","repeat":4,"steps":[{{"type":"interval","duration_seconds":60}},{{"type":"recovery","duration_seconds":120}}]}}.
+Executable interval/work/recovery steps NEVER have children or a repeat count. Targets belong on children, not repeat containers.
+Warmup and cooldown belong outside repeated blocks. Timed steps, including repeats, should sum to duration_min * 60 within 60 seconds.
+Strength sessions use strength_exercises, not exercises hidden in notes: name, sets, rest_seconds and one prescription.
+Use canonical plain English Garmin exercise names such as Squat, Push-up, Lunge, Plank, Deadlift, Row, Leg Press or Bench Press.
+Each strength_exercises item is one concrete movement, never a circuit/block title, muscle group or superset heading.
+Prescriptions: integer reps; a range uses reps plus reps_max; timed holds use duration_seconds with reps=null;
+max minus N uses reps_in_reserve=N with reps=null. Choose exactly one of reps, duration_seconds or reps_in_reserve.
+Never use reps=0 or text in numeric fields. Missing weight_kg stays null. Steps may be empty for strength.
+Omit optional/default fields when the provider schema permits; otherwise use schema defaults/nulls.
+Use previous_plan_segment for progression without repeating previous weeks. Keep intensity conservative with incomplete data.
+The structured plan is the source of truth and must support the human-readable calendar and Garmin export.
 """.strip()
 
 

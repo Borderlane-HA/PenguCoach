@@ -123,7 +123,7 @@ async def test_successful_plan_retains_all_first_attempt_reasons_and_does_not_re
     calls = []
     progress = []
     async def chat(db, messages, context, locale, **kw):
-        calls.append(kw)
+        calls.append({**kw, "messages": messages})
         raw = valid_document()
         # Exercise both completeness checks; the raw data stays schema-valid.
         if len(calls) == 1:
@@ -148,7 +148,7 @@ async def test_successful_plan_retains_all_first_attempt_reasons_and_does_not_re
     assert progress[1]['attempt'] == 2 and progress[1]['retry_reason'] == rows[0]['validation_error']
     assert metadata['elapsed_seconds'] == 60 and len(metadata['structured_plan']['sessions']) == 32
     assert result['usage']['total_tokens'] == 660
-    assert 'SEGMENT_SESSION_COUNT:4<8' in calls[1]['instruction_prompt']
+    assert 'SEGMENT_SESSION_COUNT:4<8' in calls[1]['messages'][-1]['content']
     assert all(c['response_format_schema']['properties']['sessions']['minItems'] == 8 for c in calls)
     async with factory() as db:
         saved = await db.get(AiRun, uuid.UUID(result['run_id']))
@@ -167,6 +167,8 @@ async def test_real_ollama_request_passes_specialized_schema_and_preserves_nativ
     requests = []
     def handler(request):
         body = json.loads(request.content)
+        if request.url.path.endswith('/api/show'):
+            return httpx.Response(200, json={'thinking': {'values': [False, True]}})
         requests.append(body)
         schema = body['format']
         assert schema['properties']['weeks']['const'] == 2

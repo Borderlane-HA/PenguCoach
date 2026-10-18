@@ -255,16 +255,21 @@ def _usage_aggregate(rows: list[AiRun]) -> dict:
     for row in rows:
         meta = row.metadata_json if isinstance(row.metadata_json, dict) else {}
         usage = meta.get("usage") if isinstance(meta.get("usage"), dict) else {}
+        incomplete_usage = meta.get("usage_complete") is False or any(not isinstance(usage.get(k), int) for k in ("input_tokens", "output_tokens"))
+        if incomplete_usage and meta.get("generation_calls"):
+            usage = {key: sum(int((call.get("usage") or {}).get(key) or 0) for call in meta["generation_calls"])
+                     for key in ("input_tokens", "output_tokens", "total_tokens")}
         input_tokens = int(usage.get("input_tokens") or 0)
         output_tokens = int(usage.get("output_tokens") or 0)
         total_tokens = int(usage.get("total_tokens") or (input_tokens + output_tokens))
         cost = meta.get("cost_eur")
         if cost is None:
             pricing = meta.get("pricing") if isinstance(meta.get("pricing"), dict) else None
-            cost = calculate_cost_eur(usage, pricing)
+            cost = calculate_cost_eur(usage, pricing) if not incomplete_usage else None
         cost_value = float(cost) if cost is not None else None
         elapsed_raw = meta.get("elapsed_seconds")
         elapsed_value = float(elapsed_raw) if isinstance(elapsed_raw, (int, float)) and float(elapsed_raw) >= 0 else None
+        total["unknown_usage_requests"] = total.get("unknown_usage_requests", 0) + int(incomplete_usage)
         total["requests"] += 1
         total["input_tokens"] += input_tokens
         total["output_tokens"] += output_tokens
@@ -291,6 +296,7 @@ def _usage_aggregate(rows: list[AiRun]) -> dict:
             "total_tokens": 0, "cost_eur": 0.0, "priced_requests": 0, "unpriced_requests": 0, "elapsed_seconds": 0.0, "timed_requests": 0, "timed_output_tokens": 0,
         })
         for target in (model, task):
+            target["unknown_usage_requests"] = target.get("unknown_usage_requests", 0) + int(incomplete_usage)
             target["requests"] += 1
             target["input_tokens"] += input_tokens
             target["output_tokens"] += output_tokens
@@ -306,6 +312,7 @@ def _usage_aggregate(rows: list[AiRun]) -> dict:
                 target["timed_output_tokens"] += output_tokens
     def finalize(group: dict) -> None:
         group["cost_eur"] = round(group["cost_eur"], 8)
+        group.setdefault("unknown_usage_requests", 0)
         requests = int(group.get("requests") or 0)
         timed = int(group.get("timed_requests") or 0)
         elapsed = float(group.get("elapsed_seconds") or 0.0)

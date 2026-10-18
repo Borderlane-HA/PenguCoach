@@ -19,11 +19,11 @@ Morning, workout preparation and daily reflection; larger readiness lamps with a
 Reviewed time-budget variants, confirmed training experiences, recorded 1/5/20-minute best efforts, calendar-draft load checks and a route briefing with climbs, sustained fast passages, personal GPS notes and timed-plan orientation. All calculations use available recorded data; no extra AI calls or API keys are required. See [calculation rules and workflow](docs/LOCAL_TRAINING_FEATURES.md).
 
 
-**Alpha.66 maintenance update:** strengthens generation-time schemas for requested session counts, local week numbers, executable/repeat steps and strength targets. Segmented-plan technical details now retain every validation reason and show total/retry time, plus separate native Ollama loading, input and generation timings when provided. Live progress identifies retries. These changes aim to reduce unnecessary regeneration; actual savings depend on the model. Existing saved plans remain compatible. Includes the Alpha.64/65 Sparky GPS, numeric-input and training-format fixes. See [SparkyFitness setup](docs/SPARKYFITNESS.md).
+**Alpha.67 AI reliability update:** saved response profiles retain their budgets after reload. Coach, activity analysis, planned-workout review and both background/compatibility APIs share recoverable output limits. Model-specific output/reasoning controls and compact provider schemas reduce invalid requests. Plan sections are checked for weekly completeness and saved individually; connection failures preserve a retryable checkpoint instead of replaying valid weeks. Prompts omit null fields and keep a stable prefix where possible. Interrupted usage is marked unknown rather than zero. No new database migration or runtime dependency is required. See [AI Studio](docs/AI_STUDIO.md).
 
 ## Current alpha scope
 
-`v0.1.0-alpha.65` is the current end-to-end alpha baseline:
+`v0.1.0-alpha.67` is the current end-to-end alpha baseline:
 
 - **Sparky recording times and readings:** separate local clocks and recording zones, historical timestamp correction on sync, explicit time-unknown display, better minimum-HR/telemetry extraction and missing values shown as missing. See [SparkyFitness](docs/SPARKYFITNESS.md).
 
