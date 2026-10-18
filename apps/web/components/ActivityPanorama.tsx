@@ -1,4 +1,6 @@
 "use client";
+import ClientLink from "next/link";
+
 
 import {useEffect,useMemo,useRef,useState} from "react";
 import {api} from "../lib/api";
@@ -64,7 +66,7 @@ export default function ActivityPanorama({settings,point,points,de,onGoogleActiv
     {open&&!credential&&<div className="panorama-consent">
       <label>{de?"Anbieter":"Provider"}<select value={provider} disabled={busy} onChange={e=>{setProvider(e.target.value as Provider);setError("")}}><option value="google">Google Street View</option><option value="apple">Apple Look Around</option></select></label>
       <p>{de?"Erst nach deiner Bestätigung wird eine Verbindung zum gewählten Anbieter aufgebaut. Dabei erhält er die ausgewählten Koordinaten sowie übliche Verbindungsdaten. Puls, Watt und andere Messwerte werden nicht übertragen.":"Only after your confirmation will a connection to the selected provider be made. It receives the selected coordinates and normal connection data. Heart rate, power and other measurements are not sent."}</p>
-      {!configured&&<p className="status-warn">{de?"Für diesen Anbieter ist noch kein persönlicher Zugang hinterlegt.":"You have not configured personal access for this provider."} <a className="text-link" href="/settings/maps">{de?"Karten-Einstellungen":"Map settings"}</a></p>}
+      {!configured&&<p className="status-warn">{de?"Für diesen Anbieter ist noch kein persönlicher Zugang hinterlegt.":"You have not configured personal access for this provider."} <ClientLink prefetch={false} className="text-link" href="/settings/maps">{de?"Karten-Einstellungen":"Map settings"}</ClientLink></p>}
       <div className="row"><button type="button" onClick={confirm} disabled={!configured||!point||busy}>{busy?(de?"Wird geöffnet…":"Opening…"):(de?"Bestätigen und laden":"Confirm and load")}</button><button type="button" className="ghost" onClick={close}>{de?"Abbrechen":"Cancel"}</button></div>
     </div>}
     {error&&<p role="alert" className="status-bad">{error}</p>}

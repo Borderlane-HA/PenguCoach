@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from pengucoach.auth.dependencies import safety_confirmed_user
-from pengucoach.db.models import Activity, ActivityMetric, BodyMeasurement, DailyHealth, HrvDaily, SleepSession, User
+from pengucoach.db.models import Activity, ActivityMetric, BodyMeasurement, DailyHealth, HrvDaily, SleepSession, User, UserPreference
 from pengucoach.db.session import get_db
 
 from pengucoach.common.dates import user_today, day_start as local_day_start
@@ -156,13 +156,13 @@ async def _vo2_payload(db: AsyncSession, user: User, start_date: date | None = N
 
 
 @router.get("/today")
-async def today(user: User = Depends(safety_confirmed_user), db: AsyncSession = Depends(get_db)):
+async def today(user: User = Depends(safety_confirmed_user), db: AsyncSession = Depends(get_db), include_vo2: bool = True):
     row = await db.scalar(select(DailyHealth).where(DailyHealth.user_id == user.id, DailyHealth.date == user_today(user)))
     sleep = await db.scalar(select(SleepSession).where(SleepSession.user_id == user.id, SleepSession.date == user_today(user)))
     hrv = await db.scalar(select(HrvDaily).where(HrvDaily.user_id == user.id, HrvDaily.date == user_today(user)))
     body = _body_latest(await _body_rows(db, user.id))
 
-    vo2 = await _vo2_payload(db, user, user_today(user) - timedelta(days=179))
+    vo2 = await _vo2_payload(db, user, user_today(user) - timedelta(days=179)) if include_vo2 else {}
 
     result = _health(row) if row else {"date": user_today(user).isoformat(), "sources": {}}
     result["available"] = any((row, sleep, hrv))
@@ -194,7 +194,19 @@ async def today(user: User = Depends(safety_confirmed_user), db: AsyncSession = 
         "source": _metric_source(hrv.raw, "overnight_average") or _source(hrv.raw),
     } if hrv else None
     result["body"] = body
+    from pengucoach.health.steps import goal_config, summarize_steps
+    result["step_goal"] = summarize_steps([row] if row else [], goal_config(await db.get(UserPreference, user.id)), today=user_today(user), period_days=1)
     return result
+
+
+@router.get("/resting-hr")
+async def resting_hr_trend(days: int = Query(default=14, ge=1, le=90), user: User = Depends(safety_confirmed_user), db: AsyncSession = Depends(get_db)):
+    rows = (await db.execute(select(DailyHealth.date, DailyHealth.resting_hr, DailyHealth.raw).where(
+        DailyHealth.user_id == user.id, DailyHealth.date >= user_today(user) - timedelta(days=days - 1),
+        DailyHealth.date <= user_today(user)
+    ).order_by(DailyHealth.date))).all()
+    return {"health": [{"date": row.date.isoformat(), "resting_hr": row.resting_hr,
+                        "sources": {"resting_hr": _metric_source(row.raw, "resting_hr") or _source(row.raw)}} for row in rows]}
 
 
 @router.get("/range")
@@ -224,6 +236,8 @@ async def health_range(
     # SparkyFitness measurement supplies that same metric. Charts still honour
     # the selected period, while the current cards use the latest known value.
     body_all_rows = await _body_rows(db, user.id)
+    from pengucoach.health.steps import goal_config, summarize_steps
+    step_summary = summarize_steps(health, goal_config(await db.get(UserPreference, user.id)), today=user_today(user), period_days=None if all_data else days)
     return {
         "days": None if all_data else days,
         "all": all_data,
@@ -246,6 +260,7 @@ async def health_range(
         } for x in hrvs],
         "body": [_body_row(x) for x in body_rows],
         "body_latest": _body_latest(body_all_rows),
+        "step_goal": step_summary,
     }
 
 

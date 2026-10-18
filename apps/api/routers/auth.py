@@ -9,6 +9,7 @@ from pengucoach.auth.dependencies import current_user
 from pengucoach.auth.jwt import create_safety_token, create_session_token, valid_safety_token
 from pengucoach.auth.passwords import verify_password
 from pengucoach.common.config import settings
+from pengucoach.common.dates import user_zone
 from pengucoach.db.models import SafetyAcceptance, User
 from pengucoach.db.session import get_db
 from pengucoach.safety.notice import NOTICE_VERSION
@@ -72,6 +73,7 @@ async def me(
         "safety_required": not valid_safety_token(pengucoach_safety, str(user.id)),
         "notice_version": NOTICE_VERSION,
         "app_version": settings.resolved_app_version,
+        "timezone": str(user_zone(user)),
     }
 
 

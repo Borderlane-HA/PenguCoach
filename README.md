@@ -21,9 +21,11 @@ Reviewed time-budget variants, confirmed training experiences, recorded 1/5/20-m
 
 **Alpha.67 AI reliability update:** saved response profiles retain their budgets after reload. Coach, activity analysis, planned-workout review and both background/compatibility APIs share recoverable output limits. Model-specific output/reasoning controls and compact provider schemas reduce invalid requests. Plan sections are checked for weekly completeness and saved individually; connection failures preserve a retryable checkpoint instead of replaying valid weeks. Prompts omit null fields and keep a stable prefix where possible. Interrupted usage is marked unknown rather than zero. No new database migration or runtime dependency is required. See [AI Studio](docs/AI_STUDIO.md).
 
+**Alpha.68 everyday update:** personal step targets with daily and period progress, optional confirmed target suggestions, calmer metric cards, a per-user custom light/dark palette, a cached GitHub release notice and faster internal navigation with shared dashboard readings. Today avoids its extensive VO₂max calculation unless selected; hidden and offscreen sections load selectively. See [Steps, appearance and navigation](docs/PERSONALIZATION.md).
+
 ## Current alpha scope
 
-`v0.1.0-alpha.67` is the current end-to-end alpha baseline:
+`v0.1.0-alpha.68` is the current end-to-end alpha baseline:
 
 - **Sparky recording times and readings:** separate local clocks and recording zones, historical timestamp correction on sync, explicit time-unknown display, better minimum-HR/telemetry extraction and missing values shown as missing. See [SparkyFitness](docs/SPARKYFITNESS.md).
 

@@ -15,11 +15,15 @@ def test_theme_is_restored_before_first_paint_and_cached_on_change():
     layout = text("apps/web/app/layout.tsx")
     shell = text("apps/web/components/AppShell.tsx")
     appearance = text("apps/web/app/settings/appearance/page.tsx")
-    assert "pengucoach_theme" in layout
-    assert "document.documentElement.dataset.theme=t" in layout
+    theme = text("apps/web/lib/theme.ts")
+    session = text("apps/web/lib/session.tsx")
+    assert 'import {themeBoot}' in layout
+    assert "pengucoach_theme" in theme
+    assert "document.documentElement.dataset.theme=t" in theme
     assert "<head><script" in layout
-    assert "localStorage.setItem(\"pengucoach_theme\",theme)" in shell
-    assert "localStorage.setItem(\"pengucoach_theme\",theme)" in appearance
+    assert "applyAppearance(v)" in session
+    assert "applyAppearance(v)" in appearance
+    assert "localStorage.setItem(\"pengucoach_theme\",theme)" in theme
 
 
 def test_theme_palette_additions_and_nordic_metric_contrast_guard():

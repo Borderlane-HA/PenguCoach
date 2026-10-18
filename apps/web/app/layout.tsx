@@ -2,6 +2,8 @@ import "./globals.css";
 import "leaflet/dist/leaflet.css";
 import type {Metadata,Viewport} from "next";
 import {I18nProvider} from "../lib/i18n";
+import SessionProvider from "../lib/session";
+import {themeBoot} from "../lib/theme";
 
 export const metadata:Metadata={
   title:"PenguCoach",
@@ -11,8 +13,6 @@ export const metadata:Metadata={
 
 export const viewport:Viewport={width:"device-width",initialScale:1,viewportFit:"cover"};
 
-const themeBoot = `(()=>{try{const t=localStorage.getItem("pengucoach_theme");if(t)document.documentElement.dataset.theme=t}catch{}})();`;
-
 export default function RootLayout({children}:{children:React.ReactNode}){
-  return <html lang="de" suppressHydrationWarning><head><script dangerouslySetInnerHTML={{__html:themeBoot}}/></head><body><I18nProvider>{children}</I18nProvider></body></html>;
+  return <html lang="de" suppressHydrationWarning><head><script dangerouslySetInnerHTML={{__html:themeBoot}}/></head><body><I18nProvider><SessionProvider>{children}</SessionProvider></I18nProvider></body></html>;
 }

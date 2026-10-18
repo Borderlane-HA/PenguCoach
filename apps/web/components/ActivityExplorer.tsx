@@ -1,4 +1,6 @@
 "use client";
+import ClientLink from "next/link";
+
 
 import {useCallback,useEffect,useMemo,useRef,useState} from "react";
 import ActivityRouteMap from "./ActivityRouteMap";
@@ -102,7 +104,7 @@ export default function ActivityExplorer({data,lang,activityId}:{data:Sample[];l
     return axis.kind==="time"?timeLabel(value):axis.kind==="distance"?`${value.toFixed(2)} km`:axisLabel(nearestIndex(axis.positions,fraction));
   }
 
-  if(!data.length)return <div className="activity-chart-empty"><strong>{de?"Keine aufgezeichnete Zeitreihe oder Strecke verfügbar.":"No recorded time series or route available."}</strong><a className="text-link" href="/activities">{de?"Datei mit Messwerten oder GPS importieren":"Import a file with readings or GPS"} →</a></div>;
+  if(!data.length)return <div className="activity-chart-empty"><strong>{de?"Keine aufgezeichnete Zeitreihe oder Strecke verfügbar.":"No recorded time series or route available."}</strong><ClientLink prefetch={false} className="text-link" href="/activities">{de?"Datei mit Messwerten oder GPS importieren":"Import a file with readings or GPS"} →</ClientLink></div>;
   return <div className="activity-explorer" id={activityId?`activity-explorer-${activityId}`:undefined}>
     <div className="chart-toolbar">
       <div className="chart-chip-row" aria-label={de?"Messwerte":"Metrics"}>{available.map(metric=><button type="button" key={metric.key} className={`chart-chip ${selected.includes(metric.key)?"active":""}`} aria-pressed={selected.includes(metric.key)} onClick={()=>toggle(metric.key)}><span className="chart-dot" style={{background:metric.color}}/>{de?metric.de:metric.en}</button>)}</div>
@@ -111,7 +113,7 @@ export default function ActivityExplorer({data,lang,activityId}:{data:Sample[];l
     </div>
 
     {routePoints.length>0&&<section className="route-explorer-panel">
-      <div className="between"><div><strong>{de?"Deine aufgezeichnete Strecke":"Your recorded route"}</strong><small className="panorama-subtitle">{de?"Diagramm bewegen oder eine Stelle auf der Strecke anklicken":"Move over the chart or click a point on the route"}</small></div><a className="text-link" href="/settings/maps">{de?"Karten-Einstellungen":"Map settings"}</a></div>
+      <div className="between"><div><strong>{de?"Deine aufgezeichnete Strecke":"Your recorded route"}</strong><small className="panorama-subtitle">{de?"Diagramm bewegen oder eine Stelle auf der Strecke anklicken":"Move over the chart or click a point on the route"}</small></div><ClientLink prefetch={false} className="text-link" href="/settings/maps">{de?"Karten-Einstellungen":"Map settings"}</ClientLink></div>
       <div className={`route-view-grid ${googleActive?"google-open":""}`}><div className="route-map-area">
       {settingsFailed?<div className="map-state"><p>{de?"Karten-Einstellungen konnten nicht geladen werden.":"Could not load map settings."}</p><button type="button" className="ghost compact" onClick={loadSettings}>{de?"Erneut laden":"Retry"}</button></div>:!settings?<div className="map-state">{de?"Karten-Einstellungen werden geladen…":"Loading map settings…"}</div>:googleActive?<div className="map-state">{de?"Nach dem Schließen der Straßenansicht erscheint die Streckenkarte wieder.":"Close street-level view to return to the route map."}</div>:settings.map_enabled?<>
         <div className="route-map-controls"><label>{de?"Streckenfarbe":"Route color"}<select value={colorKey} onChange={e=>setColorKey(e.target.value)}><option value="">{de?"Einheitlich":"Single color"}</option>{available.map(metric=><option value={metric.key} key={metric.key}>{de?metric.de:metric.en}</option>)}</select></label><span className="muted">{routePoints.length.toLocaleString(de?"de-DE":"en-GB")} {de?"GPS-Punkte":"GPS points"}{route.length>1?` · ${route.length} ${de?"Abschnitte":"segments"}`:""}</span></div>

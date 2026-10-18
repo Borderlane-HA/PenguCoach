@@ -14,12 +14,14 @@ from pengucoach.common.config import settings
 from pengucoach.db.models import User, UserPreference
 from pengucoach.db.session import get_db
 from pengucoach.coach.today import TODAY_CARDS, today_preferences
+from pengucoach.common.dates import user_today
+from pengucoach.health.steps import goal_config, step_goal_payload
 
 router = APIRouter(prefix="/settings", tags=["settings"])
 
 THEMES = {
     "light", "dark", "ocean", "forest", "lavender", "sand", "rose", "slate", "aurora",
-    "alpine", "arctic", "espresso", "ember", "mono",
+    "alpine", "arctic", "espresso", "ember", "mono", "custom",
 }
 MAX_IMAGE_BYTES = 3 * 1024 * 1024
 ALLOWED_IMAGE_TYPES = {
@@ -34,8 +36,16 @@ class PrivacyIn(BaseModel):
     cloud_health_ai_allowed: bool
 
 
+class CustomThemeIn(BaseModel):
+    mode: Literal["light", "dark"] = "light"
+    background: str = Field(default="#f2f7f5", pattern=r"^#[0-9a-fA-F]{6}$")
+    surface: str = Field(default="#ffffff", pattern=r"^#[0-9a-fA-F]{6}$")
+    accent: str = Field(default="#287b6e", pattern=r"^#[0-9a-fA-F]{6}$")
+
+
 class AppearanceIn(BaseModel):
-    theme: str = Field(pattern=r"^(light|dark|ocean|forest|lavender|sand|rose|slate|aurora|alpine|arctic|espresso|ember|mono)$")
+    theme: str = Field(pattern=r"^(light|dark|ocean|forest|lavender|sand|rose|slate|aurora|alpine|arctic|espresso|ember|mono|custom)$")
+    custom_theme: CustomThemeIn | None = None
 
 
 class AiPreferencesIn(BaseModel):
@@ -55,6 +65,7 @@ def _asset_info(pref: UserPreference | None) -> dict:
     cfg = dict(pref.dashboard_config or {}) if pref else {}
     return {
         "theme": (pref.theme if pref and pref.theme in THEMES else "light"),
+        "custom_theme": CustomThemeIn.model_validate(cfg.get("custom_theme") or {}).model_dump(),
         "has_avatar": bool(cfg.get("avatar_file")),
         "has_app_icon": bool(cfg.get("app_icon_file")),
         "avatar_version": cfg.get("avatar_version"),
@@ -136,9 +147,45 @@ async def appearance(user: User = Depends(safety_confirmed_user), db: AsyncSessi
 @router.put("/appearance")
 async def update_appearance(payload: AppearanceIn, user: User = Depends(safety_confirmed_user), db: AsyncSession = Depends(get_db)):
     pref = await _pref(db, user)
+    await db.refresh(pref, with_for_update=True)
     pref.theme = payload.theme
+    if payload.custom_theme is not None:
+        pref.dashboard_config = {**(pref.dashboard_config or {}), "custom_theme": payload.custom_theme.model_dump()}
     await db.commit()
     return {"saved": True, **_asset_info(pref)}
+
+
+@router.get("/update-status")
+async def get_update_status(user: User = Depends(safety_confirmed_user)):
+    from pengucoach.common.releases import update_status
+    return await update_status(settings.resolved_app_version)
+
+
+class StepGoalIn(BaseModel):
+    daily_target: int = Field(ge=1000, le=50000, strict=True)
+    adaptive: bool = False
+
+
+@router.get("/step-goal")
+async def get_step_goal(user: User = Depends(safety_confirmed_user), db: AsyncSession = Depends(get_db)):
+    return await step_goal_payload(db, user)
+
+
+@router.put("/step-goal")
+async def save_step_goal(payload: StepGoalIn, user: User = Depends(safety_confirmed_user), db: AsyncSession = Depends(get_db)):
+    pref = await _pref(db, user)
+    await db.refresh(pref, with_for_update=True)
+    cfg = dict(pref.dashboard_config or {})
+    current = goal_config(pref)
+    today = user_today(user).isoformat()
+    history = current["history"]
+    if not current["configured"] or current["daily_target"] != payload.daily_target:
+        history = [item for item in history if item["from"] != today]
+        history.append({"from": today, "target": payload.daily_target})
+    cfg["step_goal"] = {"configured": True, **payload.model_dump(), "history": history}
+    pref.dashboard_config = cfg
+    await db.commit()
+    return await step_goal_payload(db, user)
 
 
 async def _save_image(kind: str, upload: UploadFile, user: User, db: AsyncSession) -> dict:

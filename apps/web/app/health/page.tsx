@@ -1,13 +1,16 @@
 "use client";
 import NumberInput from "../../components/NumberInput";
 
-import {useEffect,useMemo,useState} from "react";
+import {useMemo,useState} from "react";
 import {sourceLabel,measuredLabel,localDate} from "../../lib/sources";
 import SourceOverview from "../../components/SourceOverview";
 import AppShell from "../../components/AppShell";
 import HealthDevelopment from "../../components/HealthDevelopment";
 import ProfessionalLineChart from "../../components/ProfessionalLineChart";
 import {api} from "../../lib/api";
+import {useCachedQuery} from "../../lib/data-cache";
+import MetricCard from "../../components/MetricCard";
+import StepGoalCard from "../../components/StepGoalCard";
 import {bi,useI18n} from "../../lib/i18n";
 
 type Vo2Point={date:string;value:number;activity_id?:string;measurement_kind?:"imported"|"estimated";confidence?:string;source?:string};
@@ -38,18 +41,17 @@ function periodDays(period:string){
 
 export default function Health(){
   const{lang}=useI18n();
-  const[data,setData]=useState<any>({health:[],sleep:[],hrv:[],body:[],body_latest:null});
   const[period,setPeriod]=useState("last7");
-  const[vo2,setVo2]=useState<Vo2Data>({running:[],cycling:[]});
-  const[development,setDevelopment]=useState<any>({summary:{},volume:[],load_recovery:[],changes:[],efficiency:{},sport_mix:[]});
+  const suffix=period==="all"?"?all=true":`?days=${periodDays(period)}`;
+  const rangeQuery=useCachedQuery<any>(`/health/range${suffix}`);
+  const devQuery=useCachedQuery<any>(`/health/development${suffix}`,60000);
+  const data=rangeQuery.data??{health:[],sleep:[],hrv:[],body:[],body_latest:null};
+  const development=devQuery.data;
+  const vo2=(development?.vo2_display??{running:[],cycling:[]}) as Vo2Data;
   const[manualOpen,setManualOpen]=useState(false),[manualSaving,setManualSaving]=useState(false),[manualError,setManualError]=useState("");
   const[manual,setManual]=useState<Record<string,string>>({measured_on:localDate(),weight_kg:"",height_cm:"",body_fat_percent:"",body_water_percent:"",muscle_mass_kg:"",bone_mass_kg:""});
 
-  function load(){
-    const suffix=period==="all"?"?all=true":`?days=${periodDays(period)}`;
-    return Promise.all([api<any>(`/health/range${suffix}`),api<any>(`/health/development${suffix}`)]).then(([range,dev])=>{setData(range);setDevelopment(dev);setVo2((dev?.vo2_display??{running:[],cycling:[]}) as Vo2Data)});
-  }
-  useEffect(()=>{void load()},[period]);
+  async function load(){await Promise.all([rangeQuery.refresh(),devQuery.refresh()])}
 
   const avgRhr=metricAverage(data.health??[],"resting_hr"),avgSteps=metricAverage(data.health??[],"steps"),avgBattery=metricAverage(data.health??[],"body_battery_high"),avgStress=metricAverage(data.health??[],"stress_avg"),avgHydration=metricAverage(data.health??[],"hydration_ml"),avgSleep=metricAverage(data.sleep??[],"duration_seconds"),avgHrv=metricAverage(data.hrv??[],"overnight_average");
   const latestHydrationGoal=latestWith(data.health??[],"hydration_goal_ml");
@@ -105,9 +107,10 @@ export default function Health(){
     <SourceOverview/>
     <section className="page-head-modern"><div><span className="eyebrow">{bi(lang,"Physiologie & Erholung","Physiology & recovery")}</span><h1>{bi(lang,"Gesundheit","Health")}</h1><p>{bi(lang,"Deine Gesundheitswerte im Verlauf – mit Quelle je Messwert und aktuellen Körperwerten aus allen verfügbaren Daten.","Your health trends, with a source for every reading and current body metrics from all available data.")}</p></div><div className="period-control"><span>{bi(lang,"Zeitraum","Period")}</span><select value={period} onChange={e=>setPeriod(e.target.value)}><option value="today">{bi(lang,"Heute","Today")}</option><option value="last7">{bi(lang,"Letzte 7 Tage","Last 7 days")}</option><option value="week">{bi(lang,"Diese Woche","This week")}</option><option value="month">{bi(lang,"Dieser Monat","This month")}</option><option value="3m">{bi(lang,"Letzte 3 Monate","Last 3 months")}</option><option value="6m">{bi(lang,"Letzte 6 Monate","Last 6 months")}</option><option value="year">{bi(lang,"Dieses Jahr","This year")}</option><option value="all">{bi(lang,"Alle","All")}</option></select></div></section>
 
-    <section className="health-metric-grid health-page-metrics">{cards.filter(c=>c.tone!=="battery"||c.value!=="—").map(c=><div className={`health-metric-card tone-${c.tone}`} key={c.label}><div className="health-metric-top"><span className="health-metric-dot"/><span className="metric-label">{c.label}</span></div><div className="metric-value">{String(c.value)}</div><div className="kpi-note">{c.note}</div></div>)}</section>
+    <section className="health-metric-grid health-page-metrics">{cards.filter(c=>c.tone!=="battery"||c.value!=="—").map(c=>c.tone==="steps"?<StepGoalCard key={c.label} summary={data.step_goal} value={String(c.value)} note={rangeQuery.error&&!rangeQuery.data?bi(lang,"Messwerte nicht verfügbar","Readings unavailable"):c.note} loading={!rangeQuery.data&&!rangeQuery.error} error={!!rangeQuery.error&&!rangeQuery.data} period/>:<MetricCard key={c.label} label={c.label} value={String(c.value)} note={rangeQuery.error&&!rangeQuery.data?bi(lang,"Messwerte nicht verfügbar","Readings unavailable"):c.note} tone={c.tone} loading={!rangeQuery.data&&!rangeQuery.error} error={!!rangeQuery.error&&!rangeQuery.data}/>)}</section>
 
-    <HealthDevelopment data={development} vo2={vo2} lang={lang} periodLabel={periodLabel}/>
+    {rangeQuery.error&&<div className="notice card" role="alert">{bi(lang,"Die Messwerte konnten nicht aktualisiert werden.","Readings could not be refreshed.")} <button type="button" className="ghost compact" onClick={()=>void rangeQuery.refresh()}>{bi(lang,"Erneut versuchen","Try again")}</button></div>}
+    {development?<HealthDevelopment data={development} vo2={vo2} lang={lang} periodLabel={periodLabel}/>:<section className="card loading-panel" aria-busy={!devQuery.error}><p>{devQuery.error?bi(lang,"Die Entwicklung konnte nicht geladen werden.","Progress could not be loaded."):bi(lang,"Deine Entwicklung wird geladen …","Loading your progress …")}</p>{devQuery.error?<button type="button" className="ghost compact" onClick={()=>void devQuery.refresh()}>{bi(lang,"Erneut versuchen","Try again")}</button>:<span className="metric-skeleton"/>}</section>}
 
     <section className="card body-composition-card"><div className="section-heading"><div><span className="eyebrow">{bi(lang,"Körperzusammensetzung","Body composition")}</span><h2>{bi(lang,"Aktuelle Körperwerte","Current body metrics")}</h2><p>{bi(lang,"Verbundene Quellen und manuell gepflegte Werte. Ein manueller Wert bleibt aktiv, bis für dieselbe Kennzahl eine neuere Messung eintrifft.","Connected sources and manually maintained values. A manual value stays active until a newer measurement for the same metric arrives.")}</p></div><div className="body-heading-actions"><span className="period-badge">{bi(lang,"Aktuell","Current")}</span><button type="button" className="ghost" onClick={openManual}>{bi(lang,"Manuell erfassen","Add manually")}</button></div></div><div className="body-metric-grid">{bodyCards.map(item=><div className="body-metric" key={item.key}><small>{item.label}</small><strong>{item.value}</strong><span>{body?.[item.key as keyof BodyLatest]!=null?bodyMetricSource(body,item.key):bi(lang,"Keine Daten","No data")}</span></div>)}</div>{manualOpen&&<div className="manual-body-editor"><div className="manual-body-intro"><strong>{bi(lang,"Körperwerte manuell pflegen","Maintain body metrics manually")}</strong><small>{bi(lang,"Ideal ohne Smart-Waage. Leere Felder werden nicht erfunden; ältere vorhandene Werte bleiben als Fallback verfügbar.","Useful without a smart scale. Empty fields are never invented; older known values remain available as fallback.")}</small></div><div className="manual-body-grid"><label>{bi(lang,"Datum","Date")}<input type="date" value={manual.measured_on} onChange={e=>setManual({...manual,measured_on:e.target.value})}/></label><label>{bi(lang,"Gewicht","Weight")}<span className="unit-input"><NumberInput allowEmpty min="20" max="500" step="0.1" placeholder={body?.weight_kg!=null?body.weight_kg.toFixed(1):""} value={manual.weight_kg} onValueChange={raw=>setManual({...manual,weight_kg:raw})}/><b>kg</b></span></label><label>{bi(lang,"Größe","Height")}<span className="unit-input"><NumberInput allowEmpty min="50" max="260" step="0.1" placeholder={body?.height_cm!=null?body.height_cm.toFixed(0):""} value={manual.height_cm} onValueChange={raw=>setManual({...manual,height_cm:raw})}/><b>cm</b></span></label><label>{bi(lang,"Körperfett","Body fat")}<span className="unit-input"><NumberInput allowEmpty min="1" max="75" step="0.1" placeholder={body?.body_fat_percent!=null?body.body_fat_percent.toFixed(1):""} value={manual.body_fat_percent} onValueChange={raw=>setManual({...manual,body_fat_percent:raw})}/><b>%</b></span></label><label>{bi(lang,"Körperwasser","Body water")}<span className="unit-input"><NumberInput allowEmpty min="10" max="90" step="0.1" placeholder={body?.body_water_percent!=null?body.body_water_percent.toFixed(1):""} value={manual.body_water_percent} onValueChange={raw=>setManual({...manual,body_water_percent:raw})}/><b>%</b></span></label><label>{bi(lang,"Muskelmasse","Muscle mass")}<span className="unit-input"><NumberInput allowEmpty min="1" max="300" step="0.1" placeholder={body?.muscle_mass_kg!=null?body.muscle_mass_kg.toFixed(1):""} value={manual.muscle_mass_kg} onValueChange={raw=>setManual({...manual,muscle_mass_kg:raw})}/><b>kg</b></span></label><label>{bi(lang,"Knochenmasse","Bone mass")}<span className="unit-input"><NumberInput allowEmpty min="0.1" max="30" step="0.1" placeholder={body?.bone_mass_kg!=null?body.bone_mass_kg.toFixed(1):""} value={manual.bone_mass_kg} onValueChange={raw=>setManual({...manual,bone_mass_kg:raw})}/><b>kg</b></span></label></div>{manualError&&<div className="status-bad">{manualError}</div>}<div className="manual-body-actions"><button type="button" className="ghost" onClick={()=>setManualOpen(false)}>{bi(lang,"Abbrechen","Cancel")}</button><button type="button" className="primary" disabled={manualSaving} onClick={()=>void saveManual()}>{manualSaving?bi(lang,"Speichert…","Saving…"):bi(lang,"Körperwerte speichern","Save body metrics")}</button></div></div>}</section>
 

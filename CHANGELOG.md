@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.0-alpha.68
+
+- Add per-user daily step targets on Today and Health with a slim progress bar, explicit percentages above 100%, recorded-day coverage and target history. Period progress uses goals for known days; unknown days do not become zero. Optional deterministic suggestions use completed-day evidence and require confirmation before saving.
+- Replace clipped decorative rings with compact metric symbols, calmer surfaces, consistent card spacing and readable labels. Add a focused step-target editor instead of another permanent dashboard panel.
+- Add custom light/dark themes with three editable colors, a live sample preview and derived contrast-safe text, control and chart colors. Restore custom colors before first paint and preserve them when returning to a preset. Existing per-account assets remain intact.
+- Use client navigation for internal app links and retain the authenticated shell. Share dashboard requests through a user/day-scoped memory cache with background refresh, mutation invalidation, readable loading/error states and retained known values. Scope period responses independently. Do not store dashboard health readings in localStorage.
+- Load Today readings without the extensive VO₂max history unless that metric is selected; add a small resting-HR trend endpoint. Avoid hidden optional-section requests and defer progress/weather until near the viewport. Load Health's readings independently of development charts.
+- Show a compact GitHub update notification near the installed version, in the collapsed sidebar and in the mobile menu. Compare alpha tags numerically, include published prereleases for alpha installations, cache anonymous checks for six hours and link to the newer release. Network failures do not block dashboard data; there is no automatic installation.
+- No database migration or runtime dependency added. Update API, web and workers together. Automated network and browser tests use simulated data; real-world first-load performance depends on the installation.
+
 ## 0.1.0-alpha.67
 
 - Correct saved response-profile budgets after reload across Coach, activity analysis and training planning. Preserve the complete latest question; reject a request that cannot fit before sending it to a model.

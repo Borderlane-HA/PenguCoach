@@ -8,8 +8,10 @@ def test_dashboard_exposes_resolved_application_version():
     auth = Path("apps/api/routers/auth.py").read_text()
     shell = Path("apps/web/components/AppShell.tsx").read_text()
     assert '"app_version": settings.resolved_app_version' in auth
-    assert 'className="side-version"' in shell
-    assert 'v{me.app_version}' in shell
+    notice = Path("apps/web/components/UpdateNotice.tsx").read_text()
+    assert '<UpdateNotice version={me.app_version}' in shell
+    assert 'className="side-version"' in notice
+    assert 'v{version}' in notice
 
 
 def test_release_versions_are_aligned():

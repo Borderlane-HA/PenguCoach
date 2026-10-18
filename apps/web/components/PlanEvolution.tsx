@@ -1,8 +1,11 @@
 "use client";
+import ClientLink from "next/link";
+
 import {strengthPrescription} from "../lib/strength";
 import NumberInput from "./NumberInput";
 import {useEffect,useState} from "react";
 import {api} from "../lib/api";
+import {useCachedQuery} from "../lib/data-cache";
 import {bi,type Lang} from "../lib/i18n";
 type O=Record<string,any>;
 
@@ -70,7 +73,6 @@ export function WeekReview({runId,revision,lang,onApplied}:{runId:string;revisio
 }
 
 export function DataFreshness({lang,initial}:{lang:Lang;initial?:O}){
- const[data,setData]=useState<O|null>(initial||null),[error,setError]=useState("");
- useEffect(()=>{if(initial){setData(initial);return}void api<O>("/coach/freshness").then(setData).catch(()=>setError(bi(lang,"Datenaktualität konnte nicht geladen werden.","Could not load data freshness.")))},[initial,lang]);
- return <details className="evolution-freshness"><summary>{bi(lang,"Datenaktualität & Abgleich","Data freshness & matching")}</summary>{error&&<p role="status">{error}</p>}{data?.sources?.map((s:O)=><div className="evidence-row" key={s.source}><strong>{s.source==="garmin"?"Garmin":"SparkyFitness"}</strong><span>{s.last_successful_sync_at?new Date(s.last_successful_sync_at).toLocaleString(lang==="de"?"de-DE":"en-GB"):bi(lang,"Noch kein erfolgreicher Sync","No successful sync yet")}</span>{(s.status!=="connected"||s.age_minutes==null||s.age_minutes>1440||s.last_error_code)&&<small>{bi(lang,"Datenstand prüfen","Check data freshness")}</small>}</div>)}{data?.sources?.length===0&&<p>{bi(lang,"Keine verbundene Datenquelle. Manuelle Importe bleiben nutzbar.","No connected source. Manual imports remain available.")}</p>}<p className="muted">{bi(lang,"Ein erfolgreicher Sync garantiert keine vollständige Historie. Ohne passende Aktivität bleibt der Abgleich offen, bis du eine Aktivität zuordnest oder „Nicht absolviert“ bestätigst.","A successful sync does not guarantee complete history. Without a matching activity, the comparison stays pending until you assign an activity or confirm ‘Not completed’. ")}</p><div className="companion-actions"><a href="/settings/garmin" className="text-link">Garmin →</a><a href="/settings/sparkyfitness" className="text-link">SparkyFitness →</a></div></details>
+ const query=useCachedQuery<O>(initial?null:"/coach/freshness",60000),data=initial||query.data,error=query.error?bi(lang,"Datenaktualität konnte nicht geladen werden.","Could not load data freshness."):"";
+ return <details className="evolution-freshness"><summary>{bi(lang,"Datenaktualität & Abgleich","Data freshness & matching")}</summary>{error&&<p role="status">{error}</p>}{data?.sources?.map((s:O)=><div className="evidence-row" key={s.source}><strong>{s.source==="garmin"?"Garmin":"SparkyFitness"}</strong><span>{s.last_successful_sync_at?new Date(s.last_successful_sync_at).toLocaleString(lang==="de"?"de-DE":"en-GB"):bi(lang,"Noch kein erfolgreicher Sync","No successful sync yet")}</span>{(s.status!=="connected"||s.age_minutes==null||s.age_minutes>1440||s.last_error_code)&&<small>{bi(lang,"Datenstand prüfen","Check data freshness")}</small>}</div>)}{data?.sources?.length===0&&<p>{bi(lang,"Keine verbundene Datenquelle. Manuelle Importe bleiben nutzbar.","No connected source. Manual imports remain available.")}</p>}<p className="muted">{bi(lang,"Ein erfolgreicher Sync garantiert keine vollständige Historie. Ohne passende Aktivität bleibt der Abgleich offen, bis du eine Aktivität zuordnest oder „Nicht absolviert“ bestätigst.","A successful sync does not guarantee complete history. Without a matching activity, the comparison stays pending until you assign an activity or confirm ‘Not completed’. ")}</p><div className="companion-actions"><ClientLink prefetch={false} href="/settings/garmin" className="text-link">Garmin →</ClientLink><ClientLink prefetch={false} href="/settings/sparkyfitness" className="text-link">SparkyFitness →</ClientLink></div></details>
 }
