@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.0-alpha.70
+
+- Move the sidebar collapse/expand control from the content header into the sidebar header next to the brand. Keep a visible expansion button below the logo in the collapsed icon rail. Preserve accessible names, keyboard focus, remembered preferences and grouped navigation. Mobile navigation is unchanged.
+- No new dependency or database migration.
+
 ## 0.1.0-alpha.69
 
 - Refine the daily-readiness card with a single status symbol, a compact numeric score and a slim segmented scale. Preserve the underlying score, status, evidence and guidance. Loading, unavailable and insufficient-data states stay neutral; the score does not turn an explicit recovery status green. Support mobile layouts, preset/custom themes and reduced motion.

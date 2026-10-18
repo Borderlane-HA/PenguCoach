@@ -805,3 +805,8 @@ html[data-theme="custom"] .tone-body{--metric:var(--violet)}html[data-theme="cus
 .upload-button{color:var(--primary-ink)}
 html[data-theme="custom"] :is(.theme-check,.ai-quality-buttons button.active,.ai-prompt-tabs button.active,.context-preset-row button.active,.activity-pager button.active,.ai-usage-periods button.active,.planner-stepper button.active>span,.ai-task-switcher>button.active>span){color:var(--primary-ink)!important}
 .metric-card-modern{padding:15px!important}.metric-card-modern .health-metric-top{min-height:24px}.metric-card-modern .metric-symbol{width:25px;height:25px}.metric-card-modern .metric-value{margin-top:10px;margin-bottom:4px;font-size:1.5rem}.metric-card-modern .kpi-note{min-height:18px}.step-progress-area{padding-top:10px;gap:6px}.step-progress-track{height:4px}
+
+/* Alpha.70: sidebar controls belong to the navigation itself. */
+.side-header{display:flex;align-items:flex-start;gap:8px;flex:none;min-height:62px;padding:4px 0 20px}
+.side-header .side-brand{flex:1;min-width:0;min-height:38px;padding:0;margin:0}.side-header .side-brand>span:last-child{min-width:0}
+.sidebar-collapsed .side-header{flex-direction:column;align-items:center;gap:10px;min-height:0;padding:4px 0 14px}.sidebar-collapsed .side-header .side-brand{flex:none;padding:0;min-height:38px}
