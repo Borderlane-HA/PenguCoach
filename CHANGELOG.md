@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.0-alpha.69
+
+- Refine the daily-readiness card with a single status symbol, a compact numeric score and a slim segmented scale. Preserve the underlying score, status, evidence and guidance. Loading, unavailable and insufficient-data states stay neutral; the score does not turn an explicit recovery status green. Support mobile layouts, preset/custom themes and reduced motion.
+- Add a manual release check beside the installed version, including the collapsed sidebar and mobile menu, and under Settings → About. Share the result immediately between notices and the About view. Show the last successful check and distinguish unavailable/stale results from a confirmed current version.
+- Keep anonymous automatic GitHub checks cached for six hours during app use. Manual checks bypass that cache after a shared one-minute cooldown; concurrent clicks share a bounded request and use ETags. No automatic update installation, new dependency or database migration.
+
 ## 0.1.0-alpha.68
 
 - Add per-user daily step targets on Today and Health with a slim progress bar, explicit percentages above 100%, recorded-day coverage and target history. Period progress uses goals for known days; unknown days do not become zero. Optional deterministic suggestions use completed-day evidence and require confirmation before saving.

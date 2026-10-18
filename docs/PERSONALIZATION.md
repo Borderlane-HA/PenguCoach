@@ -70,5 +70,26 @@ checks for six hours and uses ETags when supplied. Failures retry later and do n
 block dashboard data. The check sends no health data or account credentials. It
 does not install updates automatically.
 
+Since Alpha.69, the refresh symbol beside the installed version and **Settings →
+About → Check now** can bypass the six-hour cache. The authenticated check shares
+a one-minute cooldown across accounts on the API process, including automatic
+requests; clicks during that minute reuse the result. Concurrent checks are
+serialized, keep ETags and retain known release information if GitHub is unavailable.
+The UI then says that the check could not complete instead of claiming the installed
+version is current. The last successful check time is shown separately. Automatic
+checks are demand-driven while using the app, not an independent server cron job.
+
+For an update to appear, publish a GitHub **Release** with a comparable version tag,
+for example `v0.1.0-alpha.69`; updating repository files or creating a draft alone
+does not make a newer release available. Alpha users also see published prereleases.
+
+## Daily readiness appearance
+
+Alpha.69 replaces the three large lamps and circular dial with one status symbol,
+a score badge and a slim segmented scale. The scale visualizes the numeric score;
+the recommendation and status still use the existing readiness rules, including
+recovery overrides. Missing, failed and loading assessments have no invented score.
+Evidence and the guided daily assistants remain in their existing places.
+
 No database migration or new runtime dependency is needed. Update the API and web
 application together; deploy the matching release to workers as usual.

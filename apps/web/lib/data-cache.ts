@@ -25,6 +25,7 @@ async function request(value:Entry){
  if(value.promise===promise){value.promise=null;if(generation!==value.generation&&value.listeners.size)void request(value);else emit(value,{loading:false})}
 }
 export function invalidateDataCache(){for(const value of entries.values()){value.generation++;emit(value,{updatedAt:0});if(value.listeners.size)void request(value)}}
+export function cacheQueryResult<T>(path:string,data:T){if(!scope)return;const value=entry(path);value.generation++;emit(value,{data,updatedAt:Date.now(),error:"",loading:false})}
 export function useCachedQuery<T>(path:string|null,ttl=30000){
  useSyncExternalStore(subscribeScope,()=>scope,()=>"");
  const value=path&&scope?entry(path):null;

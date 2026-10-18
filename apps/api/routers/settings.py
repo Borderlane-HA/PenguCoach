@@ -161,6 +161,12 @@ async def get_update_status(user: User = Depends(safety_confirmed_user)):
     return await update_status(settings.resolved_app_version)
 
 
+@router.get("/update-check")
+async def check_update_now(user: User = Depends(safety_confirmed_user)):
+    from pengucoach.common.releases import update_status
+    return await update_status(settings.resolved_app_version, refresh=True)
+
+
 class StepGoalIn(BaseModel):
     daily_target: int = Field(ge=1000, le=50000, strict=True)
     adaptive: bool = False

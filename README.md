@@ -23,9 +23,11 @@ Reviewed time-budget variants, confirmed training experiences, recorded 1/5/20-m
 
 **Alpha.68 everyday update:** personal step targets with daily and period progress, optional confirmed target suggestions, calmer metric cards, a per-user custom light/dark palette, a cached GitHub release notice and faster internal navigation with shared dashboard readings. Today avoids its extensive VO₂max calculation unless selected; hidden and offscreen sections load selectively. See [Steps, appearance and navigation](docs/PERSONALIZATION.md).
 
+**Alpha.69 polish:** a compact daily-readiness card with a status symbol and slim score scale. Check for new releases manually next to the installed version or under Settings → About, with an honest offline state and the last successful check time. The automatic six-hour release cache remains in place; repeated manual checks share a one-minute cooldown.
+
 ## Current alpha scope
 
-`v0.1.0-alpha.68` is the current end-to-end alpha baseline:
+`v0.1.0-alpha.69` is the current end-to-end alpha baseline:
 
 - **Sparky recording times and readings:** separate local clocks and recording zones, historical timestamp correction on sync, explicit time-unknown display, better minimum-HR/telemetry extraction and missing values shown as missing. See [SparkyFitness](docs/SPARKYFITNESS.md).
 

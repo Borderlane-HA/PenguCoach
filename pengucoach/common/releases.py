@@ -1,6 +1,7 @@
 """Bounded, anonymous GitHub release checks, cached independently of dashboards."""
 import asyncio
 import re
+from datetime import datetime, timezone
 from time import monotonic
 
 import httpx
@@ -41,10 +42,14 @@ def select_release(items, installed):
             "url": newest["html_url"] if newest else RELEASES_URL}
 
 
-async def update_status(installed):
+async def update_status(installed, *, refresh=False):
     async with _lock:
         now = monotonic()
-        if now >= _cache.get("expires", 0):
+        # Manual checks bypass six-hour results, with a shared one-minute
+        # cooldown to prevent repeated clicks from flooding GitHub.
+        manual_due = refresh and now >= _cache.get("manual_after", 0)
+        if now >= _cache.get("expires", 0) or manual_due:
+            _cache["manual_after"] = now + 60
             try:
                 headers = {"Accept": "application/vnd.github+json", "User-Agent": "PenguCoach-update-check"}
                 if _cache.get("etag"):
@@ -57,9 +62,13 @@ async def update_status(installed):
                     if not isinstance(items, list):
                         raise ValueError("INVALID_RELEASE_LIST")
                     _cache.update(items=items, etag=response.headers.get("etag"))
-                _cache.update(expires=now + 21600, stale=False)
+                _cache.update(expires=now + 21600, stale=False,
+                              checked_at=datetime.now(timezone.utc).isoformat())
             except (httpx.HTTPError, ValueError):
                 _cache.update(expires=now + 600, stale=True)
+        meta = {"checked_at": _cache.get("checked_at"), "check_interval_hours": 6,
+                "retry_after_seconds": max(0, int(_cache.get("manual_after", 0) - now + .999)),
+                "stale": _cache.get("stale", False)}
         if "items" not in _cache:
-            return {"status": "unavailable", "installed_version": installed, "url": RELEASES_URL}
-        return {**select_release(_cache["items"], installed), "stale": _cache.get("stale", False)}
+            return {"status": "unavailable", "installed_version": installed, "url": RELEASES_URL, **meta}
+        return {**select_release(_cache["items"], installed), **meta}
