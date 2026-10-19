@@ -33,9 +33,11 @@ Reviewed time-budget variants, confirmed training experiences, recorded 1/5/20-m
 
 **Alpha.73 maintenance:** Admin → System & maintenance brings together updates, encrypted full backups and checked recovery for managed native LXC and Linux Docker Compose installations. The version indicator opens this area; other users receive read-only update information. Shell commands remain available. Normal native updates, including the first upgrade from Alpha.72, and ordinary Docker Compose startup configure the independent maintenance service automatically. Setup failures are visible to administrators. See [System maintenance](docs/SYSTEM_MAINTENANCE.md).
 
+**Alpha.74 session recovery:** brief API interruptions during backups preserve the browser session. Network/server errors are retried; expired sessions still require login.
+
 ## Current alpha scope
 
-`v0.1.0-alpha.73` is the current end-to-end alpha baseline:
+`v0.1.0-alpha.74` is the current end-to-end alpha baseline:
 
 - **Sparky recording times and readings:** separate local clocks and recording zones, historical timestamp correction on sync, explicit time-unknown display, better minimum-HR/telemetry extraction and missing values shown as missing. See [SparkyFitness](docs/SPARKYFITNESS.md).
 

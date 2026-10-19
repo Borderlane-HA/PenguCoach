@@ -164,7 +164,7 @@ def host(tmp_path,request):
     (data/'celerybeat-schedule').write_text('runtime queue state')
     key=Fernet.generate_key().decode();cipher=Fernet(key.encode()).encrypt(b'all provider API credentials').decode()
     config={'state':str(tmp_path/'maintenance'),'deployment':request.param,'project':str(project),'environment':str(tmp_path/'env'),'data':str(data),'socket':str(tmp_path/'control.sock'),'repository':'https://github.com/Borderlane-HA/PenguCoach.git'}
-    env={'PENGUCOACH_ENCRYPTION_KEY':key,'PENGUCOACH_JWT_SECRET':'before-jwt','PENGUCOACH_DATABASE_URL':'postgresql+asyncpg://pengucoach:pw@localhost/pengucoach','PENGUCOACH_REDIS_URL':'redis://localhost/0'}
+    env={'PENGUCOACH_ENCRYPTION_KEY':key,'PENGUCOACH_JWT_SECRET':'before-jwt-with-at-least-32-characters','PENGUCOACH_DATABASE_URL':'postgresql+asyncpg://pengucoach:pw@localhost/pengucoach','PENGUCOACH_REDIS_URL':'redis://localhost/0'}
     Path(config['environment']).write_text(''.join(k+'='+v+'\n' for k,v in env.items()));Path(config['environment']).chmod(0o640)
     shared={'db':{'pengucoach':{'users':['admin','athlete'],'encrypted_credentials':cipher,'prompts':['custom'],'schema':'old'}},'fail':set(),'calls':[],'head':'a'*40,'paused':False}
     factory=lambda config,log:FakeHost(config,log,shared)
@@ -176,6 +176,21 @@ def backup(host,local=False):
     job=host.engine.submit({'operation':'backup','password':PASSWORD,'local':local},asynchronous=False)
     assert job['status']=='succeeded',job
     return job['backup']['id']
+
+
+def test_backup_keeps_environment_and_existing_session_valid(host,monkeypatch):
+    from pengucoach.auth import jwt
+
+    monkeypatch.setattr(jwt.settings,'jwt_secret',host.env['PENGUCOACH_JWT_SECRET'])
+    token=jwt.create_session_token('existing-admin')
+    environment=Path(host.config['environment']).read_bytes()
+    database=json.loads(json.dumps(host.shared['db']))
+    backup(host)
+    assert Path(host.config['environment']).read_bytes()==environment
+    assert jwt.decode_session_token(token)=='existing-admin'
+    assert host.shared['db']==database
+    assert 'stop' in host.shared['calls'] and 'start' in host.shared['calls']
+    assert 'clear_queue' not in host.shared['calls']
 
 
 def restore(host,bid):return host.engine.submit({'operation':'restore','backup_id':bid,'password':PASSWORD,'confirmation':'RESTORE'},asynchronous=False)

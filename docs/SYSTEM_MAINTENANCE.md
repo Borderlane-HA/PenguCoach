@@ -46,6 +46,10 @@ docker compose run --rm --no-deps maintenance-setup
 
 Der bisherige direkte Setup-Befehl `bash install/maintenance/install.sh native|docker <Projektpfad>` bleibt als Administrator-Reparaturwerkzeug erhalten. Er gehört nicht mehr zum normalen Updateablauf.
 
+## Anmeldung während der Sicherung (Alpha.74)
+
+Eine normale Sicherung ändert den Anmeldeschlüssel nicht. Während die schreibenden App-Dienste kurz angehalten sind, bleiben die bereits geprüfte Anmeldung und die angezeigten Daten im Browser erhalten. Fehlgeschlagene Sitzungsprüfungen wegen HTTP 5xx, Verbindungsfehlern oder Timeouts werden erneut versucht. Bei einem Neuladen während dieser Unterbrechung erscheint eine Verbindungsanzeige mit erneuter Prüfung. Ein tatsächlich ungültiger oder abgelaufener Zugang (HTTP 401) führt weiterhin zur Anmeldung; auch die beabsichtigte Abmeldung nach einer Wiederherstellung bleibt erhalten.
+
 ## Updates
 
 1. Unter Updates nach einer neuen Version suchen und die Release Notes öffnen.
@@ -131,6 +135,6 @@ Bei Docker `docker logs <Helfername>` und die CLI im Helfer nutzen. `recover` ve
 
 ## Prüfung dieser Version
 
-699 Backendtests, 17 JavaScript-Tests und 24 Browserfälle sind bestanden; der Produktionsbuild und die Shell-Syntaxprüfung sind erfolgreich. Die Browserprüfung umfasst 14 vorgegebene Themes, zwei eigene Farbpaletten und Ansichten bis 320 Pixel.
+701 Backendtests, 21 JavaScript-Tests und 13 Browserfälle zur Sitzungswiederherstellung sind bestanden; der Produktionsbuild und die Shell-Syntaxprüfung sind erfolgreich. Geprüft wurden HTTP 5xx, Verbindungsfehler, eine hängende Sitzungsprüfung, begrenzte Wiederholungen, manuelle Prüfung, echte HTTP 401 und die Rückkehr nach einer Sicherung ohne doppelten Auftrag. Die neue Verbindungsanzeige wurde in Hell und Dunkel bei 320 Pixeln geprüft. Die bestehende Alpha.73-Browserprüfung umfasste 24 Wartungsfälle mit 14 vorgegebenen Themes und zwei eigenen Farbpaletten.
 
 Automatisiert geprüft: echte Verschlüsselungs-/Archiv-Rundreisen, Manipulationen, portable Exporte, Dateiersetzung und Rollback mit simulierten Host-/Datenbankdiensten, Wiederanlauf zwischen Datenbankumbenennungen, gemeinsam genutzte Sperren, Adminrechte, HTTP-Upload-/Downloadabläufe und WebUI-Bedienung. Zusätzlich geprüft: automatische Einrichtung über den vorhandenen Alpha.72-Migrationsschritt, Beschränkung auf die verwaltete Root-Installation, wiederholte Einrichtung, geschützte laufende Wartungen, Reparatur unvollständiger Python-Umgebungen, Docker-Projekt-/Volume-Erkennung und sichtbare Einrichtungsfehler. Ein realer Proxmox-LXC, Dockerdaemon und PostgreSQL-Dienst stehen in der Entwicklungsumgebung nicht zur Verfügung. Diese Hostintegration muss deshalb zuerst auf einer Testinstallation mit separat gesichertem Datenstand erprobt werden; ein bestandener Mock-Test ist kein Live-Restore-Nachweis.

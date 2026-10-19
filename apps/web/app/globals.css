@@ -890,3 +890,7 @@ html[data-theme="custom"] .maintenance-tabs button.ghost.active{color:var(--text
 
 .maintenance-tab-short{display:none}
 @media(max-width:480px){.maintenance-tabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}.maintenance-tabs button.ghost{white-space:nowrap;min-width:0;padding:10px 6px}.maintenance-tab-wide{display:none}.maintenance-tab-short{display:inline}}
+/* Keep a cold session check readable while the API is temporarily unavailable. */
+.auth-loading>p,.auth-loading>small{max-width:460px;max-width:min(460px,calc(100vw - 40px));text-align:center;line-height:1.6;color:var(--text)}
+.auth-loading>small{font-size:.8rem}
+.auth-loading>button.ghost{background:var(--panel);color:var(--text);border:1px solid var(--border);box-shadow:none}

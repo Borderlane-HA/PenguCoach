@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.0-alpha.74
+
+- Preserve the signed-in session when a backup briefly stops the API. Network failures, proxy/server errors and timeouts during session checks no longer redirect users to the login page or discard their verified identity and cached data. Actual HTTP 401 responses still end the session, including after a restore.
+- Bound session checks to 15 seconds, retry temporary failures automatically with a finite retry budget, and recheck when connectivity returns. A reload during maintenance shows a clear retry screen instead of a false logout or endless loading indicator. Backup requests are never replayed by session recovery.
+
 ## 0.1.0-alpha.73
 
 - Add Admin → System & maintenance with focused Updates, Backups and Recovery tabs. Link the small installed-version/update indicator into this area. Ordinary users receive a read-only Updates page. Move the original GitHub changelog out of About and into Updates; retain the six-hour release cache and manual check.
