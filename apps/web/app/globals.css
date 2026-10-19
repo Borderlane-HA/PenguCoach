@@ -815,3 +815,39 @@ html[data-theme="custom"] :is(.theme-check,.ai-quality-buttons button.active,.ai
 .coach-message.pending .form-actions{flex-wrap:wrap}
 .coach-message.pending .ghost.danger{color:var(--text);background:transparent;border-color:color-mix(in srgb,var(--danger) 55%,var(--border))}
 .coach-message.pending>small{color:var(--text)}
+
+/* Repository changelog: closed by default, one release open at a time. */
+.about-changelog{margin-bottom:20px;padding:0;overflow:hidden}
+.about-changelog>summary{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:20px 22px;cursor:pointer;list-style:none}
+.about-changelog>summary::-webkit-details-marker{display:none}
+.about-changelog>summary>span:first-child{display:grid;gap:5px}
+.about-changelog>summary strong{font-size:1.08rem}
+.about-changelog>summary small{color:var(--muted);font-size:.82rem}
+.about-changelog>summary:focus-visible,.changelog-release-toggle:focus-visible{outline:2px solid var(--accent);outline-offset:-4px}
+.changelog-body{padding:0 22px 22px;border-top:1px solid var(--border)}
+.changelog-toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:12px;padding:18px 0}
+.changelog-toolbar>p{flex:1 1 260px;margin:0;font-size:.82rem;line-height:1.5}
+.changelog-toolbar .form-actions{align-items:center;flex-wrap:wrap}
+.changelog-toolbar a{font-size:.79rem;text-decoration:underline;text-underline-offset:3px}
+.changelog-release{border:1px solid var(--border);border-radius:13px;background:var(--panel2);margin-bottom:9px;overflow:hidden}
+.changelog-release-toggle{border:0;display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;padding:14px 15px;background:transparent;color:var(--text);text-align:left;border-radius:12px;overflow-wrap:anywhere}
+.changelog-release-toggle>strong{min-width:0;font-size:.9rem}
+.changelog-release-toggle>span{display:flex;gap:10px;align-items:center;flex:none}
+.changelog-release-toggle[aria-expanded=true]{background:color-mix(in srgb,var(--accent) 7%,var(--panel2))}
+.changelog-installed{color:var(--text);border:1px solid var(--border);background:var(--panel);border-radius:999px;padding:3px 7px;font-size:.64rem;font-weight:650}
+.changelog-notes{padding:14px 15px;border-top:1px solid var(--border);font-size:.83rem;line-height:1.65;color:var(--text);overflow-wrap:anywhere}
+.changelog-notes p{margin:0 0 9px}
+.changelog-notes h3{margin:10px 0;font-size:.9rem}
+.changelog-bullet{display:grid;grid-template-columns:10px minmax(0,1fr);gap:7px}
+.changelog-bullet>span{color:var(--accent)}
+.changelog-notes code{font-size:.92em;border:1px solid var(--border);border-radius:5px;background:var(--panel);padding:1px 4px;white-space:break-spaces}
+.changelog-notes a{color:var(--text);text-decoration:underline;text-underline-offset:3px}
+.changelog-status{border:1px solid var(--border);border-radius:11px;background:var(--panel2);padding:12px;font-size:.84rem;line-height:1.5;color:var(--text)}
+.changelog-older{margin:5px 0 12px}
+.changelog-checked{display:block;margin-top:8px;font-size:.73rem}
+@media(max-width:600px){.about-changelog>summary{padding:16px}.changelog-body{padding:0 14px 16px}.changelog-release-toggle{padding:12px;gap:7px}.changelog-notes{padding:12px}.changelog-toolbar .form-actions{gap:10px}.changelog-installed{font-size:.59rem}}
+.about-changelog>summary small,.changelog-toolbar>p,.changelog-checked{color:var(--text)}
+.about-page{display:grid;grid-template-columns:minmax(0,1fr);gap:18px;min-width:0;overflow-wrap:anywhere}
+.about-page>.card{min-width:0}
+.about-page .form-actions{flex-wrap:wrap}
+.about-page .about-changelog{margin-bottom:0}

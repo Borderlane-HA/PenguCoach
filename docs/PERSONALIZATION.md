@@ -93,3 +93,19 @@ Evidence and the guided daily assistants remain in their existing places.
 
 No database migration or new runtime dependency is needed. Update the API and web
 application together; deploy the matching release to workers as usual.
+
+
+### Changelog in About
+
+Settings → About includes a collapsed Changelog panel sourced from the public
+repository's `main/CHANGELOG.md`. It loads only when opened. The newest entry
+is expanded, the installed version is marked when present, and older entries
+are revealed six at a time. Repository notes can describe changes newer than
+the installed app. The original language and wording are retained.
+
+The authenticated `/settings/changelog` endpoint fetches a fixed public URL
+anonymously. It shares a six-hour per-process cache, uses ETags, and allows a
+manual refresh at most once a minute. The complete fetch is limited to six
+seconds and 1 MiB. A failed refresh retains the last successful notes and
+timestamp with a visible stale notice; the direct GitHub link remains available.
+No AI request, provider key, new dependency or migration is required.

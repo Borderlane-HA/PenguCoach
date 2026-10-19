@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.0-alpha.72
+
+- Add the repository CHANGELOG.md to Settings → About in a collapsed, theme-aware card. Load it on demand, expand the newest release, mark the installed version and reveal older versions in small batches. Preserve the original wording and render headings, bullets, bold text, inline code and safe links.
+- Fetch only the fixed public GitHub source without sending account or health data. Share a six-hour backend cache, conditional ETag requests and a one-minute manual-refresh cooldown. Bound bytes and request duration; retain cached notes with a visible stale notice when GitHub is unavailable.
+- Keep the About layout within narrow screens and wrap long license links and action rows.
+- No new dependency or database migration.
+
 ## 0.1.0-alpha.71
 
 - Finish Ollama requests on the final `done` event, including content and usage delivered with it. Keep the received answer visible while it is being saved.

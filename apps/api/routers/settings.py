@@ -3,7 +3,7 @@ from __future__ import annotations
 import mimetypes
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field, model_validator
 from typing import Literal
@@ -165,6 +165,12 @@ async def get_update_status(user: User = Depends(safety_confirmed_user)):
 async def check_update_now(user: User = Depends(safety_confirmed_user)):
     from pengucoach.common.releases import update_status
     return await update_status(settings.resolved_app_version, refresh=True)
+
+
+@router.get("/changelog")
+async def get_changelog(refresh: bool = Query(default=False), user: User = Depends(safety_confirmed_user)):
+    from pengucoach.common.changelog import changelog
+    return await changelog(refresh=refresh)
 
 
 class StepGoalIn(BaseModel):

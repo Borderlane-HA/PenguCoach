@@ -29,9 +29,11 @@ Reviewed time-budget variants, confirmed training experiences, recorded 1/5/20-m
 
 **Alpha.71 Coach recovery:** Ollama finishes on its protocol completion event. Stalled streams cannot be kept alive by empty heartbeats; long active generations remain supported. Coach status checks can be resumed after a long wait or connection loss, without creating another AI request. Cancellation and saved questions remain available. See [AI Studio](docs/AI_STUDIO.md).
 
+**Alpha.72 About:** read the original GitHub changelog directly under Settings → About. The panel loads on demand, shows versions as an accordion and retains cached notes during connection failures. Refresh manually or open the source on GitHub.
+
 ## Current alpha scope
 
-`v0.1.0-alpha.71` is the current end-to-end alpha baseline:
+`v0.1.0-alpha.72` is the current end-to-end alpha baseline:
 
 - **Sparky recording times and readings:** separate local clocks and recording zones, historical timestamp correction on sync, explicit time-unknown display, better minimum-HR/telemetry extraction and missing values shown as missing. See [SparkyFitness](docs/SPARKYFITNESS.md).
 
