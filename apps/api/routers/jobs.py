@@ -68,7 +68,7 @@ async def active_job(
 
 @router.get("/{task_id}")
 async def job_status(task_id: str, user: User = Depends(safety_confirmed_user), db: AsyncSession = Depends(get_db)):
-    await _check_owner(task_id, user, db)
+    row = await _check_owner(task_id, user, db)
     result = AsyncResult(task_id, app=app)
     value = None
     progress = None
@@ -89,6 +89,7 @@ async def job_status(task_id: str, user: User = Depends(safety_confirmed_user), 
         "result": value,
         "progress": progress,
         "error": error,
+        "created_at": row.created_at if row else None,
     }
 
 
@@ -122,3 +123,4 @@ async def _check_owner(task_id, user, db):
     row = await db.get(BackgroundJob, identifier)
     if row and row.user_id and row.user_id != user.id:
         raise HTTPException(404, "JOB_NOT_FOUND")
+    return row

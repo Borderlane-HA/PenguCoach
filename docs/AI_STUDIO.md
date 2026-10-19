@@ -64,3 +64,21 @@ Cloud-health AI remains disabled per user by default. External providers are not
 ## Coach companion and output-limit troubleshooting
 
 See [COACH_COMPANION.md](COACH_COMPANION.md) for memory, history, daily briefings and plan integration. Recognized output limits, including Claude's context-window stop reason, store a recoverable draft even when no visible answer was generated. Continue from the result rather than rerunning the entire analysis. Context and hard model limits remain authoritative. Both compatibility APIs and the GUI background jobs use the same validated engine.
+
+
+### Coach status recovery
+
+A running Coach job is restored when returning to the page. Each job-status HTTP
+request has a 15-second timeout. After three consecutive status failures or 20
+minutes of observation, automatic status checks pause and the UI offers **Check
+status again** and **Cancel**. An older restored job is checked once immediately;
+completed answers load normally. Pausing the status check does not cancel the
+worker or start a second AI request. The current question and job ID remain saved.
+Cancellation is cooperative and must be confirmed by the API before the UI clears
+the job.
+
+Ollama streaming ends at its `done: true` event, without waiting for the server to
+close its HTTP connection. The final content and usage counts are retained. The
+idle allowance remains at least 900 seconds for slow local prefill. Content,
+thinking and completion reset that allowance; blank heartbeat chunks do not.
+There is no total generation deadline for a model that keeps producing tokens.

@@ -27,9 +27,11 @@ Reviewed time-budget variants, confirmed training experiences, recorded 1/5/20-m
 
 **Alpha.70 navigation polish:** the sidebar collapse/expand button now sits next to the brand inside the sidebar. In the icon rail it remains visible below the logo. Keyboard controls, remembered state and mobile navigation continue to work.
 
+**Alpha.71 Coach recovery:** Ollama finishes on its protocol completion event. Stalled streams cannot be kept alive by empty heartbeats; long active generations remain supported. Coach status checks can be resumed after a long wait or connection loss, without creating another AI request. Cancellation and saved questions remain available. See [AI Studio](docs/AI_STUDIO.md).
+
 ## Current alpha scope
 
-`v0.1.0-alpha.70` is the current end-to-end alpha baseline:
+`v0.1.0-alpha.71` is the current end-to-end alpha baseline:
 
 - **Sparky recording times and readings:** separate local clocks and recording zones, historical timestamp correction on sync, explicit time-unknown display, better minimum-HR/telemetry extraction and missing values shown as missing. See [SparkyFitness](docs/SPARKYFITNESS.md).
 

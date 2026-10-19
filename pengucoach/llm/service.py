@@ -7,7 +7,7 @@ import math
 import re
 import time
 import uuid
-from collections.abc import Callable
+from collections.abc import AsyncIterator, Callable
 from typing import Any
 
 import httpx
@@ -37,6 +37,39 @@ class AiProviderResponseError(RuntimeError):
         super().__init__(code)
         self.usage = usage or {}
         self.request_sent = True
+
+
+async def _ollama_chunks(response, idle_seconds: float) -> AsyncIterator[dict[str, Any]]:
+    """Stop on the protocol terminator; heartbeats cannot keep a stalled job alive.
+
+    Allow long prefill and continuously generating local models without imposing
+    a total generation deadline. Only content/thinking or completion resets the
+    idle deadline, rather than arbitrary bytes on the HTTP connection.
+    """
+    lines = response.aiter_lines().__aiter__()
+    deadline = time.monotonic() + idle_seconds
+    while True:
+        try:
+            async with asyncio.timeout(max(0.0, deadline - time.monotonic())):
+                line = await anext(lines)
+        except StopAsyncIteration:
+            return
+        except TimeoutError:
+            raise httpx.ReadTimeout("OLLAMA_STREAM_STALLED", request=getattr(response, "request", None)) from None
+        if not line.strip():
+            continue
+        try:
+            chunk = json.loads(line)
+            if not isinstance(chunk, dict) or not isinstance(chunk.get("message") or {}, dict):
+                raise ValueError()
+        except (ValueError, TypeError):
+            raise AiProviderResponseError("OLLAMA_STREAM_INVALID_RESPONSE") from None
+        message = chunk.get("message") or {}
+        if message.get("content") or message.get("thinking") or chunk.get("done"):
+            deadline = time.monotonic() + idle_seconds
+        yield chunk
+        if chunk.get("done"):
+            return
 
 
 def ollama_timing(final: dict[str, Any]) -> dict[str, float]:
@@ -868,19 +901,11 @@ async def chat(
 
                 cancel_task = asyncio.create_task(watch_cancel())
                 try:
-                    async for line in response.aiter_lines():
+                    async for chunk in _ollama_chunks(response, max(float(settings.ai_request_timeout_seconds), 900.0)):
                         now = time.monotonic()
                         if cancel_event.is_set() or (cancel_check and now - last_cancel_check >= 0.75 and cancel_check()):
                             raise AiGenerationCancelled(request_sent=True)
                         last_cancel_check = now
-                        if not line:
-                            continue
-                        try:
-                            chunk = json.loads(line)
-                            if not isinstance(chunk, dict):
-                                raise ValueError()
-                        except ValueError:
-                            raise AiProviderResponseError("OLLAMA_STREAM_INVALID_RESPONSE") from None
                         if chunk.get("error"):
                             raise RuntimeError("OLLAMA_STREAM_ERROR: " + str(chunk["error"])[:300])
                         message_chunk = chunk.get("message") or {}
@@ -943,6 +968,8 @@ async def chat(
                 input_tokens=usage.get("input_tokens"),
                 elapsed_seconds=round(time.monotonic() - started, 1),
                 streaming=True,
+                visible_chars=len(visible_answer(text)),
+                content_preview=visible_answer(text)[-24000:],
             )
         else:
             raise RuntimeError("UNSUPPORTED_LLM_PROVIDER")

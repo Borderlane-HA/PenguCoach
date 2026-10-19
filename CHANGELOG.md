@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.0-alpha.71
+
+- Finish Ollama requests on the final `done` event, including content and usage delivered with it. Keep the received answer visible while it is being saved.
+- Apply the existing generous Ollama idle allowance to meaningful model events, so empty heartbeats cannot hold a stalled request open indefinitely. Continuously generating models can still run longer than this allowance.
+- Coach status requests have a 15-second network timeout. After repeated connection failures or 20 minutes of observation, show a paused status check with explicit resume and cancel controls instead of an endless thinking indicator. Restored older jobs are checked once before offering manual status refresh. Refreshing status does not create another AI request.
+- Preserve the question and job identifier across status interruptions, retain received previews, and fence obsolete polling responses after cancellation or leaving the page.
+
+- Use theme colors for the Coach composer so input remains readable in dark themes.
+
 ## 0.1.0-alpha.70
 
 - Move the sidebar collapse/expand control from the content header into the sidebar header next to the brand. Keep a visible expansion button below the logo in the collapsed icon rail. Preserve accessible names, keyboard focus, remembered preferences and grouped navigation. Mobile navigation is unchanged.
