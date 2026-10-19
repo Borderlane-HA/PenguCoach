@@ -1,5 +1,7 @@
 "use client";
 import {useEffect,useState} from "react";
+import Link from "next/link";
+import {useSession} from "../lib/session";
 import {api} from "../lib/api";
 import {cacheQueryResult,useCachedQuery} from "../lib/data-cache";
 import {bi,useI18n} from "../lib/i18n";
@@ -34,9 +36,8 @@ export function UpdateCheck(){
  return <section className="card update-check-card"><div><span className="eyebrow">UPDATES</span><h2>{bi(lang,"Neue Versionen","New versions")}</h2><p className="muted">{bi(lang,"Bei Nutzung der App prüfen wir automatisch alle 6 Stunden auf neue GitHub-Releases.","While you use the app, we check for new GitHub releases every 6 hours.")}</p></div><p className="update-check-result" role="status">{busy?bi(lang,"Version wird geprüft …","Checking for updates …"):!data&&!error?bi(lang,"Release-Stand wird geladen …","Loading release status …"):resultLabel(data,lang,error)}</p>{checked&&!Number.isNaN(checked.getTime())&&<small className="muted">{bi(lang,"Zuletzt erfolgreich geprüft","Last successful check")}: {checked.toLocaleString(lang==="de"?"de-DE":"en-GB")}</small>}<div className="form-actions"><button type="button" className="ghost update-check-button" disabled={busy} onClick={()=>void check()}><RefreshIcon/>{busy?bi(lang,"Prüfe …","Checking …"):bi(lang,"Jetzt prüfen","Check now")}</button><a className="text-link" href={data?.url||RELEASES} target="_blank" rel="noopener noreferrer">{bi(lang,"GitHub-Releases öffnen","Open GitHub releases")} ↗</a></div><small className="muted">{bi(lang,"Manuelles Prüfen umgeht den 6-Stunden-Cache. Wiederholte Klicks innerhalb einer Minute verwenden dasselbe Ergebnis.","Manual checks bypass the 6-hour cache. Repeat clicks within one minute reuse the same result.")}</small></section>;
 }
 export default function UpdateNotice({version,mobile=false}:{version:string;mobile?:boolean}){
- const {lang}=useI18n(),{data,busy,error,check}=useUpdates(),[showResult,setShowResult]=useState(false);
- const available=data?.status==="available";
- const label=available?bi(lang,`Update verfügbar · ${data.latest_version}`,`Update available · ${data.latest_version}`):bi(lang,"GitHub-Releases öffnen","Open GitHub releases");
- const buttonLabel=bi(lang,"Jetzt auf Updates prüfen","Check for updates now");
- return <div className={`version-notice ${mobile?"mobile-version-notice":""} ${available?"has-update":""}`}><div className="version-notice-row"><a className="side-version" href={RELEASES} target="_blank" rel="noopener noreferrer" title={bi(lang,"Installierte PenguCoach-Version","Installed PenguCoach version")}>v{version}</a><button type="button" className={`version-check ${busy?"is-checking":""}`} disabled={busy} aria-label={buttonLabel} title={buttonLabel} onClick={()=>{setShowResult(true);void check()}}><RefreshIcon/></button></div>{available&&<a className="update-notice-link" href={data.url} target="_blank" rel="noopener noreferrer" aria-label={label} title={label}><span className="update-notice-icon" aria-hidden="true">↑</span><span><strong>{bi(lang,"Update verfügbar","Update available")}</strong><small>{data.latest_version}</small></span></a>}{showResult&&<small className="version-check-result" role="status">{busy?bi(lang,"Prüfe …","Checking …"):resultLabel(data,lang,error)}</small>}</div>;
+ const {lang}=useI18n(),{me}=useSession(),{data}=useUpdates();
+ const available=data?.status==="available",target=me?.role==="admin"?"/admin/system#updates":"/settings/updates";
+ const label=bi(lang,"Updates & Release Notes öffnen","Open updates & release notes");
+ return <div className={`version-notice ${mobile?"mobile-version-notice":""} ${available?"has-update":""}`}><div className="version-notice-row"><Link prefetch={false} className="side-version" href={target} title={label}>v{version}</Link><Link prefetch={false} className="version-check" href={target} aria-label={label} title={label}><RefreshIcon/></Link></div>{available&&<Link prefetch={false} className="update-notice-link" href={target} aria-label={bi(lang,`Update verfügbar · ${data.latest_version}`,`Update available · ${data.latest_version}`)}><span className="update-notice-icon" aria-hidden="true">↑</span><span><strong>{bi(lang,"Update verfügbar","Update available")}</strong><small>{data.latest_version}</small></span></Link>}</div>;
 }

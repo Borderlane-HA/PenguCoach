@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
+# The legacy command stays usable before activation. The host agent shares the
+# same operation lock for shell and WebUI once enabled.
+if [[ -f /etc/pengucoach-maintenance.json && -x /usr/local/bin/pengucoach-maintenance ]]; then
+  exec /usr/local/bin/pengucoach-maintenance backup "$@"
+fi
 BACKUP_ROOT=/var/lib/pengucoach/backups
 STAMP="$(date +%Y%m%d-%H%M%S)"
 DEST="$BACKUP_ROOT/$STAMP"

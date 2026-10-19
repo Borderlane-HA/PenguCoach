@@ -1,6 +1,14 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
+# The normal shell entry point also repairs a missing automatic installation.
+[[ $EUID -eq 0 ]] || { echo "Run as root inside the PenguCoach LXC." >&2; exit 1; }
 APP=/opt/pengucoach
+if [[ -x "$APP/.venv/bin/python" && -f "$APP/pengucoach/maintenance/bootstrap.py" ]]; then
+  (cd "$APP" && .venv/bin/python -m pengucoach.maintenance.bootstrap native --project "$APP") || true
+fi
+if [[ -f /etc/pengucoach-maintenance.json && -x /usr/local/bin/pengucoach-maintenance ]]; then
+  exec /usr/local/bin/pengucoach-maintenance update "$@"
+fi
 ENV_FILE=/etc/pengucoach/pengucoach.env
 CHANNEL_FILE=/etc/pengucoach/channel
 BRANCH="$(cat "$CHANNEL_FILE" 2>/dev/null || echo main)"
@@ -99,4 +107,5 @@ systemctl restart pengucoach-api pengucoach-worker pengucoach-scheduler pengucoa
 sleep 3
 curl -fsS http://127.0.0.1/healthz >/dev/null
 trap - ERR
+(cd "$APP" && .venv/bin/python -m pengucoach.maintenance.bootstrap native --project "$APP") || true
 echo "[PenguCoach] Updated successfully to ${NEW_VERSION}: $OLD_SHA -> $NEW_SHA"

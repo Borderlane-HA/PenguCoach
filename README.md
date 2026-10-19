@@ -23,17 +23,19 @@ Reviewed time-budget variants, confirmed training experiences, recorded 1/5/20-m
 
 **Alpha.68 everyday update:** personal step targets with daily and period progress, optional confirmed target suggestions, calmer metric cards, a per-user custom light/dark palette, a cached GitHub release notice and faster internal navigation with shared dashboard readings. Today avoids its extensive VO₂max calculation unless selected; hidden and offscreen sections load selectively. See [Steps, appearance and navigation](docs/PERSONALIZATION.md).
 
-**Alpha.69 polish:** a compact daily-readiness card with a status symbol and slim score scale. Check for new releases manually next to the installed version or under Settings → About, with an honest offline state and the last successful check time. The automatic six-hour release cache remains in place; repeated manual checks share a one-minute cooldown.
+**Alpha.69 polish:** a compact daily-readiness card with a status symbol and slim score scale. Check for new releases manually in the Updates area, with an honest offline state and the last successful check time. The automatic six-hour release cache remains in place; repeated manual checks share a one-minute cooldown.
 
 **Alpha.70 navigation polish:** the sidebar collapse/expand button now sits next to the brand inside the sidebar. In the icon rail it remains visible below the logo. Keyboard controls, remembered state and mobile navigation continue to work.
 
 **Alpha.71 Coach recovery:** Ollama finishes on its protocol completion event. Stalled streams cannot be kept alive by empty heartbeats; long active generations remain supported. Coach status checks can be resumed after a long wait or connection loss, without creating another AI request. Cancellation and saved questions remain available. See [AI Studio](docs/AI_STUDIO.md).
 
-**Alpha.72 About:** read the original GitHub changelog directly under Settings → About. The panel loads on demand, shows versions as an accordion and retains cached notes during connection failures. Refresh manually or open the source on GitHub.
+**Alpha.72 changelog (now in Updates):** read the original GitHub changelog in the update area. The panel loads on demand, shows versions as an accordion and retains cached notes during connection failures. Refresh manually or open the source on GitHub.
+
+**Alpha.73 maintenance:** Admin → System & maintenance brings together updates, encrypted full backups and checked recovery for managed native LXC and Linux Docker Compose installations. The version indicator opens this area; other users receive read-only update information. Shell commands remain available. Normal native updates, including the first upgrade from Alpha.72, and ordinary Docker Compose startup configure the independent maintenance service automatically. Setup failures are visible to administrators. See [System maintenance](docs/SYSTEM_MAINTENANCE.md).
 
 ## Current alpha scope
 
-`v0.1.0-alpha.72` is the current end-to-end alpha baseline:
+`v0.1.0-alpha.73` is the current end-to-end alpha baseline:
 
 - **Sparky recording times and readings:** separate local clocks and recording zones, historical timestamp correction on sync, explicit time-unknown display, better minimum-HR/telemetry extraction and missing values shown as missing. See [SparkyFitness](docs/SPARKYFITNESS.md).
 

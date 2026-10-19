@@ -37,6 +37,7 @@ services:
       PENGUCOACH_DATA_DIR: /data
     volumes:
       - app_data:/data
+      - maintenance_socket:/run/pengucoach-maintenance:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -93,7 +94,23 @@ services:
     ports:
       - "3000:3000"
 
+  # Automatic setup on ordinary Compose up; the actual agent runs independently.
+  maintenance-setup:
+    build:
+      context: .
+      dockerfile: docker/maintenance.Dockerfile
+    entrypoint: ["python3", "-m", "pengucoach.maintenance.bootstrap"]
+    command: ["docker"]
+    restart: "on-failure:3"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - maintenance_socket:/control
+    depends_on:
+      api:
+        condition: service_healthy
+
 volumes:
   postgres_data:
   redis_data:
   app_data:
+  maintenance_socket:

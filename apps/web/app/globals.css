@@ -851,3 +851,42 @@ html[data-theme="custom"] :is(.theme-check,.ai-quality-buttons button.active,.ai
 .about-page>.card{min-width:0}
 .about-page .form-actions{flex-wrap:wrap}
 .about-page .about-changelog{margin-bottom:0}
+
+/* Independent system maintenance: compact controls and progressive disclosure. */
+.system-maintenance,.system-updates{display:grid;grid-template-columns:minmax(0,1fr);gap:18px;min-width:0;overflow-wrap:anywhere}
+.system-maintenance>.card,.system-updates>.card{min-width:0;margin:0}
+.system-maintenance h2{font-size:1.12rem;margin:0 0 10px}.system-maintenance p{line-height:1.65;margin:0 0 15px}
+.system-maintenance small{color:var(--text);line-height:1.5}.maintenance-head{display:flex;justify-content:space-between;align-items:center;gap:18px}
+.maintenance-head .eyebrow{display:block;margin-bottom:10px}.maintenance-head p{margin:0;color:var(--muted)}
+.maintenance-connection{flex:none;border:1px solid var(--border);padding:8px 12px;border-radius:999px;font-size:.75rem;background:var(--panel2);color:var(--text)}
+.maintenance-connection.connected:before{content:"";display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:7px;background:var(--accent-strong)}
+.maintenance-tabs{display:flex;gap:7px;padding:5px;background:var(--panel2);border:1px solid var(--border);border-radius:15px;flex-wrap:wrap}
+.maintenance-tabs button.ghost{border:1px solid transparent;box-shadow:none;padding:10px 15px;background:transparent;color:var(--text);border-radius:10px}
+.maintenance-tabs button.ghost.active{background:var(--panel);border-color:var(--border);font-weight:750}
+.maintenance-action{display:flex;gap:24px;align-items:center;justify-content:space-between}.maintenance-action p{margin:0}.maintenance-action>button{flex:none}
+.maintenance-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.maintenance-backup-form>small{display:block;margin:14px 0 18px}
+.system-maintenance label{display:grid;gap:8px;margin-bottom:14px;min-width:0;font-size:.83rem;font-weight:650}
+.system-maintenance input,.system-maintenance select{max-width:100%;min-width:0;width:100%;box-sizing:border-box}
+.system-maintenance .form-actions{flex-wrap:wrap;gap:9px;margin-top:18px}.system-maintenance button.ghost{color:var(--text);background:var(--panel);border-color:var(--border);box-shadow:none}
+.system-maintenance button.ghost:hover:not(:disabled){color:var(--text);background:var(--panel2);transform:none}
+.system-maintenance button:disabled{cursor:not-allowed}.system-maintenance button:focus-visible,.maintenance-download:focus-visible{outline:2px solid var(--accent-strong);outline-offset:3px}
+.maintenance-backup-list{display:grid;margin-top:18px}.maintenance-backup-row{display:flex;justify-content:space-between;align-items:center;gap:18px;padding:17px 0;border-top:1px solid var(--border)}
+.maintenance-backup-row>div:first-child{display:grid;gap:6px;min-width:0}.maintenance-backup-row .form-actions{margin:0;justify-content:flex-end}
+.maintenance-backup-row small{font-size:.75rem}.maintenance-download{display:inline-flex;align-items:center;min-height:40px;padding:0 10px;border:1px solid var(--border);border-radius:10px;color:var(--text);font-size:.78rem;text-decoration:none}
+.maintenance-notice,.maintenance-inspection{border:1px solid var(--border);border-radius:13px;padding:15px;background:var(--panel2);font-size:.85rem;color:var(--text)}
+.system-maintenance .maintenance-error{border:1px solid var(--danger);border-radius:13px;padding:15px;color:var(--text);background:color-mix(in srgb,var(--danger) 7%,var(--panel));margin:0}
+.maintenance-inspection{margin-top:20px;display:grid;gap:6px}.maintenance-inspection>span{font-size:.8rem}
+.maintenance-upload{margin-top:20px}.maintenance-upload input{font-size:.8rem;font-weight:400}.system-maintenance progress{width:100%;max-width:100%;height:8px;accent-color:var(--accent-strong);margin:12px 0}
+.maintenance-progress .between{display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap}.maintenance-progress .between small{font-size:.72rem}.maintenance-progress p{margin:15px 0}
+.maintenance-log{padding-left:21px;font-size:.78rem;line-height:1.7;max-height:300px;overflow:auto}.maintenance-log li{padding:6px 0}.maintenance-log time{display:block;color:var(--muted);font-size:.7rem}
+.maintenance-setup details{padding-top:10px;border-top:1px solid var(--border)}.maintenance-setup summary{cursor:pointer;font-size:.85rem;font-weight:650}.maintenance-setup details p{margin:15px 0 7px}
+.maintenance-setup code{display:block;white-space:pre-wrap;overflow-wrap:anywhere;padding:12px;background:var(--panel2);border:1px solid var(--border);border-radius:9px;font-size:.73rem}
+.maintenance-dialog{width:min(520px,calc(100vw - 32px));max-height:calc(100dvh - 40px);overflow:auto;box-sizing:border-box}.maintenance-dialog .form-actions{justify-content:flex-end}
+@media(max-width:800px){.maintenance-head,.maintenance-action{align-items:flex-start;flex-direction:column}.maintenance-connection{font-size:.7rem}.maintenance-backup-row{flex-direction:column;align-items:stretch;gap:10px}.maintenance-backup-row .form-actions{justify-content:flex-start}.maintenance-action>button{width:100%}}
+@media(max-width:480px){.system-maintenance{gap:14px}.system-maintenance>.card,.system-updates>.card{padding:18px}.system-updates>.about-changelog{padding:0}.maintenance-fields{grid-template-columns:minmax(0,1fr);gap:0}.maintenance-tabs{gap:3px}.maintenance-tabs button.ghost{padding:10px 8px;font-size:.74rem;flex:1}.maintenance-restore .form-actions>button{width:100%}.maintenance-dialog .form-actions>button{flex:1;min-width:0}.maintenance-dialog{padding:20px!important}}
+
+.maintenance-head p,.maintenance-log time,.system-updates>p.muted{color:var(--text)}
+html[data-theme="custom"] .maintenance-tabs button.ghost.active{color:var(--text)!important}
+
+.maintenance-tab-short{display:none}
+@media(max-width:480px){.maintenance-tabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}.maintenance-tabs button.ghost{white-space:nowrap;min-width:0;padding:10px 6px}.maintenance-tab-wide{display:none}.maintenance-tab-short{display:inline}}

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from logging.config import fileConfig
+from pathlib import Path
 
 from alembic import context
 from sqlalchemy import pool
@@ -52,6 +53,10 @@ async def run_async_migrations() -> None:
 
 def run_migrations_online() -> None:
     asyncio.run(run_async_migrations())
+    # Legacy native updaters already execute this root upgrade step. Provision
+    # maintenance after commit so their first Alpha.73 update needs no extra command.
+    from pengucoach.maintenance.bootstrap import after_native_migration
+    after_native_migration(Path(__file__).resolve().parents[2],settings.database_url,getattr(config,"cmd_opts",None))
 
 
 if context.is_offline_mode():

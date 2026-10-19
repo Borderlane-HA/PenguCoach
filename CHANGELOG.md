@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.0-alpha.73
+
+- Add Admin → System & maintenance with focused Updates, Backups and Recovery tabs. Link the small installed-version/update indicator into this area. Ordinary users receive a read-only Updates page. Move the original GitHub changelog out of About and into Updates; retain the six-hour release cache and manual check.
+- Add an independent, Unix-socket host maintenance service for managed systemd/LXC and Linux Docker Compose deployments. Persist job progress outside the application database, share one operation lock with the shell, and reconnect after application restarts. The application containers receive no Docker socket.
+- Add chunk-encrypted full backups containing the PostgreSQL database, all users, LLM credentials and encryption key, prompts, cached application data and stored files. Password-protected backups can be downloaded and restored on a fresh installation. Automatically create local safety backups before updates/restores; export these with a password for portability.
+- Validate complete archives, paths, hashes and passwords, preflight database restoration and migrations in a separate database, rotate login sessions on restore, clear stale task queues, and keep a durable rollback journal. Preserve the previous application/database/files if an update or restore fails.
+- Keep pengucoach-update, pengucoach-backup and Docker Compose shell workflows. Automatically provision and verify the service during ordinary native updates (including the first update still executed by the old Alpha.72 script) and Docker Compose startup. Keep setup idempotent, protect active maintenance jobs and display setup failures without blocking the application. No application database migration is required. See docs/SYSTEM_MAINTENANCE.md for setup, recovery and validation limits.
+
 ## 0.1.0-alpha.72
 
 - Add the repository CHANGELOG.md to Settings → About in a collapsed, theme-aware card. Load it on demand, expand the newest release, mark the installed version and reveal older versions in small batches. Preserve the original wording and render headings, bullets, bold text, inline code and safe links.

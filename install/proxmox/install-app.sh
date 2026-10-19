@@ -310,3 +310,7 @@ systemctl reload nginx
 sleep 3
 curl -fsS http://127.0.0.1/healthz >/dev/null || { journalctl -u pengucoach-api -n 80 --no-pager; exit 1; }
 info "PenguCoach services are healthy"
+
+info "Enabling independent maintenance service"
+(cd "$APP_DIR" && .venv/bin/python -m pengucoach.maintenance.bootstrap native --project "$APP_DIR") || \
+  info "WARNING: Automatic maintenance setup failed; the application remains available. See /var/log/pengucoach-maintenance-setup.log." >&2

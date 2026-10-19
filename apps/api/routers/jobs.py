@@ -69,6 +69,9 @@ async def active_job(
 @router.get("/{task_id}")
 async def job_status(task_id: str, user: User = Depends(safety_confirmed_user), db: AsyncSession = Depends(get_db)):
     row = await _check_owner(task_id, user, db)
+    if row and row.status == 'cancelled' and row.message == 'RESTORE_INTERRUPTED_JOB':
+        return {'id':task_id,'state':'REVOKED','ready':True,'successful':False,'result':None,
+                'progress':None,'error':'AI_JOB_CANCELLED','created_at':row.created_at}
     result = AsyncResult(task_id, app=app)
     value = None
     progress = None

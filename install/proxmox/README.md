@@ -108,3 +108,9 @@ bash /opt/pengucoach/install/proxmox/pengucoach-db-utf8.sh
 ```
 
 The repair command creates a PostgreSQL custom-format backup, restores into a new UTF-8 database, keeps the old SQL_ASCII database under a timestamped name, restarts PenguCoach, and performs an API health check. Do not delete the retained old database until the application and Garmin history have been verified.
+
+## WebUI-Wartung ab Alpha.73
+
+Updates, verschlüsselte Vollbackups und Wiederherstellung sind unter Admin → System & Wartung verfügbar. `pengucoach-update` richtet den unabhängigen Wartungsdienst automatisch ein, auch beim ersten Wechsel von Alpha.72. Ein zusätzlicher Aktivierungsbefehl ist nicht erforderlich. `pengucoach-update` und `pengucoach-backup` bleiben nutzbar.
+
+Wenn die automatische Einrichtung scheitert, bleibt die App erreichbar und zeigt dem Administrator den Fehler samt Protokoll-/Reparaturhinweisen. Details und die ebenfalls automatische Docker-Variante sind in [System & Wartung](../../docs/SYSTEM_MAINTENANCE.md) beschrieben.

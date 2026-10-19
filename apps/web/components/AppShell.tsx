@@ -89,6 +89,7 @@ export default function AppShell({children,title}:{children:React.ReactNode;titl
     {href:"/settings/about",icon:"about" as IconName,label:bi(lang,"Über PenguCoach","About PenguCoach")},
   ],[lang]);
   const admin=useMemo(()=>[
+    {href:"/admin/system",icon:"settings" as IconName,label:bi(lang,"System & Wartung","System & maintenance")},
     {href:"/admin/ai",icon:"ai" as IconName,label:"AI Studio"},
     {href:"/admin/users",icon:"users" as IconName,label:bi(lang,"Benutzer","Users")},
   ],[lang]);

@@ -31,3 +31,6 @@ app.include_router(training_workspace.router, prefix="/api/v1")
 from apps.api.routers import execution, continuation
 app.include_router(execution.router, prefix="/api/v1")
 app.include_router(continuation.router, prefix="/api/v1")
+
+from apps.api.routers import admin_system
+app.include_router(admin_system.router, prefix="/api/v1")
