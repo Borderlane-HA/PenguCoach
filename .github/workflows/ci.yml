@@ -28,6 +28,7 @@ jobs:
         with:
           node-version: '22'
       - run: npm install --no-audit --no-fund
+      - run: node --test tests/*.cjs
       - run: npm run build
         env:
           NEXT_PUBLIC_API_BASE_URL: /api/v1
@@ -36,4 +37,73 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: bash -n install/proxmox/*.sh
+      - run: bash -n install/proxmox/*.sh install/host-steps/*.sh install/maintenance/*.sh
+      - run: python3 -m json.tool install/release-requirements.json > /dev/null
+
+  database:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: pengucoach
+          POSTGRES_PASSWORD: pengucoach
+          POSTGRES_DB: pengucoach
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U pengucoach -d pengucoach"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      PENGUCOACH_DATABASE_URL: postgresql+asyncpg://pengucoach:pengucoach@127.0.0.1:5432/pengucoach
+      PENGUCOACH_DATA_DIR: /tmp/pengucoach-ci
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install --upgrade pip
+      - run: pip install '.[dev]'
+      - name: Test fresh-install schema bootstrap
+        run: |
+          python install/proxmox/bootstrap-db.py
+          alembic -c alembic.ini stamp head
+          python - <<'PY'
+          import asyncio
+          from sqlalchemy import inspect
+          from sqlalchemy.ext.asyncio import create_async_engine
+          from pengucoach.common.config import settings
+
+          async def main():
+              engine = create_async_engine(settings.database_url)
+              async with engine.connect() as conn:
+                  def check(c):
+                      i = inspect(c)
+                      tables = set(i.get_table_names())
+                      assert {"users", "activities", "ai_runs"} <= tables
+                      assert "vo2max" in {x["name"] for x in i.get_columns("activities")}
+                  await conn.run_sync(check)
+              await engine.dispose()
+
+          asyncio.run(main())
+          PY
+      - name: Test historical Alembic chain on an empty schema
+        run: |
+          python - <<'PY'
+          import asyncio
+          from sqlalchemy import text
+          from sqlalchemy.ext.asyncio import create_async_engine
+          from pengucoach.common.config import settings
+
+          async def main():
+              engine = create_async_engine(settings.database_url)
+              async with engine.begin() as conn:
+                  await conn.execute(text("DROP SCHEMA public CASCADE"))
+                  await conn.execute(text("CREATE SCHEMA public"))
+              await engine.dispose()
+
+          asyncio.run(main())
+          PY
+          alembic -c alembic.ini upgrade head
