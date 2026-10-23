@@ -6,6 +6,7 @@ import {activityTimeLabel} from "../../lib/sources";
 import {useEffect,useRef,useState} from "react";
 import BestEfforts from "../../components/BestEfforts";
 import AppShell from "../../components/AppShell";
+import ActivityRecap from "../../components/ActivityRecap";
 import {API,api} from "../../lib/api";
 import {bi,useI18n,type Lang} from "../../lib/i18n";
 
@@ -48,7 +49,7 @@ export default function Activities(){
   function closeUpload(){if(uploading)return;setUploadOpen(false);setFile(null);setName("");setSport("auto");setUploadError("")}
 
   return <AppShell>
-    <section className="page-head-modern activities-head"><div><span className="eyebrow">{bi(lang,"Trainingstagebuch","Training log")}</span><h1>{bi(lang,"Aktivitäten","Activities")}</h1><p>{bi(lang,"Deine Aktivitäten aus verbundenen Quellen und Dateiimporten gemeinsam analysieren.","Analyse activities from connected sources and imported files together.")}</p></div><div className="activities-head-actions"><div className="activity-search"><span>⌕</span><input value={query} onChange={e=>setQuery(e.target.value)} placeholder={bi(lang,"Alle Aktivitäten durchsuchen…","Search all activities…")}/></div><button className="activity-upload-button" onClick={()=>setUploadOpen(true)}><span aria-hidden="true">↑</span>{bi(lang,"Training importieren","Import activity")}</button></div></section>
+    <section className="page-head-modern activities-head"><div><span className="eyebrow">{bi(lang,"Trainingstagebuch","Training log")}</span><h1>{bi(lang,"Aktivitäten","Activities")}</h1><p>{bi(lang,"Deine Aktivitäten aus verbundenen Quellen und Dateiimporten gemeinsam analysieren.","Analyse activities from connected sources and imported files together.")}</p></div><div className="activities-head-actions"><div className="activity-search"><span>⌕</span><input value={query} onChange={e=>setQuery(e.target.value)} placeholder={bi(lang,"Alle Aktivitäten durchsuchen…","Search all activities…")}/></div><ActivityRecap lang={lang} query={search} source={sourceFilter}/><button className="activity-upload-button" onClick={()=>setUploadOpen(true)}><span aria-hidden="true">↑</span>{bi(lang,"Training importieren","Import activity")}</button></div></section>
 
     <section className={`activity-summary-strip ${statsLoading?"stats-loading":""}`}><div><span>{bi(lang,"Gesamt","Total")}</span><strong>{stats?.total??"…"}</strong></div><div><span>Garmin</span><strong>{stats?.garmin_total??"…"}</strong></div><div><span>SparkyFitness</span><strong>{stats?.sparky_total??"…"}</strong></div><div><span>{bi(lang,"Manuell","Manual")}</span><strong>{stats?.manual_total??"…"}</strong></div><div><span>{bi(lang,"Analysiert","Analysed")}</span><strong>{stats?.analyzed_total??"…"}</strong></div>{(search||sourceFilter!=="all")&&<div><span>{bi(lang,"Treffer","Matches")}</span><strong>{data?.filtered_total??"…"}</strong></div>}</section>
 

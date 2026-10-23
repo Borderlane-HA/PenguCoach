@@ -92,7 +92,7 @@ export function ShowcaseCard({activity,analysis,series,lang,format,style,colorBy
  </svg>;
 }
 
-async function render(svg:SVGSVGElement,width:number,height:number):Promise<Blob>{
+export async function renderPng(svg:SVGSVGElement,width:number,height:number):Promise<Blob>{
  const xml=new XMLSerializer().serializeToString(svg);
  const image=new Image();
  image.decoding="async";
@@ -132,7 +132,7 @@ export default function ActivityShowcase({activity,analysis,series,lang,activity
   return()=>{document.removeEventListener("keydown",key);document.body.style.overflow="";opener.current?.focus()};
  },[open]);
  const{w,h}=FORMATS[format];
- async function image(){if(!svgRef.current)throw new Error("NO_CARD");return render(svgRef.current,w,h)}
+ async function image(){if(!svgRef.current)throw new Error("NO_CARD");return renderPng(svgRef.current,w,h)}
  async function save(){setBusy(true);setStatus("");try{const blob=await image(),url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download=fileName(activity,format);document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),2000);setStatus(bi(lang,"Bild gespeichert.","Image saved."))}catch{setStatus(bi(lang,"Das Bild konnte nicht erstellt werden.","The image could not be created."))}finally{setBusy(false)}}
  const canShare=typeof navigator!=="undefined"&&typeof navigator.canShare==="function";
  async function share(){setBusy(true);setStatus("");try{const blob=await image(),file=new File([blob],fileName(activity,format),{type:"image/png"});if(navigator.canShare?.({files:[file]})){await navigator.share({files:[file],title:String(activity.name??"PenguCoach")})}else{setStatus(bi(lang,"Teilen wird von diesem Browser nicht unterstützt – speichere das Bild stattdessen.","Sharing is not supported by this browser – save the image instead."))}}catch(e){if(!(e instanceof DOMException&&e.name==="AbortError"))setStatus(bi(lang,"Teilen ist fehlgeschlagen.","Sharing failed."))}finally{setBusy(false)}}

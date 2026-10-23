@@ -1,6 +1,8 @@
 import asyncio
 import time
 import uuid
+from datetime import datetime, timedelta, timezone
+from typing import Literal
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from sqlalchemy import and_, func, or_, select
@@ -119,6 +121,34 @@ async def _owned_activity(activity_id: uuid.UUID, user: User, db: AsyncSession) 
     return row
 
 
+def _journal_filters(user: User, sport: str | None, source: str | None, q: str | None):
+    """Filters shared by the activity journal and its recap."""
+    filtered = [Activity.user_id == user.id]
+    if sport:
+        filtered.append(Activity.sport_type == sport)
+    if source == "garmin":
+        # Native Garmin IDs are positive. Activities enriched from SparkyFitness
+        # remain part of the Garmin view as well.
+        filtered.append(Activity.garmin_activity_id > 0)
+    elif source == "sparkyfitness":
+        filtered.append(_sparky_source_expr())
+    elif source == "manual":
+        filtered.append(_manual_source_expr())
+    term = (q or "").strip()
+    if term:
+        pattern = f"%{term}%"
+        # Search intentionally stays on concise indexed/structured fields. The
+        # previous full-JSON text conversion forced PostgreSQL to scan every payload
+        # payload on each keystroke, which became visible with large histories.
+        filtered.append(or_(
+            Activity.name.ilike(pattern),
+            Activity.sport_type.ilike(pattern),
+            Activity.subsport_type.ilike(pattern),
+            Activity.raw["filename"].astext.ilike(pattern),
+        ))
+    return filtered, term
+
+
 @router.get("")
 async def list_activities(
     limit: int = Query(default=50, ge=1, le=500),
@@ -139,31 +169,7 @@ async def list_activities(
     summary statistics via ``include_stats=false`` and loads them independently
     from ``/activities/stats``.
     """
-    scope_filters = [Activity.user_id == user.id]
-    if sport:
-        scope_filters.append(Activity.sport_type == sport)
-    filtered = list(scope_filters)
-    if source == "garmin":
-        # Native Garmin IDs are positive. Activities enriched from SparkyFitness
-        # remain part of the Garmin view as well.
-        filtered.append(Activity.garmin_activity_id > 0)
-    elif source == "sparkyfitness":
-        filtered.append(_sparky_source_expr())
-    elif source == "manual":
-        filtered.append(_manual_source_expr())
-
-    term = (q or "").strip()
-    if term:
-        pattern = f"%{term}%"
-        # Search intentionally stays on concise indexed/structured fields. The
-        # previous full-JSON text conversion forced PostgreSQL to scan every payload
-        # payload on each keystroke, which became visible with large histories.
-        filtered.append(or_(
-            Activity.name.ilike(pattern),
-            Activity.sport_type.ilike(pattern),
-            Activity.subsport_type.ilike(pattern),
-            Activity.raw["filename"].astext.ilike(pattern),
-        ))
+    filtered, term = _journal_filters(user, sport, source, q)
 
     paginated = page is not None or per_page is not None
     if not paginated:
@@ -207,6 +213,75 @@ async def activity_stats(
     cache so revisiting the journal does not repeatedly scan the history.
     """
     return await _activity_stats(user.id, db, use_cache=not refresh)
+
+
+RECAP_ROUTE_LIMIT = 300
+
+
+def _recap_routes(paths: list[tuple[str, str]]) -> list[dict]:
+    import pandas as pd
+    from pengucoach.coach.recap import downsample
+    routes = []
+    for activity_id, path in paths:
+        try:
+            frame = pd.read_parquet(path, columns=["position_lat", "position_long"])
+        except (OSError, ValueError, KeyError, ImportError):
+            continue
+        frame = frame.dropna()
+        points = downsample(list(zip(frame["position_lat"].astype(float), frame["position_long"].astype(float))))
+        if points:
+            routes.append({"id": activity_id, "points": points})
+    return routes
+
+
+@router.get("/recap")
+async def activity_recap(
+    period: Literal["today", "week", "month", "year", "all"] = "month",
+    q: str | None = Query(default=None, max_length=120),
+    sport: str | None = None,
+    source: str | None = Query(default=None, pattern="^(garmin|sparkyfitness|manual)$"),
+    routes: bool = True,
+    user: User = Depends(safety_confirmed_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Animated recap of the filtered journal for a calendar period in the user's time zone."""
+    from pengucoach.coach.recap import period_bounds, summarize
+    from pengucoach.common.dates import day_start, user_zone
+    zone = user_zone(user)
+    today = datetime.now(zone).date()
+    bounds = period_bounds(period, today)
+    filtered, term = _journal_filters(user, sport, source, q)
+    columns = (Activity.id, Activity.name, Activity.sport_type, Activity.started_at, Activity.duration_seconds,
+               Activity.moving_seconds, Activity.distance_m, Activity.elevation_gain, Activity.calories,
+               Activity.avg_power)
+
+    async def load(start, end):
+        conditions = [*filtered, Activity.started_at.is_not(None), Activity.started_at < day_start(end + timedelta(days=1), user)]
+        if start is not None:
+            conditions.append(Activity.started_at >= day_start(start, user))
+        result = await db.execute(select(*columns).where(*conditions).order_by(Activity.started_at.desc()))
+        rows = []
+        for item in result.all():
+            started = item.started_at if item.started_at.tzinfo else item.started_at.replace(tzinfo=timezone.utc)
+            rows.append({"id": item.id, "name": item.name, "sport_type": item.sport_type,
+                         "day": started.astimezone(zone).date(), "distance_m": item.distance_m,
+                         "duration_s": item.moving_seconds or item.duration_seconds, "elevation_m": item.elevation_gain,
+                         "calories": item.calories, "avg_power": item.avg_power})
+        return rows
+
+    current = await load(bounds["start"], bounds["end"])
+    previous = await load(bounds["previous_start"], bounds["previous_end"]) if bounds["previous_start"] else None
+    result = summarize(current, period=period, today=today, previous=previous)
+    result.update(query=term, source_filter=source, timezone=str(zone), route_limit=RECAP_ROUTE_LIMIT, routes=[])
+    if routes and current:
+        ids = [row["id"] for row in current]
+        fits = (await db.execute(select(FitFile.activity_id, FitFile.parquet_path).where(
+            FitFile.user_id == user.id, FitFile.activity_id.in_(ids), FitFile.parquet_path.is_not(None)))).all()
+        order = {activity_id: index for index, activity_id in enumerate(ids)}
+        paths = sorted(((str(a), p) for a, p in fits), key=lambda item: order.get(uuid.UUID(item[0]), 0))[:RECAP_ROUTE_LIMIT]
+        result["routes"] = await asyncio.to_thread(_recap_routes, paths)
+        result["routes_limited"] = len(fits) > RECAP_ROUTE_LIMIT
+    return result
 
 
 @router.post("/import")

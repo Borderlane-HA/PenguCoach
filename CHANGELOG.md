@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.0-alpha.77
+
+- Add a Recap ("Rückblick") button to the activity journal. It plays an animated full-screen story for today, this week, this month, this year or your whole history and respects the journal's search and source filters: activity count and active days, distance, elevation gain, time and energy with counting numbers and playful comparisons (marathons, Munich–Berlin, around the Earth; Eiffel Tower, Zugspitze, Mont Blanc, Everest; Tatort episodes; pizzas), your sports mix, highlights (longest session, biggest climb, fastest run from 3 km, strongest ride), all GPS routes drawn on top of each other, a consistency calendar with your longest and current streak, a comparison with the same span of the previous period, and a closing card to save as PNG or share.
+- Story controls: tap or click left/right, arrow keys, space to pause, automatic pause when the tab is hidden; reduced-motion settings show final values without animation.
+- New endpoint `GET /api/v1/activities/recap` aggregates in the user's time zone. Missing distance, elevation or energy values are left out rather than counted as zero. Up to the newest 300 recorded routes are thinned for the map; a far-away holiday route does not shrink the home area to a dot.
+- No database migration or new dependency.
+
 ## 0.1.0-alpha.76
 
 - Add a Showcase button to every activity. It creates a designed image of the session: route drawn as a clean line (optionally coloured by heart rate or speed), headline figures that suit the sport, elevation profile, heart-rate zones and highlighted personal bests from the last year. Activities without GPS show a heart-rate, power or speed waveform instead. Three styles (Night, Light, Poster) and three formats (portrait 4:5, story 9:16, landscape 16:9); save as PNG or share directly on supporting devices. Style and format are remembered per browser. No map tiles, no new data or database change.
@@ -8,6 +15,7 @@
 - Check release requirements before anything changes: each release can declare the minimum version for a direct update, the Docker Compose version and, for native installations, Python and Node.js versions (`install/release-requirements.json`). The Updates area shows the result before the update starts and blocks unmet requirements with a clear message.
 - Shell: `pengucoach-status` shows the active release; the legacy shell updater refuses to modify an installation with release directories without the maintenance service. Host step 076 refreshes the shell commands.
 - CI runs the JavaScript tests and checks the syntax of host steps and the requirements file.
+- Make migrations 0011 and 0015 skip objects that already exist, like 0002–0014. A database created through the complete Alembic chain from an empty schema now reaches the same schema as a fresh installation (the CI database job previously stopped at 0011). Existing installations are unaffected.
 - No application database migration is required.
 
 ## 0.1.0-alpha.75
