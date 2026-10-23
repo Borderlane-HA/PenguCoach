@@ -16,9 +16,10 @@ export default function GarminConnect({lang,status,renewing=false,onConnected,on
   const previous=status?.auth_mode??null;
   const [mode,setMode]=useState<AuthMode>(renewing?"personal_api":previous??"password");
   const [email,setEmail]=useState(""),[password,setPassword]=useState(""),[challenge,setChallenge]=useState(""),[code,setCode]=useState("");
-  const [apiKey,setApiKey]=useState(""),[expires,setExpires]=useState(()=>addMonths(new Date(),12)),[busy,setBusy]=useState(false),[guideOpen,setGuideOpen]=useState(true);
+  const [keepLogin,setKeepLogin]=useState(true),[apiKey,setApiKey]=useState(""),[expires,setExpires]=useState(()=>addMonths(new Date(),12)),[busy,setBusy]=useState(false),[guideOpen,setGuideOpen]=useState(true);
   useEffect(()=>{if(previous&&!renewing)setMode(previous)},[previous,renewing]);
   const settingsUrl=status?.personal_api?.key_settings_url||KEY_SETTINGS_URL;
+  const switchingFromLogin=previous==="password"&&status?.status==="connected"&&!renewing;
   const fail=(e:unknown)=>notify(garminError(e instanceof Error?e.message:String(e),lang),8000);
 
   async function login(e:FormEvent){
@@ -38,7 +39,7 @@ export default function GarminConnect({lang,status,renewing=false,onConnected,on
   async function connectKey(e:FormEvent){
     e.preventDefault();setBusy(true);
     try{
-      await api("/garmin/auth/personal-api",{method:"POST",body:JSON.stringify({api_key:cleanKey(apiKey),expires_on:expires||null})});
+      await api("/garmin/auth/personal-api",{method:"POST",body:JSON.stringify({api_key:cleanKey(apiKey),expires_on:expires||null,keep_login_for_export:switchingFromLogin&&keepLogin})});
       setApiKey("");notify(bi(lang,renewing?"API-Key erneuert":"Garmin über Personal API verbunden",renewing?"API key renewed":"Garmin connected via Personal API"));onConnected();
     }catch(err){fail(err)}finally{setBusy(false)}
   }
@@ -54,7 +55,7 @@ export default function GarminConnect({lang,status,renewing=false,onConnected,on
       {([["password",bi(lang,"Garmin-Login","Garmin login"),bi(lang,"E-Mail & Passwort · alle Funktionen","E-mail & password · all features")],["personal_api",bi(lang,"Personal API Key","Personal API key"),bi(lang,"Offizieller Garmin-Zugang · nur lesen","Official Garmin access · read-only")]] as const).map(([key,label,hint])=><button type="button" role="radio" aria-checked={mode===key} key={key} className={mode===key?"active":""} onClick={()=>setMode(key)}><strong>{label}</strong><small>{hint}</small></button>)}
     </div>}
 
-    {!renewing&&<div className="garmin-capabilities" aria-label={bi(lang,"Funktionsvergleich","Feature comparison")}>{CAPABILITIES.map(c=>{const ok=mode==="password"?c.password:c.personal;return <span key={c.key} className={ok?"ok":"off"}><i aria-hidden>{ok?"✓":"–"}</i>{de?c.de:c.en}</span>})}</div>}
+    {!renewing&&<div className="garmin-capabilities" aria-label={bi(lang,"Funktionsvergleich","Feature comparison")}>{CAPABILITIES.map(c=>{const ok=mode==="password"?c.password:c.personal;return <span key={c.key} className={ok===true?"ok":ok==="optional"?"optional":"off"}><i aria-hidden>{ok===true?"✓":ok==="optional"?"+":"–"}</i>{de?c.de:c.en}{ok==="optional"&&<em>{bi(lang," · mit Zusatz-Login"," · with extra login")}</em>}</span>})}</div>}
 
     {mode==="password"&&!renewing&&<form className="stack" onSubmit={login}>
       <p className="muted">{bi(lang,"Das Passwort wird nur für die Garmin-Anmeldung verwendet und nicht dauerhaft gespeichert. Gespeichert werden nur die Anmelde-Tokens von Garmin (verschlüsselt).","The password is used only for Garmin sign-in and is not stored. Only Garmin's sign-in tokens are kept (encrypted).")}</p>
@@ -73,12 +74,12 @@ export default function GarminConnect({lang,status,renewing=false,onConnected,on
           <li>{bi(lang,"Kopiere den Key sofort und vollständig – Garmin zeigt ihn unter Umständen nur einmal an. Geht er verloren, einfach einen neuen erstellen.","Copy the complete key right away – Garmin may show it only once. If it gets lost, simply create a new one.")}</li>
           <li>{bi(lang,"Füge den Key unten ein, trage dasselbe Ablaufdatum ein und klicke „Mit API-Key verbinden“. PenguCoach prüft den Key sofort bei Garmin.","Paste the key below, enter the same expiry date and click “Connect with API key”. PenguCoach checks the key with Garmin right away.")}</li>
         </ol>}
-        <p className="garmin-write-note">{bi(lang,"Der Key ist so viel wert wie dein Passwort für deine Gesundheitsdaten: nicht weitergeben. PenguCoach speichert ihn verschlüsselt und nutzt ihn nur zum Lesen. Vor Ablauf erinnert dich diese Seite; einen widerrufenen oder abgelaufenen Key ersetzt du einfach durch einen neuen – Daten gehen nicht verloren. Workouts zu Garmin übertragen geht mit dem API-Key nicht; dafür bitte „Garmin-Login“ wählen.","Treat the key like your password for your health data: do not share it. PenguCoach stores it encrypted and only reads with it. This page reminds you before it expires; replace a revoked or expired key with a new one – no data is lost. Sending workouts to Garmin is not possible with the API key; choose “Garmin login” for that.")}</p>
+        <p className="garmin-write-note">{bi(lang,"Der Key ist so viel wert wie dein Passwort für deine Gesundheitsdaten: nicht weitergeben. PenguCoach speichert ihn verschlüsselt und nutzt ihn nur zum Lesen. Vor Ablauf erinnert dich diese Seite; einen widerrufenen oder abgelaufenen Key ersetzt du einfach durch einen neuen – Daten gehen nicht verloren. Workouts zu Garmin übertragen kann der API-Key nicht. Wer das braucht, hinterlegt nach dem Verbinden unter „Training & Kalender“ zusätzlich den Garmin-Login – er wird dann nur für den Export benutzt, der tägliche Datensync bleibt beim API-Key.","Treat the key like your password for your health data: do not share it. PenguCoach stores it encrypted and only reads with it. This page reminds you before it expires; replace a revoked or expired key with a new one – no data is lost. The API key cannot send workouts to Garmin. If you need that, add the Garmin login under “Training & calendar” after connecting – it is then used only for export, the daily data sync stays on the API key.")}</p>
       </div>
       <label>{bi(lang,"Personal API Key","Personal API key")}<input type="password" required minLength={8} autoComplete="off" spellCheck={false} value={apiKey} onChange={e=>setApiKey(e.target.value)} placeholder={bi(lang,"Key aus Garmin Connect einfügen","Paste the key from Garmin Connect")}/></label>
       <label>{bi(lang,"Ablaufdatum des Keys","Key expiry date")}<input type="date" value={expires} min={addMonths(new Date(),0)} onChange={e=>setExpires(e.target.value)}/></label>
       <div className="garmin-expiry-presets">{EXPIRY_PRESETS.map(m=><button type="button" className="ghost" key={m} onClick={()=>setExpires(addMonths(new Date(),m))}>{m===12?bi(lang,"1 Jahr","1 year"):`${m} ${bi(lang,m===1?"Monat":"Monate",m===1?"month":"months")}`}</button>)}<button type="button" className="ghost" onClick={()=>setExpires("")}>{bi(lang,"Unbekannt","Unknown")}</button></div>
-      {previous==="password"&&!renewing&&status?.status==="connected"&&<p className="muted">{bi(lang,"Hinweis: Mit dem API-Key ersetzt du die bisherige Garmin-Anmeldung. Der Workout-Export wird dabei ausgeschaltet.","Note: the API key replaces the current Garmin sign-in. Workout export is switched off.")}</p>}
+      {switchingFromLogin&&<label className="switch-row"><input type="checkbox" checked={keepLogin} onChange={e=>setKeepLogin(e.target.checked)}/><span/><div><strong>{bi(lang,"Bisherigen Garmin-Login für den Workout-Export behalten","Keep the current Garmin login for workout export")}</strong><small>{bi(lang,"Daten kommen künftig über den API-Key. Der Login wird nur noch zum Übertragen von Trainingsplänen benutzt. Ausgeschaltet wird er entfernt und der Export deaktiviert.","Data will come through the API key. The login is only used to send training plans. If off, it is removed and export is disabled.")}</small></div></label>}
       <div className="form-actions"><button disabled={busy||!cleanKey(apiKey)}>{busy?bi(lang,"Prüfe Key…","Checking key…"):renewing?bi(lang,"Key ersetzen","Replace key"):bi(lang,"Mit API-Key verbinden","Connect with API key")}</button>{onCancel&&<button type="button" className="ghost" onClick={onCancel}>{bi(lang,"Abbrechen","Cancel")}</button>}</div>
     </form>}
   </section>;

@@ -8,11 +8,17 @@ PenguCoach can connect to Garmin in two ways. You choose under **Settings → Ga
 | Daily values, sleep, HRV, stress, Body Battery, SpO₂, hydration | ✓ | ✓ |
 | Weight & body data, heart-rate zones | ✓ | ✓ |
 | Training status, training readiness, VO₂max trend, power zones, respiration, floors | ✓ | – (not offered by the API) |
-| Send workouts to Garmin / remove them there | ✓ (opt-in) | – (the API is read-only) |
+| Send workouts to Garmin / remove them there | ✓ (opt-in) | with an additional login used only for export |
 | What is stored | Garmin's sign-in tokens (encrypted); never the password | the API key and a short-lived access token (both encrypted) |
 | Typical issue | Garmin may ask for a new sign-in or MFA | the key expires after its lifetime and must be replaced |
 
 Both methods fill the same tables. Switching keeps all local data.
+
+## Using both: API key for data, login only for workout export
+
+With the Personal API key connected, *Settings → Garmin → Training & calendar* offers **Add Garmin login**. That login (e-mail, password, MFA if Garmin asks) is stored like the normal login – encrypted tokens, never the password – but it is used **only** when you send or remove workouts. Sync, history import and FIT downloads keep using the API key. If Garmin later rejects the export login, only export is affected; the page and the training plan ask for a new sign-in. When you switch from the login to an API key, the form offers to keep the existing login for export.
+
+Without the extra login, features the API key cannot deliver are shown greyed out with a short hint: Readiness on Today, power zones, and the workout export switch.
 
 ## Create a Personal API key
 

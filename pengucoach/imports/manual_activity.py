@@ -16,7 +16,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from pengucoach.common.config import settings
 from pengucoach.db.models import Activity, ActivityMetric, FitFile, User
-from pengucoach.fit.activity_detail import build_activity_stats
+from pengucoach.fit.activity_detail import BIKE_KEYS, RUN_KEYS, SWIM_KEYS, build_activity_stats
+from pengucoach.fit.track import add_distance_speed, haversine_m, moving_seconds, parse_time
 
 SUPPORTED_EXTENSIONS = {".fit", ".gpx", ".tcx", ".zip"}
 MAX_UPLOAD_BYTES = 50 * 1024 * 1024
@@ -64,73 +65,59 @@ def _number(value: Any) -> float | None:
 
 
 def _parse_dt(value: Any) -> datetime | None:
-    if isinstance(value, datetime):
-        return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
-    if not value:
-        return None
-    try:
-        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
-        return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
-    except ValueError:
-        return None
+    return parse_time(value)
 
 
 def _haversine_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
-    radius = 6_371_000.0
-    phi1, phi2 = math.radians(lat1), math.radians(lat2)
-    dphi = math.radians(lat2 - lat1)
-    dlambda = math.radians(lon2 - lon1)
-    a = math.sin(dphi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda / 2) ** 2
-    return radius * 2 * math.atan2(math.sqrt(a), math.sqrt(max(0.0, 1 - a)))
+    return haversine_m(lat1, lon1, lat2, lon2)
 
 
-def _with_derived_distance_speed(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    distance = 0.0
-    previous: tuple[float, float, datetime | None] | None = None
-    previous_segment = None
+def _with_derived_distance_speed(records: list[dict[str, Any]]) -> pd.DataFrame:
+    """Records → frame with UTC timestamps, smoothed distance and windowed speed.
+
+    Timestamps are parsed per point: pandas infers one format for a whole column
+    and silently turns mixed variants (``…:05Z`` next to ``…:05.250Z``) into NaT.
+    """
     for item in records:
-        segment = item.get("track_segment")
-        if segment != previous_segment:
-            previous = None
-        previous_segment = segment
-        lat = _number(item.get("position_lat"))
-        lon = _number(item.get("position_long"))
-        if lat is not None and lon is not None and (abs(lat) > 90 or abs(lon) > 180):
-            lat = lon = None
-            item["position_lat"] = item["position_long"] = None
-        stamp = _parse_dt(item.get("timestamp"))
-        explicit_distance = _number(item.get("distance"))
-        if explicit_distance is not None:
-            distance = explicit_distance
-        elif lat is not None and lon is not None and previous is not None:
-            distance += _haversine_m(previous[0], previous[1], lat, lon)
-        item["distance"] = distance
-        if _number(item.get("speed")) is None and previous is not None and previous[2] is not None and lat is not None and lon is not None and stamp is not None:
-            seconds = (stamp - previous[2]).total_seconds()
-            if 0 < seconds <= 300:
-                item["speed"] = _haversine_m(previous[0], previous[1], lat, lon) / seconds
-        if lat is not None and lon is not None:
-            previous = (lat, lon, stamp)
-        else:
-            previous = None
-    return records
+        item["timestamp"] = parse_time(item.get("timestamp"))
+    df = pd.DataFrame.from_records(records)
+    if df.empty:
+        return df
+    if "timestamp" in df.columns:
+        df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True)
+    return add_distance_speed(df)
+
+
+# Strava writes its numeric activity type into GPX files (1 = ride, 9 = run).
+_NUMERIC_GPX_TYPES = {"1": "cycling", "9": "running"}
+
+
+def gpx_sport(raw_type: str | None) -> str:
+    value = (raw_type or "").strip().lower().replace(" ", "_").replace("-", "_")
+    if not value:
+        return "other"
+    if value in _NUMERIC_GPX_TYPES:
+        return _NUMERIC_GPX_TYPES[value]
+    if value in RUN_KEYS or value in BIKE_KEYS or value in SWIM_KEYS:
+        return value
+    if "swim" in value:
+        return "swimming"
+    if any(x in value for x in ("bik", "cycl", "ride", "bicycle", "mtb", "gravel")):
+        return "cycling"
+    if "run" in value or "jog" in value:
+        return "running"
+    if "hik" in value:
+        return "hiking"
+    if "walk" in value:
+        return "walking"
+    return value
 
 
 def parse_gpx_bytes(raw: bytes) -> tuple[pd.DataFrame, dict[str, Any], str | None, str | None]:
     root = ET.fromstring(raw)
     track = next((x for x in root.iter() if _local(x.tag) == "trk"), root)
     name = _first_descendant(track, "name")
-    raw_type = (_first_descendant(track, "type") or "").lower()
-    if any(x in raw_type for x in ("bike", "cycling", "bicycle")):
-        sport = "cycling"
-    elif any(x in raw_type for x in ("run", "running")):
-        sport = "running"
-    elif "swim" in raw_type:
-        sport = "swimming"
-    elif any(x in raw_type for x in ("walk", "hike", "hiking")):
-        sport = "walking" if "walk" in raw_type else "hiking"
-    else:
-        sport = raw_type.replace(" ", "_") or "other"
+    sport = gpx_sport(_first_descendant(track, "type"))
 
     records: list[dict[str, Any]] = []
     segments = {
@@ -157,12 +144,12 @@ def parse_gpx_bytes(raw: bytes) -> tuple[pd.DataFrame, dict[str, Any], str | Non
             elif tag in {"atemp", "temperature"}: item["temperature"] = _number(value)
             elif tag == "speed": item["speed"] = _number(value)
         records.append(item)
-    records = _with_derived_distance_speed(records)
-    df = pd.DataFrame.from_records(records)
+    df = _with_derived_distance_speed(records)
     session: dict[str, Any] = {"source_format": "gpx"}
-    if records:
-        session["start_time"] = records[0].get("timestamp")
-        session["total_distance"] = records[-1].get("distance")
+    if not df.empty:
+        if "timestamp" in df.columns and df["timestamp"].notna().any():
+            session["start_time"] = df["timestamp"].dropna().iloc[0].to_pydatetime()
+        session["total_distance"] = float(df["distance"].max()) if "distance" in df.columns and df["distance"].notna().any() else None
     return df, session, name, sport
 
 
@@ -170,7 +157,7 @@ def parse_tcx_bytes(raw: bytes) -> tuple[pd.DataFrame, dict[str, Any], str | Non
     root = ET.fromstring(raw)
     activity = next((x for x in root.iter() if _local(x.tag) == "activity"), root)
     raw_sport = (activity.attrib.get("Sport") or activity.attrib.get("sport") or "Other").lower()
-    sport = "running" if "run" in raw_sport else "cycling" if any(x in raw_sport for x in ("bike", "biking", "cycling")) else "swimming" if "swim" in raw_sport else "other"
+    sport = gpx_sport(raw_sport) if raw_sport != "other" else "other"
     activity_id = _first_descendant(activity, "id")
     laps: list[dict[str, Any]] = []
     for lap in (x for x in activity if _local(x.tag) == "lap"):
@@ -203,15 +190,14 @@ def parse_tcx_bytes(raw: bytes) -> tuple[pd.DataFrame, dict[str, Any], str | Non
             elif tag in {"watts", "power"}: item["power"] = _number(value)
             elif tag in {"runcadence", "cadence"} and item.get("cadence") is None: item["cadence"] = _number(value)
         records.append(item)
-    records = _with_derived_distance_speed(records)
-    df = pd.DataFrame.from_records(records)
+    df = _with_derived_distance_speed(records)
     session: dict[str, Any] = {"source_format": "tcx", "start_time": activity_id, "_laps": laps}
     if laps:
         session["total_timer_time"] = sum(x.get("total_timer_time") or 0 for x in laps) or None
         session["total_distance"] = sum(x.get("total_distance") or 0 for x in laps) or None
         session["total_calories"] = sum(x.get("total_calories") or 0 for x in laps) or None
     elif records:
-        session["total_distance"] = records[-1].get("distance")
+        session["total_distance"] = float(df["distance"].max()) if "distance" in df.columns and df["distance"].notna().any() else None
     return df, session, None, sport
 
 
@@ -272,6 +258,44 @@ def _safe_filename(filename: str) -> str:
     return "".join(c for c in base if c.isalnum() or c in "-_. ") or "activity"
 
 
+def _track_problem(df: pd.DataFrame) -> str | None:
+    """Reject files that are not recordings instead of storing an empty activity."""
+    if df.empty:
+        return "NO_TRACK_POINTS"
+    times = df["timestamp"].notna().sum() if "timestamp" in df.columns else 0
+    if times < 2:
+        # Planned routes from route planners have positions but no times.
+        return "ROUTE_WITHOUT_TIMES"
+    return None
+
+
+async def find_overlapping_activity(db: AsyncSession, user_id, started_at: datetime, duration_s: float | None) -> Activity | None:
+    """An existing activity that is very likely the same workout (Garmin, SparkyFitness or an earlier import)."""
+    from datetime import timedelta
+    span = max(60.0, float(duration_s or 0))
+    window = timedelta(seconds=max(600.0, span))
+    rows = (await db.scalars(select(Activity).where(
+        Activity.user_id == user_id,
+        Activity.started_at >= started_at - window,
+        Activity.started_at <= started_at + window,
+    ))).all()
+    start = started_at.timestamp()
+    end = start + span
+    for row in rows:
+        if row.started_at is None:
+            continue
+        other_start = (row.started_at if row.started_at.tzinfo else row.started_at.replace(tzinfo=timezone.utc)).timestamp()
+        other_span = float(row.duration_seconds or 0)
+        if not duration_s or not other_span:
+            if abs(other_start - start) <= 300:
+                return row
+            continue
+        overlap = min(end, other_start + other_span) - max(start, other_start)
+        if overlap >= 0.5 * min(span, other_span):
+            return row
+    return None
+
+
 async def import_manual_activity(
     db: AsyncSession,
     user: User,
@@ -280,6 +304,7 @@ async def import_manual_activity(
     *,
     name_override: str | None = None,
     sport_override: str | None = None,
+    allow_overlap: bool = False,
 ) -> Activity:
     if not raw:
         raise ValueError("EMPTY_UPLOAD")
@@ -323,6 +348,11 @@ async def import_manual_activity(
     except Exception as exc:
         temp_path.unlink(missing_ok=True)
         raise ValueError("INVALID_ACTIVITY_FILE") from exc
+    if import_format in {"gpx", "tcx"}:
+        problem = _track_problem(df)
+        if problem:
+            temp_path.unlink(missing_ok=True)
+            raise ValueError(problem)
 
     started_at = _parse_dt(session.get("start_time") or session.get("timestamp"))
     if started_at is None and "timestamp" in df.columns:
@@ -331,6 +361,16 @@ async def import_manual_activity(
             started_at = timestamps.iloc[0].to_pydatetime()
     started_at = started_at or datetime.now(timezone.utc)
     year = started_at.year
+
+    duration = _first_number(session, "total_timer_time", "total_elapsed_time", "duration")
+    elapsed = _first_number(session, "total_elapsed_time") or _duration_from_df(df)
+    if duration is None:
+        duration = _duration_from_df(df)
+    if not allow_overlap:
+        existing = await find_overlapping_activity(db, user.id, started_at, elapsed or duration)
+        if existing is not None:
+            temp_path.unlink(missing_ok=True)
+            raise ValueError(f"ACTIVITY_OVERLAP:{existing.id}")
 
     target_dir = settings.fit_dir / str(user.id) / str(year)
     parquet_dir = settings.parquet_dir / str(user.id) / str(year)
@@ -355,13 +395,17 @@ async def import_manual_activity(
 
     sport = (sport_override or inferred_sport or "other").strip().lower().replace(" ", "_")
     display_name = (name_override or inferred_name or Path(safe_filename).stem or "Imported activity").strip()[:255]
-    duration = _first_number(session, "total_timer_time", "total_elapsed_time", "duration")
-    if duration is None:
-        duration = _duration_from_df(df)
     distance = _first_number(session, "total_distance", "distance")
     if distance is None:
         distance = _max_numeric(df, "distance")
+    # FIT has the watch's timer time. GPX/TCX tracks include pauses in their
+    # time span, so moving time comes from the points themselves.
+    moving = _first_number(session, "total_timer_time")
+    if moving is None and import_format in {"gpx", "tcx"}:
+        moving = moving_seconds(df)
     avg_speed = _first_number(session, "enhanced_avg_speed", "avg_speed", "average_speed")
+    if avg_speed is None and distance and moving:
+        avg_speed = distance / moving
     if avg_speed is None and _number(speed.get("avg")) is not None:
         avg_speed = _number(speed.get("avg")) / 3.6
 
@@ -374,7 +418,7 @@ async def import_manual_activity(
         subsport_type=str(session.get("sub_sport") or "") or None,
         started_at=started_at,
         duration_seconds=int(duration) if duration is not None else None,
-        moving_seconds=int(_first_number(session, "total_timer_time") or duration) if duration is not None else None,
+        moving_seconds=int(moving) if moving else (int(duration) if duration is not None else None),
         distance_m=distance,
         calories=_first_number(session, "total_calories", "calories"),
         avg_hr=int(_first_number(session, "avg_heart_rate") or _number(heart.get("avg"))) if (_first_number(session, "avg_heart_rate") is not None or _number(heart.get("avg")) is not None) else None,

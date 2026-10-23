@@ -13,6 +13,7 @@ from pengucoach.db.session import get_db
 from garminconnect import GarminConnectAuthenticationError, GarminConnectTooManyRequestsError
 
 from pengucoach.garmin.auth.service import garmin_auth_service
+from pengucoach.garmin.gateway.factory import workout_export_available
 from pengucoach.garmin.personal_api import KEY_SETTINGS_URL, PersonalApiError
 from pengucoach.garmin.zones import training_zone_snapshot
 from worker.celery_app import app
@@ -29,6 +30,7 @@ class GarminLoginRequest(BaseModel):
 class GarminPersonalApiRequest(BaseModel):
     api_key: str = Field(min_length=8, max_length=4096)
     expires_on: date | None = None
+    keep_login_for_export: bool = False
 
 
 class GarminMfaRequest(BaseModel):
@@ -103,7 +105,7 @@ async def garmin_status(user: User = Depends(safety_confirmed_user), db: AsyncSe
     if not conn:
         return {"connected": False, "status": "disconnected", "auth_mode": None, "personal_api": _personal_api_info(None), "read_only": True, "activity_count": activity_count, "activity_catalog": catalog_meta, "settings": {"interval_minutes": settings.garmin_default_interval_minutes}}
     mode = conn.auth_mode or "password"
-    return {"connected": conn.status == "connected", "status": conn.status, "auth_mode": mode, "personal_api": _personal_api_info(conn), "capabilities": {"workout_export": mode == "password", "power_zones": mode == "password", "training_status": mode == "password"}, "display_name": conn.garmin_display_name, "last_validated_at": conn.last_validated_at, "last_successful_sync_at": conn.last_successful_sync_at, "next_sync_at": conn.next_sync_at, "cooldown_until": conn.cooldown_until, "last_error_code": conn.last_error_code, "read_only": True, "activity_count": activity_count, "activity_catalog": catalog_meta, "settings": {"enabled": sync.enabled, "interval_minutes": sync.interval_minutes, "fit_download_enabled": sync.fit_download_enabled, "fit_analysis_enabled": sync.fit_analysis_enabled, "historical_days": sync.historical_days, "sync_health": sync.sync_health, "sync_activities": sync.sync_activities, "sync_body": sync.sync_body, "sync_training": sync.sync_training, "workout_export_enabled": sync.workout_export_enabled} if sync else None}
+    return {"connected": conn.status == "connected", "status": conn.status, "auth_mode": mode, "personal_api": _personal_api_info(conn), "capabilities": {"workout_export": workout_export_available(conn), "power_zones": mode == "password", "training_status": mode == "password", "training_readiness": mode == "password"}, "export_login": _export_login_info(conn), "display_name": conn.garmin_display_name, "last_validated_at": conn.last_validated_at, "last_successful_sync_at": conn.last_successful_sync_at, "next_sync_at": conn.next_sync_at, "cooldown_until": conn.cooldown_until, "last_error_code": conn.last_error_code, "read_only": True, "activity_count": activity_count, "activity_catalog": catalog_meta, "settings": {"enabled": sync.enabled, "interval_minutes": sync.interval_minutes, "fit_download_enabled": sync.fit_download_enabled, "fit_analysis_enabled": sync.fit_analysis_enabled, "historical_days": sync.historical_days, "sync_health": sync.sync_health, "sync_activities": sync.sync_activities, "sync_body": sync.sync_body, "sync_training": sync.sync_training, "workout_export_enabled": sync.workout_export_enabled} if sync else None}
 
 
 def _personal_api_info(conn: GarminConnection | None) -> dict:
@@ -118,12 +120,36 @@ def _personal_api_info(conn: GarminConnection | None) -> dict:
     }
 
 
+def _export_login_info(conn: GarminConnection | None) -> dict | None:
+    if not conn or conn.auth_mode != "personal_api":
+        return None
+    return {"status": conn.export_status or "none", "connected": conn.export_status == "connected",
+            "display_name": conn.export_display_name, "last_error_code": conn.export_error_code}
+
+
+@router.post("/auth/export/start")
+async def start_export_login(payload: GarminLoginRequest, user: User = Depends(safety_confirmed_user), db: AsyncSession = Depends(get_db)):
+    """Garmin login used only for workout export while data comes from the Personal API key."""
+    try:
+        return await garmin_auth_service.start(db, user, str(payload.email), payload.password, purpose="export")
+    except KeyError as exc:
+        raise HTTPException(status_code=409, detail="GARMIN_EXPORT_NEEDS_API_CONNECTION") from exc
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="GARMIN_AUTH_FAILED") from exc
+
+
+@router.post("/auth/export/disconnect")
+async def disconnect_export_login(user: User = Depends(safety_confirmed_user), db: AsyncSession = Depends(get_db)):
+    await garmin_auth_service.disconnect_export(db, user)
+    return {"disconnected": True, "data_sync_unchanged": True}
+
+
 @router.post("/auth/personal-api")
 async def connect_personal_api(payload: GarminPersonalApiRequest, user: User = Depends(safety_confirmed_user), db: AsyncSession = Depends(get_db)):
     if payload.expires_on and payload.expires_on < date.today():
         raise HTTPException(status_code=422, detail="GARMIN_API_KEY_EXPIRED")
     try:
-        return await garmin_auth_service.connect_personal_api(db, user, payload.api_key, payload.expires_on)
+        return await garmin_auth_service.connect_personal_api(db, user, payload.api_key, payload.expires_on, payload.keep_login_for_export)
     except GarminConnectAuthenticationError as exc:
         raise HTTPException(status_code=400, detail="GARMIN_API_KEY_REJECTED") from exc
     except GarminConnectTooManyRequestsError as exc:
@@ -172,8 +198,8 @@ async def put_sync_settings(payload: SyncSettingsRequest, user: User = Depends(s
         row = GarminSyncSetting(user_id=user.id); db.add(row)
     values = payload.model_dump()
     conn = await db.scalar(select(GarminConnection).where(GarminConnection.user_id == user.id))
-    if conn and conn.auth_mode == "personal_api":
-        # Workout export writes to Garmin; the Personal API key is read-only.
+    if conn and conn.auth_mode == "personal_api" and conn.export_status != "connected":
+        # Workout export writes to Garmin; the Personal API key alone is read-only.
         values["workout_export_enabled"] = False
     for field, value in values.items(): setattr(row, field, value)
     await db.commit(); return values
@@ -243,6 +269,8 @@ async def training_zones(user: User = Depends(safety_confirmed_user), db: AsyncS
     conn = await db.scalar(select(GarminConnection).where(GarminConnection.user_id == user.id))
     snapshot = await training_zone_snapshot(db, user.id)
     snapshot["connected"] = bool(conn and conn.status == "connected")
+    # Power zones are not offered by the Personal API; the UI greys them out.
+    snapshot["auth_mode"] = (conn.auth_mode or "password") if conn else None
     return snapshot
 
 

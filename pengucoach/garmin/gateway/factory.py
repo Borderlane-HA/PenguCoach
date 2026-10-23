@@ -51,15 +51,41 @@ async def gateway_from_connection(connection: GarminConnection):
     return GarminReadOnlyGateway(client), client
 
 
+def workout_token(connection: GarminConnection | None) -> str | None:
+    """Encrypted Garmin login tokens usable for writing workouts, if any."""
+    if connection is None:
+        return None
+    if auth_mode(connection) == AUTH_PASSWORD:
+        return connection.token_ciphertext
+    if getattr(connection, "export_status", None) == "connected":
+        return getattr(connection, "export_token_ciphertext", None)
+    return None
+
+
+def workout_export_available(connection: GarminConnection | None) -> bool:
+    """True when workouts can be written: Garmin login, or API key plus export login."""
+    return bool(connection and connection.status == "connected" and workout_token(connection))
+
+
 async def workout_gateway_from_connection(connection: GarminConnection) -> tuple[GarminWorkoutGateway, Garmin]:
-    if auth_mode(connection) != AUTH_PASSWORD:
-        raise WorkoutExportNeedsLogin()
-    if not connection.token_ciphertext:
+    token = workout_token(connection)
+    if not token:
+        if auth_mode(connection) != AUTH_PASSWORD:
+            raise WorkoutExportNeedsLogin()
         raise RuntimeError("Garmin connection has no token")
-    token_blob = SecretBox().decrypt(connection.token_ciphertext)
     client = Garmin()
-    await asyncio.to_thread(client.login, token_blob)
+    await asyncio.to_thread(client.login, SecretBox().decrypt(token))
     return GarminWorkoutGateway(client), client
+
+
+def store_workout_token(connection: GarminConnection, client: Garmin) -> None:
+    """Persist refreshed login tokens after a workout write in the right column."""
+    encrypted = SecretBox().encrypt(client.client.dumps())
+    if auth_mode(connection) == AUTH_PASSWORD:
+        connection.token_ciphertext = encrypted
+    else:
+        # Never overwrite the cached Personal API bearer token with OAuth tokens.
+        connection.export_token_ciphertext = encrypted
 
 
 def serialize_refreshed_token(client) -> str:

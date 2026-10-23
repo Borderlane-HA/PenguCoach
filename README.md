@@ -94,7 +94,7 @@ Reviewed time-budget variants, confirmed training experiences, recorded 1/5/20-m
 - multi-user local authentication
 - mandatory safety/development gate after every login
 - Garmin Connect login with MFA
-- alternatively the official Garmin **Personal API key** (read-only, with in-app guide and expiry reminder) – see [`docs/GARMIN_PERSONAL_API.md`](docs/GARMIN_PERSONAL_API.md)
+- alternatively the official Garmin **Personal API key** (read-only, with in-app guide and expiry reminder), optionally combined with a Garmin login used only for workout export – see [`docs/GARMIN_PERSONAL_API.md`](docs/GARMIN_PERSONAL_API.md)
 - encrypted Garmin token persistence; Garmin password is never stored
 - allow-list based **strict read-only** Garmin data-sync gateway plus a separate opt-in, narrow workout/calendar write gateway
 - configurable automatic sync with jitter, lock, 429 cooldown and reconnect state
@@ -104,7 +104,7 @@ Reviewed time-budget variants, confirmed training experiences, recorded 1/5/20-m
 - FIT parsing and Parquet time-series storage
 - deterministic FIT analytics: HR/pace/power/cadence drift, aerobic decoupling, pace consistency and data coverage
 - performance-oriented server-side activity journal: the first 25/50/100 rows load independently from source/status counters, PostgreSQL indexes accelerate the common user/date and source filters, summary counters are aggregated/cached separately, and responsive skeleton/loading states keep large 5,000+ activity histories visibly responsive; detail views retain FIT time series
-- manual activity import without Garmin: FIT, GPX, TCX and ZIP-contained FIT files are stored locally, normalized into the same activity history and analysed with the same deterministic pipeline
+- manual activity import without Garmin: FIT, GPX, TCX and ZIP-contained FIT files are stored locally, normalized into the same activity history and analysed with the same deterministic pipeline; GPS-only tracks get smoothed distance, windowed speed and moving time, and an import that matches an existing workout asks before creating a duplicate
 - health overview and professional historical charts with Today / Last 7 days / This week / This month / Last 3 months / Last 6 months / This year / All filters; top health cards show averages of the available measurements in the selected period while missing days are not treated as zero
 - Ollama, OpenAI, Anthropic, IONOS AI Model Hub, Google Gemini, xAI/Grok, OpenRouter and generic OpenAI-compatible provider management
 - optional per-model input/output token pricing plus system-wide AI usage/cost statistics for today, 7 days, 30 days, current year and all time; local models retain token statistics even without prices

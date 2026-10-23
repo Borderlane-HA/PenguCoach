@@ -14,7 +14,9 @@ const ERRORS:Record<string,[string,string]> = {
   GARMIN_AUTH_FAILED:["Anmeldung fehlgeschlagen. Prüfe E-Mail und Passwort.","Sign-in failed. Check e-mail and password."],
   GARMIN_MFA_FAILED:["Der Bestätigungscode wurde nicht akzeptiert.","The verification code was not accepted."],
   GARMIN_MFA_CHALLENGE_EXPIRED:["Die Bestätigung ist abgelaufen. Bitte erneut anmelden.","The verification expired. Please sign in again."],
-  GARMIN_WORKOUT_EXPORT_NEEDS_LOGIN:["Workouts zu Garmin übertragen oder dort löschen geht nur mit der Verbindungsart „Garmin-Login“. Die Personal API kann nur lesen.","Sending workouts to Garmin or deleting them there requires the “Garmin login” connection method. The Personal API is read-only."],
+  GARMIN_WORKOUT_EXPORT_NEEDS_LOGIN:["Workouts zu Garmin übertragen oder dort löschen braucht den Garmin-Login – als Verbindungsart oder als Zusatz-Login neben dem API-Key (Einstellungen → Garmin → Training & Kalender).","Sending workouts to Garmin or deleting them there needs the Garmin login – as connection method or as extra login next to the API key (Settings → Garmin → Training & calendar)."],
+  GARMIN_EXPORT_LOGIN_EXPIRED:["Der Garmin-Login für den Workout-Export ist abgelaufen. Melde dich unter Einstellungen → Garmin → Training & Kalender neu an. Der Datensync über den API-Key läuft weiter.","The Garmin login for workout export has expired. Sign in again under Settings → Garmin → Training & calendar. The data sync via the API key keeps running."],
+  GARMIN_EXPORT_NEEDS_API_CONNECTION:["Der Zusatz-Login für den Export ist nur mit einer aktiven Personal-API-Verbindung möglich.","The extra export login requires an active Personal API connection."],
   GARMIN_REAUTH_REQUIRED:["Garmin verlangt eine neue Anmeldung bzw. einen neuen API-Key.","Garmin requires a new sign-in or a new API key."],
 };
 
@@ -48,11 +50,28 @@ export function cleanKey(value:string){
   return value.replace(/^\s*(ApiKey|Bearer)\s+/i,"").replace(/\s+/g,"");
 }
 
-export type Capability={key:string;de:string;en:string;password:boolean;personal:boolean};
+export type Capability={key:string;de:string;en:string;password:boolean;personal:boolean|"optional"};
 export const CAPABILITIES:Capability[]=[
   {key:"activities",de:"Aktivitäten & Original-FIT",en:"Activities & original FIT",password:true,personal:true},
   {key:"daily",de:"Tageswerte, Schlaf, HRV, Stress, Body Battery",en:"Daily values, sleep, HRV, stress, Body Battery",password:true,personal:true},
   {key:"body",de:"Gewicht & Körperdaten, Herzfrequenzzonen",en:"Weight & body data, heart-rate zones",password:true,personal:true},
   {key:"training",de:"Trainingsstatus, Readiness, VO₂max-Verlauf, Leistungszonen",en:"Training status, readiness, VO₂max trend, power zones",password:true,personal:false},
-  {key:"export",de:"Workouts zu Garmin übertragen",en:"Send workouts to Garmin",password:true,personal:false},
+  {key:"export",de:"Workouts zu Garmin übertragen",en:"Send workouts to Garmin",password:true,personal:"optional"},
 ];
+
+/** Features the Personal API does not deliver. Used to grey out cards with a hint. */
+export type GarminFeature="training_readiness"|"training_status"|"power_zones"|"workout_export";
+export type GarminModeInfo={auth_mode?:AuthMode|null;connected?:boolean;export_login?:{connected?:boolean}|null};
+
+export function featureUnavailable(info:GarminModeInfo|null|undefined,feature:GarminFeature){
+  if(!info||info.auth_mode!=="personal_api"||!info.connected)return false;
+  if(feature==="workout_export")return !info.export_login?.connected;
+  return true;
+}
+
+export function featureHint(feature:GarminFeature,lang:Lang){
+  const de=lang==="de";
+  if(feature==="workout_export")return de?"Mit dem Garmin API-Key allein nicht möglich – unter Einstellungen → Garmin zusätzlich den Garmin-Login für den Export hinterlegen.":"Not possible with the Garmin API key alone – add the Garmin login for export under Settings → Garmin.";
+  const name=feature==="training_readiness"?(de?"Training Readiness":"Training readiness"):feature==="power_zones"?(de?"Leistungszonen":"Power zones"):(de?"Trainingsstatus":"Training status");
+  return de?`${name}: über den Garmin API-Key nicht verfügbar. Dafür die Verbindungsart „Garmin-Login“ verwenden.`:`${name}: not available through the Garmin API key. Use the “Garmin login” connection method for this.`;
+}

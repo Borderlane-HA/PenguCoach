@@ -109,7 +109,10 @@ def frame(raw: dict | None) -> pd.DataFrame:
         return pd.DataFrame()
     out = pd.DataFrame(records).sort_values("timestamp", kind="stable").drop_duplicates("timestamp", keep="first").reset_index(drop=True)
     out["track_segment"] = (out["timestamp"].diff().dt.total_seconds() > 120).cumsum()
-    return out
+    # Phone and Health Connect tracks often have positions but no cumulative
+    # distance; without it there are no splits and no distance axis.
+    from pengucoach.fit.track import add_distance_speed
+    return add_distance_speed(out)
 
 
 def laps(raw):

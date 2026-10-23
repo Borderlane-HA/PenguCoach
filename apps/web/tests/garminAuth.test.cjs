@@ -37,6 +37,20 @@ test('error codes become readable text',()=>{
 
 test('feature comparison marks read-only gaps of the Personal API',()=>{
   const missing=G.CAPABILITIES.filter(c=>!c.personal).map(c=>c.key);
-  assert.deepEqual(missing,['training','export']);
+  assert.deepEqual(missing,['training']);
+  assert.equal(G.CAPABILITIES.find(c=>c.key==='export').personal,'optional');
   assert.ok(G.CAPABILITIES.every(c=>c.password));
+});
+
+test('features are greyed out only for an active API-only connection',()=>{
+  const api={auth_mode:'personal_api',connected:true,export_login:{connected:false}};
+  assert.equal(G.featureUnavailable(api,'training_readiness'),true);
+  assert.equal(G.featureUnavailable(api,'workout_export'),true);
+  assert.equal(G.featureUnavailable({...api,export_login:{connected:true}},'workout_export'),false);
+  assert.equal(G.featureUnavailable({...api,export_login:{connected:true}},'power_zones'),true);
+  assert.equal(G.featureUnavailable({auth_mode:'password',connected:true},'training_readiness'),false);
+  assert.equal(G.featureUnavailable({auth_mode:'personal_api',connected:false},'training_readiness'),false);
+  assert.equal(G.featureUnavailable(null,'power_zones'),false);
+  assert.match(G.featureHint('power_zones','de'),/Leistungszonen/);
+  assert.match(G.featureHint('workout_export','en'),/export/);
 });

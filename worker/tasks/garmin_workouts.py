@@ -9,7 +9,9 @@ from sqlalchemy import select
 
 from pengucoach.db.models import AiRun, GarminConnection, GarminExerciseMapping, GarminSyncSetting, GarminWorkoutExport, User
 from pengucoach.db.session import SessionLocal
-from pengucoach.garmin.gateway.factory import serialize_refreshed_token, workout_gateway_from_connection
+from garminconnect import GarminConnectAuthenticationError
+
+from pengucoach.garmin.gateway.factory import auth_mode, store_workout_token, workout_export_available, workout_gateway_from_connection
 from pengucoach.garmin.gateway.workouts import session_exportability
 from pengucoach.training_plan.calendar import apply_session_overrides, scheduled_date, select_session_rows
 from pengucoach.training_plan.structured import TrainingPlanDocument
@@ -31,6 +33,19 @@ def _id_from(value: Any, *keys: str) -> str | None:
     return None
 
 
+async def _workout_gateway(db, connection):
+    """Workout gateway; an expired export-only login is flagged without touching the data sync."""
+    try:
+        return await workout_gateway_from_connection(connection)
+    except GarminConnectAuthenticationError as exc:
+        if auth_mode(connection) != "password":
+            connection.export_status = "reauth_required"
+            connection.export_error_code = "GARMIN_EXPORT_LOGIN_EXPIRED"
+            await db.commit()
+            raise RuntimeError("GARMIN_EXPORT_LOGIN_EXPIRED") from exc
+        raise
+
+
 async def _export_plan(
     user_id: str,
     payload: dict[str, Any],
@@ -47,6 +62,8 @@ async def _export_plan(
         connection = await db.scalar(select(GarminConnection).where(GarminConnection.user_id == uid))
         if not connection or connection.status != "connected" or not connection.token_ciphertext:
             raise RuntimeError("GARMIN_NOT_CONNECTED")
+        if not workout_export_available(connection):
+            raise RuntimeError("GARMIN_WORKOUT_EXPORT_NEEDS_LOGIN")
 
         run_id = uuid.UUID(str(payload["plan_run_id"]))
         run = await db.get(AiRun, run_id)
@@ -70,7 +87,7 @@ async def _export_plan(
         if not sessions:
             raise RuntimeError("NO_TRAINING_SESSIONS_SELECTED")
 
-        gateway, raw_client = await workout_gateway_from_connection(connection)
+        gateway, raw_client = await _workout_gateway(db, connection)
         mapping_rows = (await db.scalars(select(GarminExerciseMapping).where(
             GarminExerciseMapping.user_id == uid
         ))).all()
@@ -176,7 +193,7 @@ async def _export_plan(
                 })
             await asyncio.sleep(0.2)
 
-        connection.token_ciphertext = serialize_refreshed_token(raw_client)
+        store_workout_token(connection, raw_client)
         await db.commit()
         return {
             "plan_run_id": str(run_id),
@@ -229,7 +246,9 @@ async def _delete_plan_from_garmin(
         connection = await db.scalar(select(GarminConnection).where(GarminConnection.user_id == uid))
         if not connection or connection.status != "connected" or not connection.token_ciphertext:
             raise RuntimeError("GARMIN_NOT_CONNECTED")
-        gateway, raw_client = await workout_gateway_from_connection(connection)
+        if not workout_export_available(connection):
+            raise RuntimeError("GARMIN_WORKOUT_EXPORT_NEEDS_LOGIN")
+        gateway, raw_client = await _workout_gateway(db, connection)
 
         deleted = failed = 0
         errors: list[dict[str, Any]] = []
@@ -270,7 +289,7 @@ async def _delete_plan_from_garmin(
                     "error": ledger.error_message_safe,
                 })
 
-        connection.token_ciphertext = serialize_refreshed_token(raw_client)
+        store_workout_token(connection, raw_client)
         await db.commit()
         if failed:
             # Keep the plan and export ledger so the failed remote cleanup can be retried.

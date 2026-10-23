@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.1.0-alpha.80
+
+- **Garmin: API key and login together.** With the Personal API key, a Garmin login can now be added under *Settings → Garmin → Training & calendar* that is used **only** to send training plans to Garmin. The daily data sync stays on the API key, so a Garmin sign-in prompt no longer interrupts the data. When switching from the login to an API key, the existing login can be kept for export with one switch. An expired export login is flagged on its own and never stops the data sync. Users who only want one method keep using either the login or the API key as before.
+- **Features not offered by the API key are greyed out with a hint:** the Readiness card on Today, power zones in the training-zone status and the workout export (until an export login is added). The connection form marks workout export as "with extra login" for the API key.
+- **GPX/TCX import is more accurate:**
+  - Timestamps are read per point. Files mixing `…:05Z` and `…:05.250Z` previously lost part of their time axis, which produced wrong durations and absurd top speeds.
+  - Distance and speed from raw GPS positions are smoothed (dense recordings only), and GPS jumps are ignored. In a test run with typical GPS noise the distance moved from +10 % to +1.4 % and top speed from 2.6× to 1.4× the real pace.
+  - Moving time excludes pauses, so average speed and pace no longer include standing time.
+  - Sport detection understands Garmin types such as `road_biking`, `mountain_biking`, `biking`, `trail_running` and Strava's numeric types 1 (ride) and 9 (run).
+  - Planned routes without timestamps and files without track points are rejected with a clear message instead of creating an empty activity dated today.
+  - If an activity at the same time already exists (Garmin, SparkyFitness or an earlier import), the import asks first: open the existing one or import anyway. This prevents double-counted distance and load.
+- **SparkyFitness:** GPS tracks without a cumulative distance (phone and Health Connect recordings) now get a distance axis and speed, so splits and the distance view work. The endpoints PenguCoach uses were checked against SparkyFitness 1.9.0 and are unchanged.
+- Migration `0017_garmin_export_login`. No new dependency.
+
 ## 0.1.0-alpha.79
 
 - Garmin can now also be connected with Garmin's official **Personal API key** instead of e-mail and password. The Garmin page offers both methods side by side with a feature comparison and a step-by-step guide for creating the key in Garmin Connect. The key is checked with Garmin immediately, stored encrypted and exchanged for short-lived access tokens; the page shows its expiry, warns 14 days ahead and replaces it in place with **Renew key**. Activities, original FIT files, daily values, sleep, HRV, stress, Body Battery, SpO₂, hydration, weight and heart-rate zones are synchronised through the same code path as before; training status, readiness, VO₂max trend and power zones are not offered by the Personal API.

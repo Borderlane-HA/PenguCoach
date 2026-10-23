@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from pengucoach.garmin.gateway.factory import workout_export_available
 from pengucoach.auth.dependencies import safety_confirmed_user
 from pengucoach.db.models import AiRun, GarminConnection, GarminExerciseMapping, GarminSyncSetting, GarminWorkoutExport, User
 from pengucoach.db.session import get_db
@@ -154,7 +155,8 @@ async def workout_export_status(
 ):
     conn = await db.scalar(select(GarminConnection).where(GarminConnection.user_id == user.id))
     settings = await db.get(GarminSyncSetting, user.id)
-    available = not conn or (conn.auth_mode or "password") == "password"
+    # "Available" describes the connection method, independent of a temporary sign-in problem.
+    available = not conn or (conn.auth_mode or "password") == "password" or conn.export_status == "connected"
     return {
         "connected": bool(conn and conn.status == "connected" and conn.token_ciphertext),
         "enabled": bool(available and settings and settings.workout_export_enabled),
@@ -235,7 +237,7 @@ async def queue_workout_export(
     conn = await db.scalar(select(GarminConnection).where(GarminConnection.user_id == user.id))
     if not conn or conn.status != "connected" or not conn.token_ciphertext:
         raise HTTPException(status_code=409, detail="GARMIN_NOT_CONNECTED")
-    if (conn.auth_mode or "password") != "password":
+    if not workout_export_available(conn):
         raise HTTPException(status_code=409, detail="GARMIN_WORKOUT_EXPORT_NEEDS_LOGIN")
     _, plan = await _load_plan(db, user, payload.plan_run_id)
     try:
@@ -269,7 +271,7 @@ async def queue_plan_garmin_cleanup(
         conn = await db.scalar(select(GarminConnection).where(GarminConnection.user_id == user.id))
         if not conn or conn.status != "connected" or not conn.token_ciphertext:
             raise HTTPException(status_code=409, detail="GARMIN_NOT_CONNECTED")
-        if (conn.auth_mode or "password") != "password":
+        if not workout_export_available(conn):
             raise HTTPException(status_code=409, detail="GARMIN_WORKOUT_EXPORT_NEEDS_LOGIN")
     task = delete_plan.apply_async(args=[str(user.id), str(plan_run_id)], queue="garmin")
     return {"task_id": task.id, "status": "queued", "garmin_entries": sum(1 for row in exports if row.workout_id or row.scheduled_workout_id)}

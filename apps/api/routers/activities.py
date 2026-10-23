@@ -289,6 +289,7 @@ async def import_activity(
     file: UploadFile = File(...),
     name: str | None = Form(default=None),
     sport_type: str | None = Form(default=None),
+    allow_overlap: bool = Form(default=False),
     user: User = Depends(safety_confirmed_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -302,12 +303,20 @@ async def import_activity(
             db, user, filename, raw,
             name_override=(name or "").strip() or None,
             sport_override=None if not sport_type or sport_type == "auto" else sport_type,
+            allow_overlap=allow_overlap,
         )
     except ValueError as exc:
         code = str(exc)
         if code.startswith("DUPLICATE_UPLOAD:"):
             existing = code.split(":", 1)[1]
             raise HTTPException(status_code=409, detail={"code": "ACTIVITY_ALREADY_IMPORTED", "activity_id": existing}) from exc
+        if code.startswith("ACTIVITY_OVERLAP:"):
+            existing_id = uuid.UUID(code.split(":", 1)[1])
+            other = await db.get(Activity, existing_id)
+            raise HTTPException(status_code=409, detail={
+                "code": "ACTIVITY_OVERLAP", "activity_id": str(existing_id),
+                "activity": _summary(other) if other else None,
+            }) from exc
         status = 413 if code == "UPLOAD_TOO_LARGE" else 400
         raise HTTPException(status_code=status, detail=code) from exc
     _stats_cache.pop(user.id, None)

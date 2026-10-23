@@ -64,6 +64,12 @@ class GarminConnection(Base):
     api_key_ciphertext: Mapped[str | None] = mapped_column(Text, nullable=True)
     api_key_hint: Mapped[str | None] = mapped_column(String(16), nullable=True)
     api_key_expires_on: Mapped[date | None] = mapped_column(Date, nullable=True)
+    # Optional second sign-in, used only to write workouts while data is read
+    # through the Personal API key ("both" mode). Never used for the data sync.
+    export_token_ciphertext: Mapped[str | None] = mapped_column(Text, nullable=True)
+    export_display_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    export_status: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    export_error_code: Mapped[str | None] = mapped_column(String(128), nullable=True)
     last_validated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_successful_sync_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     next_sync_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
