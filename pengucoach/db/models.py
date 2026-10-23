@@ -58,6 +58,12 @@ class GarminConnection(Base):
     garmin_profile_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     token_ciphertext: Mapped[str | None] = mapped_column(Text, nullable=True)
     token_version: Mapped[int] = mapped_column(Integer, default=1)
+    # "password" (Garmin login, OAuth tokens in token_ciphertext) or "personal_api"
+    # (official key in api_key_ciphertext, cached bearer token in token_ciphertext).
+    auth_mode: Mapped[str] = mapped_column(String(32), default="password", server_default="password")
+    api_key_ciphertext: Mapped[str | None] = mapped_column(Text, nullable=True)
+    api_key_hint: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    api_key_expires_on: Mapped[date | None] = mapped_column(Date, nullable=True)
     last_validated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_successful_sync_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     next_sync_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

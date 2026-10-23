@@ -154,9 +154,12 @@ async def workout_export_status(
 ):
     conn = await db.scalar(select(GarminConnection).where(GarminConnection.user_id == user.id))
     settings = await db.get(GarminSyncSetting, user.id)
+    available = not conn or (conn.auth_mode or "password") == "password"
     return {
         "connected": bool(conn and conn.status == "connected" and conn.token_ciphertext),
-        "enabled": bool(settings and settings.workout_export_enabled),
+        "enabled": bool(available and settings and settings.workout_export_enabled),
+        "export_available": available,
+        "auth_mode": (conn.auth_mode or "password") if conn else None,
         "data_sync_read_only": True,
         "supported_sports": supported_workout_sports(),
     }
@@ -232,6 +235,8 @@ async def queue_workout_export(
     conn = await db.scalar(select(GarminConnection).where(GarminConnection.user_id == user.id))
     if not conn or conn.status != "connected" or not conn.token_ciphertext:
         raise HTTPException(status_code=409, detail="GARMIN_NOT_CONNECTED")
+    if (conn.auth_mode or "password") != "password":
+        raise HTTPException(status_code=409, detail="GARMIN_WORKOUT_EXPORT_NEEDS_LOGIN")
     _, plan = await _load_plan(db, user, payload.plan_run_id)
     try:
         calendar_sessions = apply_session_overrides(list(plan.sessions), payload.session_overrides, max_week=plan.weeks)
@@ -264,5 +269,7 @@ async def queue_plan_garmin_cleanup(
         conn = await db.scalar(select(GarminConnection).where(GarminConnection.user_id == user.id))
         if not conn or conn.status != "connected" or not conn.token_ciphertext:
             raise HTTPException(status_code=409, detail="GARMIN_NOT_CONNECTED")
+        if (conn.auth_mode or "password") != "password":
+            raise HTTPException(status_code=409, detail="GARMIN_WORKOUT_EXPORT_NEEDS_LOGIN")
     task = delete_plan.apply_async(args=[str(user.id), str(plan_run_id)], queue="garmin")
     return {"task_id": task.id, "status": "queued", "garmin_entries": sum(1 for row in exports if row.workout_id or row.scheduled_workout_id)}

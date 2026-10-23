@@ -15,6 +15,7 @@ from pengucoach.db.models import (
     HrvDaily, SleepSession, SourceRecord, User,
 )
 from pengucoach.garmin.gateway.factory import gateway_from_connection, serialize_refreshed_token
+from pengucoach.garmin.personal_api import PersonalApiUnsupported
 
 
 from pengucoach.health.provenance import merge_metric
@@ -109,6 +110,10 @@ async def _call(domain: str, func: Callable[[], Any], domains: dict[str, Any], t
         raise
     except GarminConnectAuthenticationError:
         raise
+    except PersonalApiUnsupported:
+        # The official Personal API has no endpoint for this domain: not an error.
+        domains[domain] = {"ok": True, "available": False, "unsupported": True}
+        return None
     except Exception as exc:
         # One missing/unsupported Garmin endpoint must not fail the whole daily sync.
         domains[domain] = {"ok": False, "error": type(exc).__name__}
@@ -158,12 +163,12 @@ async def _upsert_health(db: AsyncSession, user: User, day: date, data: dict[str
         if merge_metric(row, field, value, "garmin"):
             sources[field] = "garmin"
 
-    steps_value = _first_number(summary, "totalSteps", "steps")
+    steps_value = _first_number(summary, "totalSteps", "steps", "stepCount")
     steps = int(steps_value) if steps_value is not None else None
     apply("steps", steps)
-    apply("distance_m", _first_number(summary, "totalDistanceMeters", "distance", "totalDistance"))
-    apply("active_calories", _first_number(summary, "activeKilocalories", "activeCalories"))
-    apply("resting_calories", _first_number(summary, "bmrKilocalories", "restingCalories"))
+    apply("distance_m", _first_number(summary, "totalDistanceMeters", "totalDistanceInMeters", "distanceInMeters", "distance", "totalDistance"))
+    apply("active_calories", _first_number(summary, "activeKilocalories", "activeKiloCalories", "activeCalories"))
+    apply("resting_calories", _first_number(summary, "bmrKilocalories", "bmrKiloCalories", "restingCalories"))
     resting_hr = int(_first_number(heart, "restingHeartRate") or _first_number(summary, "restingHeartRate") or 0) or None
     apply("resting_hr", resting_hr)
     if heart or not preserve_missing:
@@ -194,8 +199,13 @@ async def _upsert_health(db: AsyncSession, user: User, day: date, data: dict[str
     if intensity or not preserve_missing:
         apply("intensity_moderate", int(_first_number(intensity, "moderateIntensityMinutes", "moderateMinutes") or 0) or None)
         apply("intensity_vigorous", int(_first_number(intensity, "vigorousIntensityMinutes", "vigorousMinutes") or 0) or None)
+    elif summary:
+        # Personal API: intensity minutes only arrive inside the daily summary.
+        apply("intensity_moderate", int(_first_number(summary, "moderateIntensityMinutes", "moderateMinutes") or 0) or None)
+        apply("intensity_vigorous", int(_first_number(summary, "vigorousIntensityMinutes", "vigorousMinutes") or 0) or None)
     if respiration or not preserve_missing:
-        apply("respiration_avg", _first_number(respiration, "avgWakingRespirationValue", "avgRespiration", "averageRespiration"))
+        apply("respiration_avg", _first_number(respiration, "avgWakingRespirationValue", "avgRespiration", "averageRespiration")
+              or _first_number(summary, "avgWakingRespirationValue", "averageWakingRespirationValue"))
     if spo2 or not preserve_missing:
         apply("spo2_avg", _first_number(spo2, "averageSpO2", "avgSpO2", "averageSpo2"))
     if readiness or not preserve_missing:

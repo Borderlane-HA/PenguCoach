@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pengucoach"
-version = "0.1.0-alpha.78"
+version = "0.1.0-alpha.79"
 description = "Self-hosted AI training and health coach"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -24,6 +24,7 @@ dependencies = [
   "PyJWT>=2.10,<3",
   "cryptography>=45,<47",
   "garminconnect==0.3.16",
+  "requests>=2.31,<3",
   "email-validator>=2.2,<3",
   "python-multipart>=0.0.20,<1",
   "httpx>=0.28,<1",

@@ -94,6 +94,7 @@ Reviewed time-budget variants, confirmed training experiences, recorded 1/5/20-m
 - multi-user local authentication
 - mandatory safety/development gate after every login
 - Garmin Connect login with MFA
+- alternatively the official Garmin **Personal API key** (read-only, with in-app guide and expiry reminder) – see [`docs/GARMIN_PERSONAL_API.md`](docs/GARMIN_PERSONAL_API.md)
 - encrypted Garmin token persistence; Garmin password is never stored
 - allow-list based **strict read-only** Garmin data-sync gateway plus a separate opt-in, narrow workout/calendar write gateway
 - configurable automatic sync with jitter, lock, 429 cooldown and reconnect state

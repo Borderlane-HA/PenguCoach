@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.0-alpha.79
+
+- Garmin can now also be connected with Garmin's official **Personal API key** instead of e-mail and password. The Garmin page offers both methods side by side with a feature comparison and a step-by-step guide for creating the key in Garmin Connect. The key is checked with Garmin immediately, stored encrypted and exchanged for short-lived access tokens; the page shows its expiry, warns 14 days ahead and replaces it in place with **Renew key**. Activities, original FIT files, daily values, sleep, HRV, stress, Body Battery, SpO₂, hydration, weight and heart-rate zones are synchronised through the same code path as before; training status, readiness, VO₂max trend and power zones are not offered by the Personal API.
+- Workout export stays available with the Garmin login only, because the Personal API is read-only. With an API key the switch is disabled and the training plan explains why.
+- Garmin error codes on the settings page are now readable text.
+- Migration `0016_garmin_personal_api` (existing connections stay on the login method). New explicit dependency `requests` (already installed through `garminconnect`).
+- See [Garmin connection methods](docs/GARMIN_PERSONAL_API.md).
+
 ## 0.1.0-alpha.78
 
 - Fix the first update with release directories failing at `python3 -m venv` (`MAINTENANCE_COMMAND_FAILED:python3:1`). The maintenance service runs with `UMask=0077`, so Alpha.76/77 created `/opt/pengucoach-releases` as `0700 root` and the service user could not build inside it. The release folder is now explicitly `0755` (an existing `0700` folder is repaired), and build commands run with the usual `022` umask like the installer. The failed attempt had already been rolled back without stopping anything.
