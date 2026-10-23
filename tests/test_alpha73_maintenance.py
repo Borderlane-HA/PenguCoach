@@ -122,6 +122,7 @@ class FakeHost:
     # Release directories use the real link handling on the temporary filesystem.
     link_target=Driver.link_target
     prune_releases=Driver.prune_releases
+    ensure_releases_dir=Driver.ensure_releases_dir
     def release_layout(self):return self.mode=='native' and self.config.get('release_layout',True) is not False
     def installed_commit(self):return self.shared['head']
     def release_size(self):return 0

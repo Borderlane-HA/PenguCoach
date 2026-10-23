@@ -83,6 +83,14 @@ Lokale Änderungen an versionierten Quelldateien werden ersetzt. Nicht versionie
 
 Das Verfahren greift ab dem ersten Update **nach** Alpha.76, denn das Update auf Alpha.76 führt noch der Alpha.75-Wartungsdienst aus.
 
+**Hinweis für Alpha.76/77:** Diese Versionen legten `/opt/pengucoach-releases` wegen der Umask des Wartungsdiensts nur für root lesbar an; der Build brach dann sofort mit `MAINTENANCE_COMMAND_FAILED:python3:1` ab (ohne Änderung an der laufenden App). Vor dem Update auf Alpha.78 einmalig im LXC ausführen:
+
+```bash
+[ -d /opt/pengucoach-releases ] && chmod 755 /opt/pengucoach-releases
+```
+
+Ab Alpha.78 setzt der Wartungsdienst die Rechte selbst.
+
 **Docker:** Die neuen Images werden gebaut, bevor die Dienste angehalten werden. Scheitert der Build, werden Quellstand und Image-Tags zurückgesetzt; die laufenden Container bleiben unberührt.
 
 ### Voraussetzungen einer Version

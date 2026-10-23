@@ -112,6 +112,7 @@ class Driver:
         if self._build_home is None:
             home = Path(self.config.get('build_home','/var/cache/pengucoach-build'))
             home.mkdir(parents=True, exist_ok=True, mode=0o750)
+            os.chmod(home, 0o750)  # the agent runs with UMask=0077
             owner = pwd.getpwnam(self.config.get('user','pengucoach'))
             os.chown(home, owner.pw_uid, owner.pw_gid)
             self._build_home = home
@@ -129,8 +130,11 @@ class Driver:
                        'PIP_CACHE_DIR='+str(home/'.cache/pip'),*command]
         with open(input_file, 'rb') if input_file else open(os.devnull, 'rb') as src:
             with open(output_file, 'wb') if output_file else tempfile.TemporaryFile() as dst:
+                # The agent runs with UMask=0077. Application builds need ordinary
+                # permissions, exactly like the installer and the previous shell updater.
                 result = subprocess.run(command, cwd=cwd or self.root, env={**os.environ,**(env or {})}, stdin=src,
-                    stdout=dst, stderr=subprocess.PIPE, timeout=timeout, check=False)
+                    stdout=dst, stderr=subprocess.PIPE, timeout=timeout, check=False,
+                    umask=0o022 if target else -1)
                 if result.returncode:
                     # Discard raw stderr: it can contain credentials, SQL and user data.
                     raise RuntimeError('MAINTENANCE_COMMAND_FAILED:'+Path(args[0]).name+':'+str(result.returncode))
@@ -405,16 +409,22 @@ class Driver:
                 except OSError:pass
         return total
 
+    def ensure_releases_dir(self):
+        """The service user must traverse the release folder; also repairs Alpha.76's 0700 folder."""
+        self.releases.mkdir(parents=True,exist_ok=True,mode=0o755)
+        os.chmod(self.releases,0o755)
+
     def prepare_release(self, source, commit, version):
         """Export the release from the root-owned checkout into its own directory."""
         if not re.fullmatch(r'[a-f0-9]{40,64}',commit):raise ValueError('UPDATE_REVISION_INVALID')
-        self.releases.mkdir(parents=True,exist_ok=True,mode=0o755)
+        self.ensure_releases_dir()
         target = self.releases/commit[:12]
         if target.exists() and target.resolve() == self.link.resolve():raise ValueError('UPDATE_RELEASE_ACTIVE')
         staging = self.releases/('.'+commit[:12]+'.new')
         for path in (staging,target):
             if path.exists():shutil.rmtree(path)
         staging.mkdir(mode=0o755)
+        os.chmod(staging,0o755)
         try:
             exported = subprocess.run(['git','-C',str(source),'-c','core.hooksPath=/dev/null','archive','--format=tar',commit],
                                       stdin=subprocess.DEVNULL,stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=300)
@@ -448,7 +458,7 @@ class Driver:
         release = Path(release)
         if self.link.exists() and not self.link.is_symlink():
             legacy = self.link_target()
-            self.releases.mkdir(parents=True,exist_ok=True,mode=0o755)
+            self.ensure_releases_dir()
             if legacy.exists():raise ValueError('UPDATE_LEGACY_TARGET_EXISTS')
             self.link.rename(legacy)
         temporary = self.link.with_name(self.link.name+'.switch')

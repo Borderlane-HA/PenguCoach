@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.0-alpha.78
+
+- Fix the first update with release directories failing at `python3 -m venv` (`MAINTENANCE_COMMAND_FAILED:python3:1`). The maintenance service runs with `UMask=0077`, so Alpha.76/77 created `/opt/pengucoach-releases` as `0700 root` and the service user could not build inside it. The release folder is now explicitly `0755` (an existing `0700` folder is repaired), and build commands run with the usual `022` umask like the installer. The failed attempt had already been rolled back without stopping anything.
+- The maintenance area explains failed host commands and shows the technical code in brackets.
+- Updating from Alpha.76 or Alpha.77: run `chmod 755 /opt/pengucoach-releases` once in the LXC (only if the folder exists), then start the update. Docker is not affected.
+
 ## 0.1.0-alpha.77
 
 - Add a Recap ("Rückblick") button to the activity journal. It plays an animated full-screen story for today, this week, this month, this year or your whole history and respects the journal's search and source filters: activity count and active days, distance, elevation gain, time and energy with counting numbers and playful comparisons (marathons, Munich–Berlin, around the Earth; Eiffel Tower, Zugspitze, Mont Blanc, Everest; Tatort episodes; pizzas), your sports mix, highlights (longest session, biggest climb, fastest run from 3 km, strongest ride), all GPS routes drawn on top of each other, a consistency calendar with your longest and current streak, a comparison with the same span of the previous period, and a closing card to save as PNG or share.

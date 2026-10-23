@@ -4,6 +4,7 @@ import os
 import pwd
 import subprocess
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -172,3 +173,26 @@ def test_shipped_requirements_file_is_valid_and_reachable_for_preview():
     assert seen==['https://raw.githubusercontent.com/Borderlane-HA/PenguCoach/v0.1.0-alpha.76/install/release-requirements.json']
     engine.config={'repository':'/srv/local/repo'}
     assert engine.remote_requirements('v1')is None
+
+
+def test_release_folders_stay_traversable_for_the_service_user_under_the_agent_umask(tmp_path,monkeypatch):
+    """Alpha.76 created /opt/pengucoach-releases with 0700 under UMask=0077, so the build failed."""
+    repo=tmp_path/'upstream';repo.mkdir()
+    run=lambda *a:subprocess.run(['git','-c','user.email=t@t','-c','user.name=t',*a],cwd=repo,check=True,stdout=subprocess.PIPE,text=True).stdout.strip()
+    run('init','-q');(repo/'app.py').write_text('x');run('add','-A');run('commit','-qm','x');commit=run('rev-parse','HEAD')
+    project=tmp_path/'opt/pengucoach';project.mkdir(parents=True)
+    broken=tmp_path/'opt/pengucoach-releases';broken.mkdir(mode=0o700);broken.chmod(0o700)  # state left by Alpha.76
+    user=pwd.getpwuid(os.getuid()).pw_name
+    driver=Driver({'project':str(project),'environment':str(tmp_path/'env'),'data':str(tmp_path/'data'),'deployment':'native','user':user,'build_home':str(tmp_path/'cache')})
+    driver.installed_commit=lambda:'a'*40
+    previous=os.umask(0o077)
+    try:
+        release=driver.prepare_release(repo,commit,'0.1.0-alpha.78')
+        driver.point_link(release)
+        assert driver.build_home().stat().st_mode&0o777==0o750
+    finally:os.umask(previous)
+    assert broken.stat().st_mode&0o777==0o755 and release.stat().st_mode&0o777==0o755
+    calls=[]
+    monkeypatch.setattr('pengucoach.maintenance.drivers.subprocess.run',lambda command,**kw:calls.append(kw) or SimpleNamespace(returncode=0))
+    driver.run(['python3','-m','venv','x'],target=True);driver.run(['systemctl','stop','x'])
+    assert calls[0]['umask']==0o022 and calls[1]['umask']==-1
