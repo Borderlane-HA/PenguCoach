@@ -13,3 +13,9 @@ echo
 
 echo "Database encoding:"
 runuser -u postgres -- psql -d postgres -Atqc "SELECT datname || ' = ' || pg_encoding_to_char(encoding) FROM pg_database WHERE datname='pengucoach';" 2>/dev/null || true
+
+if [[ -L /opt/pengucoach ]]; then
+  echo
+  echo "Active release: $(readlink -f /opt/pengucoach)"
+  ls -1dt /opt/pengucoach-releases/*/ 2>/dev/null | sed 's#^#  #'
+fi

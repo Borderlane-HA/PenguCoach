@@ -118,6 +118,27 @@ class FakeHost:
         self.config,self.log,self.shared=config,log,shared
         self.root=Path(config['project']);self.env_file=Path(config['environment']);self.data=Path(config['data']);self.mode=config['deployment']
         self.managed_env=self.env_file.with_name('managed.env')
+        self.link=Path(config['project']);self.releases=Path(str(self.link)+'-releases')
+    # Release directories use the real link handling on the temporary filesystem.
+    link_target=Driver.link_target
+    prune_releases=Driver.prune_releases
+    def release_layout(self):return self.mode=='native' and self.config.get('release_layout',True) is not False
+    def installed_commit(self):return self.shared['head']
+    def release_size(self):return 0
+    def tool_versions(self):return dict(self.shared.get('tools',{}))
+    def prepare_release(self,source,commit,version):
+        path=self.releases/commit[:12];path.mkdir(parents=True)
+        (path/'.pengucoach-release').write_text(json.dumps({'commit':commit,'version':version}))
+        self.shared.setdefault('release_heads',{})[str(path)]=commit;self.shared['calls'].append('prepare_release')
+        return path
+    def build_release(self,release):
+        assert not self.shared['paused'],'release must be built while the app runs'
+        self.shared['calls'].append('build_release');self.fail('build')
+    def point_link(self,release):
+        heads=self.shared.setdefault('release_heads',{})
+        if not self.link.is_symlink():heads[str(Driver.link_target(self))]=self.shared['head']
+        Driver.point_link(self,release)
+        self.shared['head']=heads.get(str(Path(release)),self.shared['head']);self.shared['calls'].append(('link',Path(release).name))
     def fail(self,point):
         if point in self.shared['fail']:
             self.shared['fail'].remove(point);raise RuntimeError('SIMULATED_'+point.upper())
@@ -164,7 +185,7 @@ class FakeHost:
         return ''
     def update_source(self,source,commit):self.shared['head']=commit
     def build(self):self.shared['calls'].append('build');self.fail('build')
-    def migrate(self):self.shared['db']['pengucoach']['schema']='new';self.fail('migrate')
+    def migrate(self,release=None):self.shared['db']['pengucoach']['schema']='new';self.fail('migrate')
     def images(self):return [{'tag':'api','id':'old-image'}]
     def rollback_images(self,images):self.shared['calls'].append(('rollback_images',images))
 

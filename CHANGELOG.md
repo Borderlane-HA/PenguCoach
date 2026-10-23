@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.0-alpha.76
+
+- Add a Showcase button to every activity. It creates a designed image of the session: route drawn as a clean line (optionally coloured by heart rate or speed), headline figures that suit the sport, elevation profile, heart-rate zones and highlighted personal bests from the last year. Activities without GPS show a heart-rate, power or speed waveform instead. Three styles (Night, Light, Poster) and three formats (portrait 4:5, story 9:16, landscape 16:9); save as PNG or share directly on supporting devices. Style and format are remembered per browser. No map tiles, no new data or database change.
+- Build updates while the app keeps running. Native installations prepare each release in its own directory `/opt/pengucoach-releases/<commit>` (Python environment and web build included) and switch `/opt/pengucoach` as a link only after maintenance mode, safety backup and stop. A failed build no longer stops anything. A failure after the switch points the link back and restores the database without rebuilding the previous version. The first such update moves the existing directory into the release folder as-is; systemd units and nginx keep using `/opt/pengucoach`. The current and the previous release are kept (`keep_releases`); `"release_layout": false` keeps the previous in-place update.
+- Docker Compose installations build the new images before the services stop; a failed build restores the previous source and images without a restart.
+- Check release requirements before anything changes: each release can declare the minimum version for a direct update, the Docker Compose version and, for native installations, Python and Node.js versions (`install/release-requirements.json`). The Updates area shows the result before the update starts and blocks unmet requirements with a clear message.
+- Shell: `pengucoach-status` shows the active release; the legacy shell updater refuses to modify an installation with release directories without the maintenance service. Host step 076 refreshes the shell commands.
+- CI runs the JavaScript tests and checks the syntax of host steps and the requirements file.
+- No application database migration is required.
+
 ## 0.1.0-alpha.75
 
 - Install the newest published release tag instead of the head of `main`. The update notice and the update action now use the same version rules (stable installations follow stable releases, alpha installations all published releases). The Updates area shows the installed and the target version before the update starts; a check can be repeated manually. A checkout that is already newer than or contains the release is never moved back. `"update_source": "branch"` in the maintenance configuration restores the previous branch-based behaviour.

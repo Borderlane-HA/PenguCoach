@@ -1,4 +1,4 @@
-# System & Wartung / System maintenance (Alpha.73–75)
+# System & Wartung / System maintenance (Alpha.73–76)
 
 Admin → **System & Wartung** bündelt **Updates**, **Sicherungen** und **Wiederherstellung**. Der kleine Versions-/Updatehinweis öffnet diesen Bereich. Normale Benutzer sehen eine reine Informationsseite unter Einstellungen → Updates; dort stehen Updateprüfung und Release Notes ohne Wartungsaktionen. Unter „Über PenguCoach“ bleibt ein Link dorthin. Die automatische GitHub-Prüfung bleibt sechs Stunden gecacht; „Jetzt prüfen“ ist im Updatebereich verfügbar.
 
@@ -69,6 +69,25 @@ Es gelten dieselben Versionsregeln wie beim Updatehinweis: Stabile Installatione
 Die Updatefunktion benötigt ein Git-Checkout als Installationsverzeichnis; bei einem direkt entpackten Quell-ZIP bleiben Backup/Restore nutzbar, die Updateaktion zeigt den fehlenden Git-Stand an.
 
 Lokale Änderungen an versionierten Quelldateien werden ersetzt. Nicht versionierte `.env`-, `.env.maintenance`- und Compose-Konfigurationsdateien werden beim Aufräumen geschützt. LXC-Builds laufen bei gestopptem Webdienst mit begrenztem Node-Heap und eigenem Cache unter `/var/cache/pengucoach-build`.
+
+### Bauen bei laufender App und Release-Verzeichnisse (Alpha.76)
+
+**LXC:** Jede Version bekommt ein eigenes Verzeichnis `/opt/pengucoach-releases/<commit>`. Darin entstehen Python-Umgebung und Web-Build, **während die bisherige Version weiterläuft**. Erst danach folgen Wartungsmodus, Sicherheitskopie, Anhalten, Umschalten von `/opt/pengucoach` (ein Link auf das aktive Release), Migration, Systemschritte und Start. Die systemd-Units und nginx verwenden weiterhin `/opt/pengucoach`.
+
+- Scheitert der Build, wird nichts angehalten und kein Wartungsmodus gesetzt; das unfertige Verzeichnis wird entfernt.
+- Scheitert etwas nach dem Umschalten, zeigt der Link zurück auf die vorherige Version und die Datenbank wird aus der Sicherheitskopie zurückgespielt – ohne die vorherige Version neu zu bauen.
+- Beim ersten Update mit diesem Verfahren wird das bisherige Verzeichnis unverändert nach `/opt/pengucoach-releases/legacy-<commit>` verschoben.
+- Aufbewahrt werden das aktive und das vorherige Release (`keep_releases`). Ein Release belegt etwa so viel Platz wie die bisherige Installation (Python-Umgebung, Node-Module, Web-Build); die Platzprüfung berücksichtigt das vor dem Start.
+- Wer lieber im bestehenden Verzeichnis aktualisiert, setzt `"release_layout": false`.
+- `pengucoach-status` zeigt das aktive Release. Der alte Shell-Updater ohne Wartungsdienst verändert eine Installation mit Release-Verzeichnissen nicht.
+
+Das Verfahren greift ab dem ersten Update **nach** Alpha.76, denn das Update auf Alpha.76 führt noch der Alpha.75-Wartungsdienst aus.
+
+**Docker:** Die neuen Images werden gebaut, bevor die Dienste angehalten werden. Scheitert der Build, werden Quellstand und Image-Tags zurückgesetzt; die laufenden Container bleiben unberührt.
+
+### Voraussetzungen einer Version
+
+Jedes Release kann in `install/release-requirements.json` festlegen, ab welcher Version ein direktes Update möglich ist (`min_upgrade_from`) und welche Docker-Compose-, Python- bzw. Node.js-Version nötig ist. Der Updatebereich zeigt die Prüfung vor dem Start; nicht erfüllte Voraussetzungen sperren das Update mit einem klaren Hinweis. Beim Update selbst wird dieselbe Datei aus dem geprüften Release-Checkout gelesen, bevor irgendetwas verändert wird.
 
 ### Systemschritte aus dem Repository
 
@@ -181,8 +200,14 @@ In `/etc/pengucoach-maintenance.json` (Docker: `/state/config.json` im Wartungsc
 | `keep_automatic_backups` | `3` | Anzahl aufbewahrter Sicherheitskopien vor Update/Restore |
 | `min_free_bytes` | `1073741824` | Freie Reserve, die nach einer Sicherung bleiben muss |
 | `drain_timeout` | `600` | Sekunden, die auf laufende Hintergrundaufgaben gewartet wird |
+| `release_layout` | `true` | LXC: Release-Verzeichnisse mit Bauen bei laufender App |
+| `keep_releases` | `2` | Aufbewahrte Release-Verzeichnisse (aktiv + vorheriges) |
 
-## Prüfung dieser Version (Alpha.75)
+## Prüfung von Alpha.76
+
+Automatisiert geprüft: Bauen vor dem Anhalten (nativ und Docker), Verschieben des bisherigen Verzeichnisses und atomares Umschalten des Links mit einem echten Git-Export, Zurückschalten bei Fehlern in Migration, Systemschritt und Erreichbarkeitsprüfung ohne Neubau, Wiederanlauf nach einem Abbruch nach dem Umschalten, Aufbewahrung der Releases, Build-Fehler ohne Anhalten und ohne Sicherheitskopie, Voraussetzungsprüfung (Zwischenversion, Docker Compose, Python, Node.js) vor jeder Änderung und Vorschau der Voraussetzungen. Ein realer LXC- bzw. Docker-Host stand nicht zur Verfügung; das erste Update nach Alpha.76 deshalb zuerst auf einer Testinstallation ausführen.
+
+## Prüfung von Alpha.75
 
 Automatisiert geprüft: Auswahl des Release-Tags gegen ein echtes lokales Git-Repository (unveröffentlichter `main`-Stand wird nicht installiert, kein Zurücksetzen eines neueren Stands), Systemschritte (Reihenfolge, Bereich, einmalige Ausführung, Rollback bei Fehler, nginx-Schritt mit simulierten Befehlen), Inhalt und Streaming der Sicherung ohne Klartextkopie, Wiederherstellung einer Alpha.73-Sicherung, Export ohne Entpacken, Beschädigungen, Aufbewahrung, Platzprüfung vor dem Anhalten, Wartungsmodus in API und Scheduler, Abwarten und Schutz von Garmin-Exporten, getrennte Wartungs-Umgebungsdatei inkl. Ladeprüfung, systemd-Drop-ins, Build-Cache, Wiederherstellung über die WebUI und Shell-Fehlermeldungen. Ein realer Proxmox-LXC, Dockerdaemon, PostgreSQL- und Redis-Dienst stehen in der Entwicklungsumgebung nicht zur Verfügung. Das erste Update auf Alpha.75 deshalb zuerst auf einer Testinstallation mit separat gesichertem Datenstand ausführen.
 

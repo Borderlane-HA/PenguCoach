@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from . import archive
-from .drivers import Driver, write_env
+from .drivers import RELEASE_MARKER, Driver, write_env
 from .versions import display, newest_tag, version_key
 
 
@@ -39,6 +39,15 @@ def atomic_json(path, value):
         out.flush();os.fsync(out.fileno())
     temporary.replace(path)
     sync_directory(Path(path).parent)
+
+
+REQUIREMENTS = 'install/release-requirements.json'
+REQUIREMENT_ERRORS = {'upgrade_path':'UPDATE_REQUIRES_INTERMEDIATE','docker_compose':'DOCKER_COMPOSE_TOO_OLD',
+                      'python':'PYTHON_TOO_OLD','node':'NODE_TOO_OLD'}
+
+
+def _numbers(value):
+    return tuple(int(x) for x in re.findall(r'\d+',str(value))[:3]) or (0,)
 
 
 OPERATIONS = {'backup','update','inspect','restore','export','recover'}
@@ -114,7 +123,8 @@ class Engine:
         return {'available':True,'protocol':2,'deployment':self.config['deployment'],
                 'jobs':jobs[:30],'backups':backups,'max_upload_bytes':archive.MAX_BYTES,
                 'recovery_required':any(j.get('recovery_required') for j in jobs),
-                'can_update':(Path(self.config['project'])/'.git').exists(),
+                'can_update':self.updatable(),
+                'release_layout':self.config['deployment'] == 'native' and self.config.get('release_layout',True) is not False,
                 'update_source':self.update_mode,'storage':self.storage(backups)}
 
     def driver(self, job=None):
@@ -297,12 +307,14 @@ class Engine:
             stamp, cached = self._preview
             if cached and not refresh and time.monotonic()-stamp < 60:return cached
             installed = self.driver().version()
-            result = {'installed':installed,'source':self.update_mode,'checked_at':utc(),
-                      'can_update':(Path(self.config['project'])/'.git').exists()}
+            result = {'installed':installed,'source':self.update_mode,'checked_at':utc(),'can_update':self.updatable()}
             try:
                 target = self.release_target(installed,timeout=10)
                 if target['source'] == 'release':
                     result.update(target=target['version'],tag=target['tag'],available=target['newer'])
+                    if target['newer']:
+                        requirements = self.remote_requirements(target['tag'])
+                        if requirements is not None:result['checks'] = self.requirement_checks(self.driver(),requirements,installed)
                 else:result.update(branch=target['branch'],available=None)
             except (ValueError,RuntimeError,OSError,subprocess.TimeoutExpired) as exc:
                 result.update(available=False,error=str(exc) if str(exc) == 'UPDATE_NO_RELEASE_FOUND' else 'UPDATE_CHECK_FAILED')
@@ -327,6 +339,49 @@ class Engine:
         commit = self._git('rev-parse','HEAD',cwd=source)
         if not re.fullmatch('[a-f0-9]{40,64}',commit):raise ValueError('UPDATE_REVISION_INVALID')
         return source,commit,target
+
+    def updatable(self):
+        project = Path(self.config['project'])
+        return (project/'.git').exists() or (project/RELEASE_MARKER).is_file()
+
+    def requirement_checks(self, driver, requirements, installed):
+        checks = []
+        minimum = requirements.get('min_upgrade_from')
+        if minimum:
+            have, need = version_key(installed), version_key(minimum)
+            checks.append({'key':'upgrade_path','ok':not (have and need and have < need),'required':str(minimum),'actual':installed})
+        tools = driver.tool_versions()
+        for key in ('docker_compose','python','node'):
+            need = requirements.get(key+'_min')
+            if need and key in tools:
+                checks.append({'key':key,'ok':_numbers(tools[key]) >= _numbers(need),'required':str(need),'actual':tools[key]})
+        return checks
+
+    def check_requirements(self, driver, source, installed):
+        path = Path(source)/REQUIREMENTS
+        if not path.is_file():return []
+        try:requirements = json.loads(path.read_text())
+        except ValueError:raise ValueError('UPDATE_REQUIREMENTS_INVALID') from None
+        if not isinstance(requirements,dict):raise ValueError('UPDATE_REQUIREMENTS_INVALID')
+        checks = self.requirement_checks(driver,requirements,installed)
+        for check in checks:
+            if not check['ok']:raise ValueError(REQUIREMENT_ERRORS[check['key']]+':'+re.sub(r'[^A-Za-z0-9_.-]','',check['required']))
+        return checks
+
+    def remote_requirements(self, tag):
+        """Requirements of a GitHub release without fetching it (preview only)."""
+        match = re.fullmatch(r'https://github\.com/([\w.-]+)/([\w.-]+?)(?:\.git)?/?',str(self.config.get('repository','')))
+        if not match:return None
+        import urllib.error
+        import urllib.parse
+        import urllib.request
+        url = f'https://raw.githubusercontent.com/{match[1]}/{match[2]}/{urllib.parse.quote(tag,safe="")}/{REQUIREMENTS}'
+        try:
+            with urllib.request.urlopen(url,timeout=8) as response:value = json.loads(response.read(65536))
+        except urllib.error.HTTPError as exc:
+            return {} if exc.code == 404 else None
+        except (OSError,ValueError):return None
+        return value if isinstance(value,dict) else None
 
     def update_needed(self, source, previous, commit, installed, target):
         if previous == commit:return 'current'
@@ -377,9 +432,9 @@ class Engine:
         try:driver.ensure_env_wiring()
         except Exception:pass
         source = self.state/'source'
-        if not (source/'.git').is_dir() or not (Path(self.config['project'])/'.git').exists():return
+        if not (source/'.git').is_dir() or not self.updatable():return
         try:
-            if driver.run(['git','rev-parse','HEAD'],target=True,quiet=True) != self._git('rev-parse','HEAD',cwd=source):return
+            if driver.installed_commit() != self._git('rev-parse','HEAD',cwd=source):return
             if not self.pending_steps(driver,source):return
             self.acquire()
         except Exception:return
@@ -480,33 +535,49 @@ class Engine:
         atomic_json(work/'transaction.json',values)
         job['transaction'] = True;self.save(job)
 
+    def mark_stopped(self, work, **values):
+        entry = work/'transaction.json'
+        state = json.loads(entry.read_text())
+        state.update(stopped=True,**values)
+        atomic_json(entry,state)
+
     def rollback(self, driver, work, job):
         entry = work/'transaction.json'
         if not entry.exists():return
         state = json.loads(entry.read_text())
+        # Journals before Alpha.76 always meant: services were stopped.
+        stopped = state.get('stopped',True)
         driver.log('Vorheriger Zustand wird wiederhergestellt')
-        driver.quiesce()
-        if state.get('old_commit'):
-            if driver.mode == 'native':driver.run(['systemctl','stop','pengucoach-web'])
+        if stopped:driver.quiesce()
+        if state.get('mode') == 'release':
+            if stopped and driver.mode == 'native':driver.run(['systemctl','stop','pengucoach-web'])
+            old = Path(state['old_target']) if state.get('old_target') else None
+            if old and old.is_dir() and (driver.link.is_symlink() or not driver.link.exists()):
+                if not (driver.link.is_symlink() and driver.link.resolve() == old.resolve()):driver.point_link(old)
+            release = Path(state['release']) if state.get('release') else None
+            if release and release.exists() and not (driver.link.is_symlink() and driver.link.resolve() == release.resolve()):
+                shutil.rmtree(release,ignore_errors=True)
+        elif state.get('old_commit'):
+            if stopped and driver.mode == 'native':driver.run(['systemctl','stop','pengucoach-web'])
             driver.run(['git','-c','core.hooksPath=/dev/null','reset','--hard',state['old_commit']],target=True)
             if driver.mode == 'docker':driver.rollback_images(state.get('images',[]))
-            else:driver.build()
+            elif stopped:driver.build()
         if state.get('old_database'):
             driver.rollback_database(state['old_database'],state['discard_database'])
         elif state.get('database_may_have_changed'):
-            name, old = 'pc_rb_'+job['id'][:16], 'pc_drop_'+job['id'][:16]
+            name, old_db = 'pc_rb_'+job['id'][:16], 'pc_drop_'+job['id'][:16]
             if not state.get('rollback_database_ready'):
                 if driver.database_exists(name):driver.drop_database(name)
                 driver.prepare_database(work/'safety/database.pgdump',name,migrate=False)
                 state['rollback_database_ready']=True;atomic_json(entry,state)
             # Reuse the rename recovery path: it handles a crash between either rename.
-            driver.rollback_database(name,old)
+            driver.rollback_database(name,old_db)
         self.rollback_data(driver,work)
         if (work/'managed.before').exists():self.restore_managed(driver,work)
         if (work/'environment.before').exists():
             # Alpha.73/74 journals rewrote the main environment file.
             write_env(driver.env_file,json.loads((work/'environment.before').read_text()))
-        driver.start();driver.healthy()
+        if stopped:driver.start();driver.healthy()
         entry.unlink()
         job['rolled_back'] = True;self.save(job)
 
@@ -536,15 +607,34 @@ class Engine:
                 driver.ensure_managed()
                 source = commit = target = None
                 steps = []
+                release = None
                 if operation == 'update':
-                    if not (Path(self.config['project'])/'.git').exists():raise ValueError('UPDATE_REQUIRES_GIT_CHECKOUT')
+                    if not self.updatable():raise ValueError('UPDATE_REQUIRES_GIT_CHECKOUT')
                     driver.log('Neue Programmversion wird abgerufen')
                     source,commit,target = self.fetch_source(driver)
                     job['target'] = target;self.save(job)
-                    previous = driver.run(['git','rev-parse','HEAD'],target=True,quiet=True)
-                    reason = self.update_needed(source,previous,commit,driver.version(),target)
+                    previous = driver.installed_commit()
+                    installed = driver.version()
+                    reason = self.update_needed(source,previous,commit,installed,target)
                     if reason:
                         job.update(status='succeeded',message=NOOP[reason],finished_at=utc(),noop=reason);self.save(job);return
+                    driver.log('Voraussetzungen der neuen Version werden geprüft')
+                    self.check_requirements(driver,source,installed)
+                    # Build the new version while the current one keeps serving users.
+                    if driver.release_layout():
+                        driver.log('Freier Speicherplatz wird geprüft')
+                        self.check_space(driver,extra=int(driver.release_size()*1.2))
+                        release = driver.releases/commit[:12]
+                        self.transaction(driver,job,work,{'mode':'release','stopped':False,'release':str(release),'old_target':str(driver.link_target())})
+                        driver.log('Neue Version wird bei laufender App vorbereitet')
+                        driver.prepare_release(source,commit,target.get('version') or '')
+                        driver.log('Abhängigkeiten und Weboberfläche werden gebaut – die App bleibt erreichbar')
+                        driver.build_release(release)
+                    elif driver.mode == 'docker':
+                        self.transaction(driver,job,work,{'old_commit':previous,'images':driver.images(),'stopped':False})
+                        driver.log('Neue Images werden gebaut – die App bleibt erreichbar')
+                        driver.update_source(source,commit)
+                        driver.build()
                 if operation == 'restore':
                     # Fully restore/migrate a scratch DB before touching the live database.
                     temporary = 'pc_new_'+job['id'][:16]
@@ -568,11 +658,23 @@ class Engine:
                     backup = self.store_backup(driver,work/'safety',before,self.machine_key() if kind in {'safety','local'} else password,kind)
                     job['backup']=backup;self.save(job)
                     if operation == 'update':
-                        driver.log('Programm und Abhängigkeiten werden aktualisiert')
-                        self.transaction(driver,job,work,{'old_commit':previous,'images':driver.images(),'database_may_have_changed':True})
-                        if driver.mode == 'native':driver.run(['systemctl','stop','pengucoach-web'])
-                        driver.update_source(source,commit)
-                        driver.build();driver.migrate()
+                        if release is not None:
+                            self.mark_stopped(work,database_may_have_changed=True)
+                            driver.run(['systemctl','stop','pengucoach-web'])
+                            driver.log('Neue Version wird aktiviert und die Datenbank migriert')
+                            driver.point_link(release)
+                            driver.migrate(release)
+                        elif driver.mode == 'docker':
+                            self.mark_stopped(work,database_may_have_changed=True)
+                            driver.log('Datenbank wird migriert')
+                            driver.migrate()
+                        else:
+                            # Native installation without release directories (release_layout: false).
+                            driver.log('Programm und Abhängigkeiten werden aktualisiert')
+                            self.transaction(driver,job,work,{'old_commit':previous,'images':[],'database_may_have_changed':True,'stopped':True})
+                            driver.run(['systemctl','stop','pengucoach-web'])
+                            driver.update_source(source,commit)
+                            driver.build();driver.migrate()
                         steps = self.run_steps(driver,source)
                     elif operation == 'restore':
                         old = 'pc_old_'+job['id'][:16]
@@ -589,7 +691,8 @@ class Engine:
                 driver.log('Dienste starten; Erreichbarkeit wird geprüft')
                 driver.start();driver.healthy()
                 # Persist commit before deleting the rollback journal. Recovery then only cleans up.
-                atomic_json(work/'committed.json',{'operation':operation,'old_database':old if operation=='restore' else None,'steps':steps,'commit':commit})
+                journal = json.loads((work/'transaction.json').read_text()) if (work/'transaction.json').exists() else {}
+                atomic_json(work/'committed.json',{'operation':operation,'old_database':old if operation=='restore' else None,'steps':steps,'commit':commit,'old_target':journal.get('old_target')})
                 (work/'transaction.json').unlink(missing_ok=True);sync_directory(work)
                 shutil.rmtree(driver.data/'.maintenance-rollback',ignore_errors=True)
                 self.mark_steps(steps,commit)
@@ -600,6 +703,11 @@ class Engine:
                     try:
                         removed = self.prune_backups(protect={backup['id']})
                         if removed:job['pruned_backups'] = len(removed)
+                    except OSError:pass
+                if release is not None:
+                    try:
+                        removed = driver.prune_releases(int(self.config.get('keep_releases',2)),protect={json.loads((work/'committed.json').read_text()).get('old_target') or ''} - {''})
+                        if removed:job['pruned_releases'] = len(removed)
                     except OSError:pass
                 if operation == 'update':
                     # Update agent code only from the root-owned, fixed upstream checkout.

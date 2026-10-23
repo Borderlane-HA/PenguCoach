@@ -1,14 +1,18 @@
 """Native systemd and Linux Docker Compose adapters; no request-provided commands."""
+import io
 import json
 import os
 import pwd
 import re
 import secrets
 import shlex
+import shutil
 import subprocess
+import tarfile
 import tempfile
 import time
 import tomllib
+from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit
 
@@ -22,6 +26,7 @@ INFRASTRUCTURE = {'PENGUCOACH_DATABASE_URL','PENGUCOACH_REDIS_URL','PENGUCOACH_D
                   'PENGUCOACH_MAINTENANCE_SOCKET'}
 MAINTENANCE_KEY = 'pengucoach:maintenance'
 DROPIN = '10-pengucoach-maintenance-env.conf'
+RELEASE_MARKER = '.pengucoach-release'
 TASK_PROBE = ("import json;from worker.celery_app import app;i=app.control.inspect(timeout=3);"
               "print(json.dumps({'active':i.active() or {},'reserved':i.reserved() or {}}))")
 
@@ -93,6 +98,9 @@ class Driver:
         for file in config.get('compose_files') or [str(self.root/'docker-compose.yml')]:self.compose += ['-f',file]
         if config.get('compose_project'):self.compose += ['--project-name',config['compose_project']]
         self.data = Path(config['data']).resolve()
+        # Native installs: /opt/pengucoach becomes a link to /opt/pengucoach-releases/<commit>.
+        self.link = Path(config['project'])
+        self.releases = Path(config.get('releases_dir') or str(self.link)+'-releases')
         default = self.root/'.env.maintenance' if self.mode == 'docker' else self.env_file.with_name('pengucoach.managed.env')
         self.managed_env = Path(config.get('managed_environment') or default)
         self.systemd = Path(config.get('systemd_dir','/etc/systemd/system'))
@@ -109,7 +117,7 @@ class Driver:
             self._build_home = home
         return self._build_home
 
-    def run(self, args, *, target=None, input_file=None, output_file=None, env=None, timeout=3600, quiet=False):
+    def run(self, args, *, target=None, input_file=None, output_file=None, env=None, timeout=3600, quiet=False, cwd=None):
         # Never put environment contents, passwords or provider data into logs.
         if not quiet:self.log('Ausführen: '+Path(args[0]).name+' '+(' '.join(args[1:3])))
         command = list(args)
@@ -121,7 +129,7 @@ class Driver:
                        'PIP_CACHE_DIR='+str(home/'.cache/pip'),*command]
         with open(input_file, 'rb') if input_file else open(os.devnull, 'rb') as src:
             with open(output_file, 'wb') if output_file else tempfile.TemporaryFile() as dst:
-                result = subprocess.run(command, cwd=self.root, env={**os.environ,**(env or {})}, stdin=src,
+                result = subprocess.run(command, cwd=cwd or self.root, env={**os.environ,**(env or {})}, stdin=src,
                     stdout=dst, stderr=subprocess.PIPE, timeout=timeout, check=False)
                 if result.returncode:
                     # Discard raw stderr: it can contain credentials, SQL and user data.
@@ -365,17 +373,124 @@ class Driver:
             self.run(['npm','--prefix',str(web),'run','build'],target=True,
                 env={'NEXT_PUBLIC_API_BASE_URL':'/api/v1','NODE_OPTIONS':'--max-old-space-size=768','NEXT_TELEMETRY_DISABLED':'1'})
 
-    def migrate(self):
+    def migrate(self, release=None):
         if self.mode == 'docker':self.run([*self.compose,'run','--rm','--no-deps','-T','api','alembic','-c','alembic.ini','upgrade','head'])
-        else:self.run([str(self.root/'.venv/bin/alembic'),'-c','alembic.ini','upgrade','head'],target=True,env=self.environment())
+        else:
+            root = Path(release) if release else self.root
+            self.run([str(root/'.venv/bin/alembic'),'-c','alembic.ini','upgrade','head'],target=True,env=self.environment(),cwd=root)
+
+    # --- Release directories (native) ---------------------------------------
+
+    def release_layout(self):
+        return self.mode == 'native' and self.config.get('release_layout', True) is not False
+
+    def installed_commit(self):
+        marker = self.root/RELEASE_MARKER
+        if marker.is_file():
+            try:return str(json.loads(marker.read_text())['commit'])
+            except (ValueError,KeyError,OSError):pass
+        return self.run(['git','rev-parse','HEAD'],target=True,quiet=True)
+
+    def link_target(self):
+        """Directory the services use now, and where a legacy directory will be moved."""
+        if self.link.is_symlink():return self.link.resolve()
+        return self.releases/('legacy-'+self.installed_commit()[:12])
+
+    def release_size(self):
+        total = 0
+        for base, dirs, files in os.walk(self.root):
+            dirs[:] = [d for d in dirs if d not in {'.git','cache'}]
+            for name in files:
+                try:total += os.lstat(os.path.join(base,name)).st_size
+                except OSError:pass
+        return total
+
+    def prepare_release(self, source, commit, version):
+        """Export the release from the root-owned checkout into its own directory."""
+        if not re.fullmatch(r'[a-f0-9]{40,64}',commit):raise ValueError('UPDATE_REVISION_INVALID')
+        self.releases.mkdir(parents=True,exist_ok=True,mode=0o755)
+        target = self.releases/commit[:12]
+        if target.exists() and target.resolve() == self.link.resolve():raise ValueError('UPDATE_RELEASE_ACTIVE')
+        staging = self.releases/('.'+commit[:12]+'.new')
+        for path in (staging,target):
+            if path.exists():shutil.rmtree(path)
+        staging.mkdir(mode=0o755)
+        try:
+            exported = subprocess.run(['git','-C',str(source),'-c','core.hooksPath=/dev/null','archive','--format=tar',commit],
+                                      stdin=subprocess.DEVNULL,stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=300)
+            if exported.returncode:raise RuntimeError('UPDATE_EXPORT_FAILED')
+            with tarfile.open(fileobj=io.BytesIO(exported.stdout)) as archive:archive.extractall(staging,filter='data')
+            (staging/RELEASE_MARKER).write_text(json.dumps({'commit':commit,'version':version,'created_at':datetime.now(timezone.utc).isoformat()}))
+            owner = pwd.getpwnam(self.config.get('user','pengucoach'))
+            for base, dirs, files in os.walk(staging):
+                os.chown(base,owner.pw_uid,owner.pw_gid)
+                for name in files:os.lchown(os.path.join(base,name),owner.pw_uid,owner.pw_gid)
+            staging.rename(target)
+        except BaseException:
+            shutil.rmtree(staging,ignore_errors=True)
+            raise
+        return target
+
+    def build_release(self, release):
+        """Complete build while the current version keeps serving users."""
+        release = Path(release)
+        self.run([self.config.get('python','python3'),'-m','venv',str(release/'.venv')],target=True,cwd=release)
+        self.run([str(release/'.venv/bin/pip'),'install','--upgrade','pip','wheel'],target=True,cwd=release)
+        self.run([str(release/'.venv/bin/pip'),'install','.'],target=True,cwd=release)
+        web = release/'apps/web'
+        self.run(['npm','--prefix',str(web),'install','--no-audit','--no-fund'],target=True,cwd=release)
+        self.run(['npm','--prefix',str(web),'run','build'],target=True,cwd=release,
+            env={'NEXT_PUBLIC_API_BASE_URL':'/api/v1','NODE_OPTIONS':'--max-old-space-size=768','NEXT_TELEMETRY_DISABLED':'1'})
+        shutil.rmtree(web/'.next/cache',ignore_errors=True)  # build cache only; not needed at runtime
+
+    def point_link(self, release):
+        """Atomically point /opt/pengucoach at a release; a legacy directory is moved first."""
+        release = Path(release)
+        if self.link.exists() and not self.link.is_symlink():
+            legacy = self.link_target()
+            self.releases.mkdir(parents=True,exist_ok=True,mode=0o755)
+            if legacy.exists():raise ValueError('UPDATE_LEGACY_TARGET_EXISTS')
+            self.link.rename(legacy)
+        temporary = self.link.with_name(self.link.name+'.switch')
+        if temporary.is_symlink() or temporary.exists():temporary.unlink()
+        temporary.symlink_to(release)
+        os.replace(temporary,self.link)
+        self.root = release.resolve()
+
+    def prune_releases(self, keep=2, protect=()):
+        if not self.releases.is_dir():return []
+        current = self.link.resolve() if self.link.is_symlink() else None
+        rows = [p for p in self.releases.iterdir() if p.is_dir() and not p.is_symlink() and not p.name.startswith('.')]
+        rows.sort(key=lambda p:p.stat().st_mtime,reverse=True)
+        keep_set = {current,*[Path(x).resolve() for x in protect]}
+        removed = []
+        for path in rows[max(1,keep):]:
+            if path.resolve() in keep_set:continue
+            shutil.rmtree(path,ignore_errors=True);removed.append(path.name)
+        # Interrupted exports
+        for path in self.releases.glob('.*.new'):shutil.rmtree(path,ignore_errors=True)
+        return removed
+
+    # --- Requirements -----------------------------------------------------------
+
+    def tool_versions(self):
+        result = {}
+        try:
+            if self.mode == 'docker':
+                result['docker_compose'] = self.run(['docker','compose','version','--short'],quiet=True,timeout=30).lstrip('v')
+            else:
+                result['python'] = self.run([self.config.get('python','python3'),'-c','import sys;print("%d.%d.%d"%sys.version_info[:3])'],quiet=True,timeout=30)
+                result['node'] = self.run(['node','-p','process.versions.node'],quiet=True,timeout=30)
+        except (RuntimeError,OSError,subprocess.TimeoutExpired):pass
+        return result
 
     def rollback_images(self, images):
         for image in images:self.run(['docker','image','tag',image['id'],image['tag']],quiet=True)
 
     def host_step(self, script, source, timeout=600):
         """Run one reviewed host step from the root-owned release checkout."""
-        env = {'PENGUCOACH_DEPLOYMENT':self.mode,'PENGUCOACH_PROJECT':str(self.root),'PENGUCOACH_SOURCE':str(source),
+        env = {'PENGUCOACH_DEPLOYMENT':self.mode,'PENGUCOACH_PROJECT':str(self.link),'PENGUCOACH_SOURCE':str(source),
                'PENGUCOACH_DATA':str(self.data),'PENGUCOACH_ENV_FILE':str(self.env_file),
                'PENGUCOACH_MANAGED_ENV':str(self.managed_env),'PENGUCOACH_SERVICE_USER':self.config.get('user','pengucoach')}
         if self.mode == 'docker':env['PENGUCOACH_COMPOSE']=shlex.join(self.compose)
-        self.run(['bash',str(script)],env=env,timeout=timeout,quiet=True)
+        self.run(['bash',str(script)],env=env,timeout=timeout,quiet=True,cwd=self.link if self.link.exists() else self.root)

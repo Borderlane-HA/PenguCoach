@@ -9,6 +9,11 @@ fi
 if [[ -f /etc/pengucoach-maintenance.json && -x /usr/local/bin/pengucoach-maintenance ]]; then
   exec /usr/local/bin/pengucoach-maintenance update "$@"
 fi
+if [[ -L "$APP" ]]; then
+  # Release directories (Alpha.76+) are switched only by the maintenance service.
+  echo "[PenguCoach] This installation uses release directories. Start the maintenance service (systemctl start pengucoach-maintenance) and run pengucoach-update again." >&2
+  exit 1
+fi
 ENV_FILE=/etc/pengucoach/pengucoach.env
 CHANNEL_FILE=/etc/pengucoach/channel
 BRANCH="$(cat "$CHANNEL_FILE" 2>/dev/null || echo main)"

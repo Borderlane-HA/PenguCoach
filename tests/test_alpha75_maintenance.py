@@ -108,8 +108,8 @@ def test_host_steps_run_once_in_order_and_only_for_matching_deployment(host,monk
     expected=['075-first.native.sh','076-later.all.sh'] if host.config['deployment']=='native' else ['075-docker-only.docker.sh','076-later.all.sh']
     assert ran==expected
     assert set(host.engine.applied_steps())==set(expected)
-    host.shared['calls'].clear();host.shared['head']='a'*40
-    assert run_update(host,monkeypatch,tmp_path,steps=names)['status']=='succeeded'
+    host.shared['calls'].clear()
+    assert run_update(host,monkeypatch,tmp_path,steps=names,commit='c'*40)['status']=='succeeded'
     assert not [c for c in host.shared['calls'] if isinstance(c,tuple) and c[0]=='step']
 
 
@@ -120,7 +120,7 @@ def test_failing_host_step_rolls_back_and_is_retried_next_time(host,monkeypatch,
     assert job['status']=='failed' and job['error']=='HOST_STEP_FAILED:075' and job['rolled_back']
     assert host.shared['head']=='a'*40 and host.shared['db']=={'pengucoach':before}
     assert host.engine.applied_steps()=={}
-    assert run_update(host,monkeypatch,tmp_path,steps=['075-first.all.sh'])['status']=='succeeded'
+    assert run_update(host,monkeypatch,tmp_path,steps=['075-first.all.sh'],commit='c'*40)['status']=='succeeded'
     assert '075-first.all.sh' in host.engine.applied_steps()
 
 
