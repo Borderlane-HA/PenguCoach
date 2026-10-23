@@ -10,8 +10,14 @@ depends_on = None
 
 
 def upgrade():
-    op.add_column("conversations", sa.Column("summary", sa.Text(), nullable=False, server_default=""))
-    op.add_column("messages", sa.Column("metadata", postgresql.JSONB(), nullable=False, server_default="{}"))
+    # 0001 creates the current metadata on an empty database, so objects added here
+    # may already exist. Existing installations ran this revision long ago.
+    inspector = sa.inspect(op.get_bind())
+    tables = set(inspector.get_table_names())
+    if "summary" not in {c["name"] for c in inspector.get_columns("conversations")}:
+        op.add_column("conversations", sa.Column("summary", sa.Text(), nullable=False, server_default=""))
+    if "metadata" not in {c["name"] for c in inspector.get_columns("messages")}:
+        op.add_column("messages", sa.Column("metadata", postgresql.JSONB(), nullable=False, server_default="{}"))
     # Explicit table definitions preserve historical migrations as models evolve.
     for name, key, target in [("coach_profiles", "user_id", "users.id"), ("activity_feedback", "activity_id", "activities.id"), ("plan_schedules", "plan_run_id", "ai_runs.id")]:
         columns = [sa.Column(key, postgresql.UUID(as_uuid=True), sa.ForeignKey(target, ondelete="CASCADE"), primary_key=True)]
@@ -22,7 +28,8 @@ def upgrade():
         else:
             columns.append(sa.Column("data", postgresql.JSONB(), nullable=False))
         columns.append(sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()))
-        op.create_table(name, *columns)
+        if name not in tables:
+            op.create_table(name, *columns)
     for name in ("coach_memories", "coach_checkins"):
         columns = [sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True), sa.Column("user_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)]
         if name == "coach_memories":
@@ -30,7 +37,8 @@ def upgrade():
         else:
             columns.extend([sa.Column("date", sa.Date(), nullable=False), sa.Column("data", postgresql.JSONB(), nullable=False), sa.UniqueConstraint("user_id", "date")])
         columns.append(sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()))
-        op.create_table(name, *columns)
+        if name not in tables:
+            op.create_table(name, *columns)
 
 
 def downgrade():

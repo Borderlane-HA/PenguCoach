@@ -9,6 +9,9 @@ depends_on = None
 
 
 def upgrade():
+    # Already present when 0001 created the current metadata on an empty database.
+    if 'training_reviews' in sa.inspect(op.get_bind()).get_table_names():
+        return
     op.create_table('training_reviews',
         sa.Column('id', postgresql.UUID(as_uuid=True), primary_key=True),
         sa.Column('user_id', postgresql.UUID(as_uuid=True), sa.ForeignKey('users.id', ondelete='CASCADE'), nullable=False),
