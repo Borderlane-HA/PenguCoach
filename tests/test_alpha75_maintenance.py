@@ -420,6 +420,9 @@ def test_deployment_files_wire_the_maintenance_environment_and_lock_file():
     installer=Path('install/proxmox/install-app.sh').read_text()
     assert '10-pengucoach-maintenance-env.conf' in installer and 'pengucoach.managed.env' in installer
     assert '/var/cache/pengucoach-build' in installer
-    gitignore=Path('.gitignore').read_text().splitlines()
-    assert 'apps/web/package-lock.json' not in gitignore and '.env.maintenance' in gitignore
+    # Dotfiles such as .gitignore are not always published (GitHub web upload skips them).
+    if Path('.gitignore').is_file():
+        gitignore=Path('.gitignore').read_text().splitlines()
+        assert 'apps/web/package-lock.json' not in gitignore and '.env.maintenance' in gitignore
+    assert Path('apps/web/package-lock.json').is_file()
     assert 'package-lock.json' in Path('apps/web/Dockerfile').read_text()
