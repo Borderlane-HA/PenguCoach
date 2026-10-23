@@ -1,6 +1,7 @@
 FROM node:22-alpine AS deps
 WORKDIR /app
-COPY package.json ./
+# The lock file pins the exact dependency tree used for native and Docker builds.
+COPY package.json package-lock.json* ./
 RUN npm install --no-audit --no-fund
 
 FROM node:22-alpine AS builder

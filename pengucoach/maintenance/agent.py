@@ -46,6 +46,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
         try:
             path = urlsplit(self.path).path
             if path == '/status':return self.json(engine.status())
+            if path == '/update':
+                refresh = parse_qs(urlsplit(self.path).query).get('refresh',['0'])[0] == '1'
+                return self.json(engine.update_preview(refresh=refresh))
             upload=re.fullmatch(r'/uploads/([a-f0-9]{32})',path)
             if upload:
                 file=engine.state/'uploads'/(upload[1]+'.partial')
@@ -76,7 +79,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 file.unlink();file.with_suffix('.json').unlink()
             finally:engine.release()
             self.json({'deleted':True})
-        except (ValueError,FileNotFoundError) as exc:self.json({'detail':str(exc) if isinstance(exc,ValueError) else 'BACKUP_NOT_FOUND'},400)
+        except (ValueError,FileNotFoundError) as exc:
+            detail = str(exc) if isinstance(exc,ValueError) else 'BACKUP_NOT_FOUND'
+            self.json({'detail':detail},409 if detail=='MAINTENANCE_BUSY' else 400)
 
     def do_POST(self):
         engine = self.server.engine
@@ -93,7 +98,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 uid = uuid.uuid4().hex
                 # Partial uploads are private and expire, keeping abandoned files bounded.
                 for old in (engine.state/'uploads').glob('*.json'):
-                    if time.time()-old.stat().st_mtime>86400:
+                    partial = old.with_suffix('.partial')
+                    # Expire by last activity, not by start: large uploads may take long.
+                    active = max(old.stat().st_mtime,partial.stat().st_mtime if partial.exists() else 0)
+                    if time.time()-active>86400:
                         old.with_suffix('.partial').unlink(missing_ok=True);old.unlink(missing_ok=True)
                 if sum(p.stat().st_size for p in (engine.state/'uploads').glob('*.partial'))+size > archive.MAX_BYTES:
                     raise ValueError('UPLOAD_STORAGE_LIMIT')
@@ -123,6 +131,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     out.seek(0,os.SEEK_END)
                     if out.tell()!=offset:raise ValueError('UPLOAD_OFFSET_INVALID')
                     out.write(block)
+                os.utime(file.with_suffix('.json'))
                 return self.json({'id':uid,'offset':offset+len(block)})
             self.json({'detail':'NOT_FOUND'},404)
         except (ValueError,KeyError,FileNotFoundError) as exc:
@@ -134,6 +143,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
 def serve(config):
     engine = Engine(config)
     engine.recover()
+    engine.startup()
     socket = Path(config['socket']);socket.parent.mkdir(parents=True,exist_ok=True)
     socket.unlink(missing_ok=True)
     with Server(str(socket),Handler) as server:

@@ -35,9 +35,11 @@ Reviewed time-budget variants, confirmed training experiences, recorded 1/5/20-m
 
 **Alpha.74 session recovery:** brief API interruptions during backups preserve the browser session. Network/server errors are retried; expired sessions still require login.
 
+**Alpha.75 maintenance design:** updates install the newest published release (shown before you start) and apply versioned host steps from the repository. Backups contain the database, environment and application data only, are written in one encrypted streaming pass, and automatic safety copies are rotated after a free-space check. A maintenance mode pauses new changes and waits for running background tasks; Garmin workout transfers are never cut off. Restores no longer edit your environment files, and recovery can be started from the web interface. See [System maintenance](docs/SYSTEM_MAINTENANCE.md).
+
 ## Current alpha scope
 
-`v0.1.0-alpha.74` is the current end-to-end alpha baseline:
+`v0.1.0-alpha.75` is the current end-to-end alpha baseline:
 
 - **Sparky recording times and readings:** separate local clocks and recording zones, historical timestamp correction on sync, explicit time-unknown display, better minimum-HR/telemetry extraction and missing values shown as missing. See [SparkyFitness](docs/SPARKYFITNESS.md).
 

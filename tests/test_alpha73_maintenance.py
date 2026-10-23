@@ -16,7 +16,6 @@ from pydantic import ValidationError
 
 from apps.api.routers import admin_system as api
 from pengucoach.auth.dependencies import admin_user
-from pengucoach.db.session import get_db
 from pengucoach.maintenance import archive
 from pengucoach.maintenance.drivers import Driver, read_env, write_env
 from pengucoach.maintenance.engine import Engine, atomic_json, utc
@@ -118,12 +117,24 @@ class FakeHost:
     def __init__(self,config,log,shared):
         self.config,self.log,self.shared=config,log,shared
         self.root=Path(config['project']);self.env_file=Path(config['environment']);self.data=Path(config['data']);self.mode=config['deployment']
+        self.managed_env=self.env_file.with_name('managed.env')
     def fail(self,point):
         if point in self.shared['fail']:
             self.shared['fail'].remove(point);raise RuntimeError('SIMULATED_'+point.upper())
     def ensure_managed(self):self.shared['calls'].append('ensure')
-    def environment(self):return read_env(self.env_file)
+    def environment(self):
+        values=read_env(self.env_file)
+        if self.managed_env.is_file():values.update(read_env(self.managed_env))
+        return values
     def version(self):return '0.1.0-alpha.73'
+    def database_size(self):return 1024
+    def set_maintenance(self,job_id):self.shared['calls'].append('maintenance_on')
+    def clear_maintenance(self):self.shared['calls'].append('maintenance_off')
+    def background_tasks(self):
+        self.shared['calls'].append('tasks')
+        return self.shared['tasks'].pop(0) if self.shared.get('tasks') else []
+    def ensure_env_wiring(self):return False
+    def host_step(self,script,source):self.shared['calls'].append(('step',Path(script).name));self.fail('step')
     def quiesce(self):self.shared['calls'].append('stop');self.shared['paused']=True
     def start(self):self.shared['calls'].append('start');self.shared['paused']=False
     def healthy(self):self.shared['calls'].append('health');self.fail('health')
@@ -142,7 +153,9 @@ class FakeHost:
         db.pop(discarded,None)
     def fix_ownership(self):self.fail('files')
     def restore_environment(self,values):
-        values={**values,'PENGUCOACH_JWT_SECRET':'rotated-after-restore'};write_env(self.env_file,values)
+        from pengucoach.maintenance.drivers import write_private_env
+        write_private_env(self.managed_env,{'PENGUCOACH_ENCRYPTION_KEY':values['PENGUCOACH_ENCRYPTION_KEY'],'PENGUCOACH_JWT_SECRET':'rotated-after-restore'})
+        self.fail('environment')
     def clear_queue(self):self.shared['calls'].append('clear_queue')
     def run(self,args,**kw):
         self.shared['calls'].append(args)
@@ -159,7 +172,8 @@ class FakeHost:
 @pytest.fixture(params=['native','docker'])
 def host(tmp_path,request):
     project=tmp_path/'project';project.mkdir();(project/'.git').mkdir();data=tmp_path/'data';data.mkdir()
-    (data/'cache').mkdir();(data/'cache/activity.json').write_text('all cached telemetry')
+    (data/'fit').mkdir();(data/'fit/activity.json').write_text('all cached telemetry')
+    (data/'.npm').mkdir();(data/'.npm/cache-entry').write_text('build cache, never backed up')
     (data/'backups').mkdir();(data/'backups/legacy').write_text('do not recursively back up')
     (data/'celerybeat-schedule').write_text('runtime queue state')
     key=Fernet.generate_key().decode();cipher=Fernet(key.encode()).encrypt(b'all provider API credentials').decode()
@@ -198,8 +212,8 @@ def restore(host,bid):return host.engine.submit({'operation':'restore','backup_i
 
 def change_live(host):
     host.shared['db']['pengucoach']={'users':['new-install'],'schema':'different'}
-    (host.data/'cache/activity.json').write_text('new data')
-    (host.data/'new-file').write_text('new install only')
+    (host.data/'fit/activity.json').write_text('new data')
+    (host.data/'user-assets').mkdir();(host.data/'user-assets/new-file').write_text('new install only')
     env={**host.env,'PENGUCOACH_ENCRYPTION_KEY':Fernet.generate_key().decode()};write_env(Path(host.config['environment']),env)
     return env
 
@@ -209,13 +223,18 @@ def test_full_backup_restore_preserves_all_users_keys_and_files(host):
     job=restore(host,bid)
     assert job['status']=='succeeded',job
     assert host.shared['db']['pengucoach']['users']==['admin','athlete']
-    key=read_env(host.config['environment'])['PENGUCOACH_ENCRYPTION_KEY']
+    driver=host.factory(host.config,lambda _:None)
+    key=driver.environment()['PENGUCOACH_ENCRYPTION_KEY']
     cipher=host.shared['db']['pengucoach']['encrypted_credentials']
     assert Fernet(key.encode()).decrypt(cipher.encode())==b'all provider API credentials'
-    assert read_env(host.config['environment'])['PENGUCOACH_JWT_SECRET']=='rotated-after-restore'
+    assert driver.environment()['PENGUCOACH_JWT_SECRET']=='rotated-after-restore'
+    # The administrator's own environment file is never rewritten.
+    assert read_env(host.config['environment'])['PENGUCOACH_JWT_SECRET']==host.env['PENGUCOACH_JWT_SECRET']
     assert Path(host.config['environment']).stat().st_mode&0o777==0o640
-    assert (host.data/'cache/activity.json').read_text()=='all cached telemetry'
-    assert not (host.data/'new-file').exists()
+    assert driver.managed_env.stat().st_mode&0o777==0o600
+    assert (host.data/'fit/activity.json').read_text()=='all cached telemetry'
+    assert not (host.data/'user-assets').exists()
+    assert (host.data/'.npm/cache-entry').is_file()
     assert (host.data/'backups/legacy').is_file()
     assert 'clear_queue' in host.shared['calls'] and not host.shared['paused']
     assert list(host.shared['db'])==['pengucoach']
@@ -225,7 +244,7 @@ def test_full_backup_restore_preserves_all_users_keys_and_files(host):
     for secret in [PASSWORD,key,'all provider API credentials']:assert secret not in history
 
 
-@pytest.mark.parametrize('failure',['preflight','between_renames','files','health'])
+@pytest.mark.parametrize('failure',['preflight','between_renames','files','environment','health'])
 def test_restore_failures_keep_previous_database_environment_and_files(host,failure):
     bid=backup(host);environment=change_live(host)
     before=json.loads(json.dumps(host.shared['db']['pengucoach']))
@@ -234,8 +253,9 @@ def test_restore_failures_keep_previous_database_environment_and_files(host,fail
     assert not job.get('recovery_required')
     assert host.shared['db']=={'pengucoach':before}
     assert read_env(host.config['environment'])==environment
-    assert (host.data/'cache/activity.json').read_text()=='new data'
-    assert (host.data/'new-file').read_text()=='new install only'
+    assert not host.factory(host.config,lambda _:None).managed_env.exists()
+    assert (host.data/'fit/activity.json').read_text()=='new data'
+    assert (host.data/'user-assets/new-file').read_text()=='new install only'
     assert not host.shared['paused'] and not (host.data/'.maintenance-rollback').exists()
     if failure=='preflight':assert not job.get('rolled_back')
     else:assert job['rolled_back']
@@ -252,7 +272,8 @@ def test_automatic_backup_export_is_portable_to_fresh_host(host,tmp_path):
     result=archive.unpack(decoded,tmp_path/'out')
     assert 'database.pgdump' in result['files']
     assert 'data/backups/legacy' not in result['files']
-    assert all('celerybeat' not in name for name in result['files'])
+    assert 'data/fit/activity.json' in result['files']
+    assert all('celerybeat' not in name and '.npm' not in name for name in result['files'])
 
 
 def test_inspection_tracks_backup_and_wrong_password_never_stops_services(host):
@@ -277,7 +298,7 @@ def test_operation_lock_shared_by_gui_shell_and_agent_instances(host):
 @pytest.mark.parametrize('failure',['build','migrate','health'])
 def test_update_failure_restores_previous_revision_and_database(host,failure,tmp_path,monkeypatch):
     source=tmp_path/'trusted';source.mkdir()
-    monkeypatch.setattr(host.engine,'fetch_source',lambda driver:(source,'b'*40))
+    monkeypatch.setattr(host.engine,'fetch_source',lambda driver:(source,'b'*40,{'source':'branch','branch':'main'}))
     host.shared['fail'].add(failure);before=json.loads(json.dumps(host.shared['db']['pengucoach']))
     job=host.engine.submit({'operation':'update','confirmation':'UPDATE'},asynchronous=False)
     assert job['status']=='failed' and job['rolled_back'] and not job.get('recovery_required'),job
@@ -286,7 +307,7 @@ def test_update_failure_restores_previous_revision_and_database(host,failure,tmp
 
 
 def test_noop_update_does_not_stop_services_or_create_backup(host,monkeypatch):
-    monkeypatch.setattr(host.engine,'fetch_source',lambda driver:(Path(host.config['project']),'a'*40))
+    monkeypatch.setattr(host.engine,'fetch_source',lambda driver:(Path(host.config['project']),'a'*40,{'source':'branch','branch':'main'}))
     job=host.engine.submit({'operation':'update','confirmation':'UPDATE'},asynchronous=False)
     assert job['status']=='succeeded' and not host.engine.backups()
     assert 'stop' not in host.shared['calls']
@@ -376,16 +397,15 @@ async def test_all_maintenance_api_routes_require_admin_and_forbid_command_injec
 async def test_api_bridge_role_status_busy_and_request_bounds(monkeypatch):
     app=FastAPI();app.include_router(api.router)
     app.dependency_overrides[admin_user]=lambda:SimpleNamespace(id=uuid.uuid4())
-    app.dependency_overrides[get_db]=lambda:object()
     proxy=AsyncMock(return_value={'id':'a'*32,'status':'queued'});monkeypatch.setattr(api,'proxy',proxy)
-    check=AsyncMock();monkeypatch.setattr(api,'ensure_no_active_jobs',check)
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),base_url='http://app') as client:
         response=await client.post('/admin/system/jobs',json={'operation':'update','confirmation':'UPDATE'})
-        assert response.status_code==202;check.assert_awaited_once()
+        assert response.status_code==202
         assert proxy.call_args.kwargs['json']['actor']
-        check.side_effect=HTTPException(409,'BACKGROUND_JOBS_RUNNING')
+        proxy.side_effect=HTTPException(409,'MAINTENANCE_BUSY')
         response=await client.post('/admin/system/jobs',json={'operation':'backup','password':PASSWORD})
         assert response.status_code==409
+        proxy.side_effect=None
         response=await client.post('/admin/system/uploads/'+'a'*32+'?offset=0',content=b'x'*(api.MAX_CHUNK+1))
         assert response.status_code==413
         assert (await client.delete('/admin/system/backups/'+'a'*32)).status_code==422

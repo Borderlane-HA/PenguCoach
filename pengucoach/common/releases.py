@@ -1,24 +1,16 @@
 """Bounded, anonymous GitHub release checks, cached independently of dashboards."""
 import asyncio
-import re
 from datetime import datetime, timezone
 from time import monotonic
 
 import httpx
 
+from pengucoach.maintenance.versions import version_key  # noqa: F401  (shared with the host updater)
+
 RELEASES_URL = "https://github.com/Borderlane-HA/PenguCoach/releases"
 API_URL = "https://api.github.com/repos/Borderlane-HA/PenguCoach/releases"
 _cache = {}
 _lock = asyncio.Lock()
-
-
-def version_key(value):
-    match = re.fullmatch(r"v?(\d+)\.(\d+)\.(\d+)(?:[-.]?(alpha|beta|rc)[.-]?(\d+(?:\.\d+)*))?", str(value).strip(), re.I)
-    if not match:
-        return None
-    major, minor, patch, stage, number = match.groups()
-    return (int(major), int(minor), int(patch), {"alpha": 0, "beta": 1, "rc": 2, None: 3}[stage.lower() if stage else None],
-            tuple(map(int, number.split("."))) if number else ())
 
 
 def select_release(items, installed):

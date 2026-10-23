@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 from celery import shared_task
 from sqlalchemy import select
 
+from pengucoach.common import maintenance_mode
 from pengucoach.db.models import GarminConnection, GarminSyncSetting, SparkyFitnessConnection
 from pengucoach.db.session import SessionLocal
 from worker.tasks.garmin_sync import sync_user as sync_garmin_user
@@ -11,6 +12,8 @@ from worker.tasks.sparkyfitness_sync import sync_user as sync_sparkyfitness_user
 
 
 async def _schedule():
+    if maintenance_mode.active():
+        return {"queued": 0, "skipped": "maintenance"}
     now = datetime.now(timezone.utc); queued = 0
     async with SessionLocal() as db:
         rows = (await db.execute(select(GarminConnection, GarminSyncSetting).join(GarminSyncSetting, GarminSyncSetting.user_id == GarminConnection.user_id).where(GarminConnection.status == "connected", GarminSyncSetting.enabled.is_(True)))).all()
@@ -30,6 +33,8 @@ def schedule_due_garmin_syncs(): return asyncio.run(_schedule())
 
 
 async def _schedule_sparkyfitness():
+    if maintenance_mode.active():
+        return {"queued": 0, "skipped": "maintenance"}
     now = datetime.now(timezone.utc); queued = 0
     async with SessionLocal() as db:
         rows = (await db.scalars(select(SparkyFitnessConnection).where(

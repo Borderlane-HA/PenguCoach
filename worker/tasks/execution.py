@@ -27,6 +27,9 @@ async def refresh_user(db, user):
 
 @app.task(name='worker.tasks.execution.refresh_reviews')
 def refresh_reviews(user_id=None):
+    from pengucoach.common import maintenance_mode
+    if user_id is None and maintenance_mode.active():
+        return {'skipped': 'maintenance'}
     async def work():
         import uuid
         from pengucoach.db.session import SessionLocal

@@ -7,13 +7,13 @@ import httpx
 SOCKET = '/run/pengucoach-maintenance/control.sock'
 
 
-def client():
+def client(timeout=15):
     return httpx.AsyncClient(transport=httpx.AsyncHTTPTransport(uds=SOCKET),
-                            base_url='http://maintenance',timeout=httpx.Timeout(15,connect=2),trust_env=False)
+                            base_url='http://maintenance',timeout=httpx.Timeout(timeout,connect=2),trust_env=False)
 
 
-async def request(method, path, *, json=None, content=None):
-    async with client() as connection:
+async def request(method, path, *, json=None, content=None, timeout=15):
+    async with (client(timeout) if timeout != 15 else client()) as connection:
         response = await connection.request(method,path,json=json,content=content)
         response.raise_for_status()
         return response.json()

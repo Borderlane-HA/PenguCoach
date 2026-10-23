@@ -1,6 +1,14 @@
-# System & Wartung / System maintenance (Alpha.73)
+# System & Wartung / System maintenance (Alpha.73–75)
 
 Admin → **System & Wartung** bündelt **Updates**, **Sicherungen** und **Wiederherstellung**. Der kleine Versions-/Updatehinweis öffnet diesen Bereich. Normale Benutzer sehen eine reine Informationsseite unter Einstellungen → Updates; dort stehen Updateprüfung und Release Notes ohne Wartungsaktionen. Unter „Über PenguCoach“ bleibt ein Link dorthin. Die automatische GitHub-Prüfung bleibt sechs Stunden gecacht; „Jetzt prüfen“ ist im Updatebereich verfügbar.
+
+## Update auf Alpha.75: Release anlegen
+
+Ab Alpha.75 installiert die Wartung **das neueste veröffentlichte Release** (Git-Tag wie `v0.1.0-alpha.75`), nicht mehr den aktuellen Stand von `main`. Für jede neue Version deshalb nach dem Hochladen auf GitHub ein Release mit passendem Tag veröffentlichen. Ohne Tag meldet die Updateprüfung „kein passendes Release gefunden“ und es wird nichts verändert.
+
+Der erste Wechsel von Alpha.74 auf Alpha.75 läuft noch mit dem Alpha.74-Wartungsdienst und lädt dabei wie bisher `main`. Danach startet der neue Dienst und holt die Systemschritte von Alpha.75 (Shell-Befehle, nginx, Build-Cache) automatisch einmal nach. Ein zusätzlicher Befehl ist nicht nötig.
+
+Wer bewusst weiter dem Branch folgen möchte, setzt in `/etc/pengucoach-maintenance.json` (Docker: `/state/config.json` im Wartungscontainer) `"update_source": "branch"`.
 
 ## Automatische Einrichtung beim normalen Update
 
@@ -52,27 +60,45 @@ Eine normale Sicherung ändert den Anmeldeschlüssel nicht. Während die schreib
 
 ## Updates
 
-1. Unter Updates nach einer neuen Version suchen und die Release Notes öffnen.
-2. „Update vorbereiten“ wählen und `UPDATE` bestätigen.
-3. Der Dienst lädt den konfigurierten Quellbranch, hält die schreibenden Dienste an, erzeugt eine lokale Vollsicherung, baut die Anwendung, führt Migrationen aus und prüft API/Datenbank und Webserver.
+1. Unter Updates zeigt der Bereich die installierte Version und das neueste passende Release („v0.1.0-alpha.74 → v0.1.0-alpha.75 verfügbar“). „Erneut prüfen“ fragt GitHub sofort ab.
+2. „Update vorbereiten“ wählen; der Dialog nennt die Zielversion. `UPDATE` bestätigen.
+3. Der Dienst holt das Release in sein eigenes Root-Checkout, prüft den freien Speicher, aktiviert den Wartungsmodus und wartet laufende Hintergrundaufgaben ab, hält die schreibenden Dienste an, erzeugt eine lokale Vollsicherung, baut die Anwendung, führt Migrationen und offene Systemschritte aus und prüft API/Datenbank und Webserver.
+
+Es gelten dieselben Versionsregeln wie beim Updatehinweis: Stabile Installationen folgen nur stabilen Releases, Alpha-Installationen allen veröffentlichten Releases. Ein Stand, der bereits neuer ist als das Release oder es enthält (zum Beispiel ein Checkout von `main` nach dem Release), wird nie zurückgesetzt; das Update endet dann ohne Änderung.
 
 Die Updatefunktion benötigt ein Git-Checkout als Installationsverzeichnis; bei einem direkt entpackten Quell-ZIP bleiben Backup/Restore nutzbar, die Updateaktion zeigt den fehlenden Git-Stand an.
 
-Wie der bisherige Shell-Updater aktualisiert die Wartung den ausgewählten Git-Branch (standardmäßig `main`), nicht automatisch einen beliebigen Release-Download. Lokale Änderungen an versionierten Quelldateien werden ersetzt. Nicht versionierte `.env`- und Compose-Konfigurationsdateien werden beim Aufräumen geschützt. LXC-Frontend-Builds laufen bei gestopptem Webdienst mit begrenztem Node-Heap.
+Lokale Änderungen an versionierten Quelldateien werden ersetzt. Nicht versionierte `.env`-, `.env.maintenance`- und Compose-Konfigurationsdateien werden beim Aufräumen geschützt. LXC-Builds laufen bei gestopptem Webdienst mit begrenztem Node-Heap und eigenem Cache unter `/var/cache/pengucoach-build`.
+
+### Systemschritte aus dem Repository
+
+Änderungen am Host, die ein Release braucht (Shell-Befehle, nginx, systemd), liegen als nummerierte Skripte in `install/host-steps/` (`NNN-name.native.sh`, `.docker.sh` oder `.all.sh`). Der Wartungsdienst führt offene Schritte nach Build und Migration und vor dem Start der Dienste als root aus seinem eigenen Release-Checkout aus, nie aus dem Anwendungsverzeichnis. Jeder Schritt läuft genau einmal; der Stand liegt in `host-steps.json` im privaten Wartungsverzeichnis. Scheitert ein Schritt, werden Programm, Datenbank und Daten zurückgesetzt und der Schritt beim nächsten Update erneut versucht. Hoständerungen eines Schritts selbst werden nicht zurückgedreht; Schritte müssen deshalb wiederholbar und mit der Vorversion verträglich sein. Hinweise für neue Schritte stehen in `install/host-steps/README.md`.
+
+### Wartungsmodus
+
+Vor Update, Wiederherstellung und Vollsicherung setzt der Dienst einen kurzlebigen Wartungsmodus. Die App nimmt dann keine neuen Änderungen an (Hinweis „Gerade läuft eine Systemwartung“); Anmelden, das Abbrechen laufender Aufträge und dieser Wartungsbereich bleiben nutzbar. Der Scheduler plant keine neuen Synchronisierungen. Anschließend wartet der Dienst auf alle laufenden und bereits vorgemerkten Celery-Aufgaben – unabhängig davon, ob es Coach-, Analyse-, Garmin-, SparkyFitness- oder FIT-Aufgaben sind – standardmäßig bis zu 10 Minuten (`drain_timeout`). Danach werden verbleibende Aufgaben beim Anhalten beendet. Laufende Garmin-Workout-Exporte oder -Bereinigungen werden nie abgeschnitten: In diesem Fall startet die Wartung nicht und meldet den Grund. Ist Redis gestört, blockiert der Wartungsmodus den normalen Betrieb nicht.
 
 Fehler vor Abschluss lösen die Wiederherstellung von Quellstand/Images, Datenbank und Umgebung aus. Der Status bleibt außerhalb der App-Datenbank erhalten. Bei einer Verbindungsunterbrechung läuft der Auftrag weiter; die Seite prüft erneut. Bei einem erfolgreichen Restore werden Benutzer abgemeldet und müssen sich neu anmelden. Ein Auftrag darf während des eigentlichen Umbaus nicht per WebUI abgebrochen werden.
 
-Neue WebUI-Updates und Backups warten auf aktive, bekannte Hintergrundaufträge. Eine zweite Wartungsaktion wird unabhängig vom verwendeten Zugang gesperrt. Die vorhandenen Shell-Kommandos bleiben für einen Administrator auch bei nicht erreichbarer WebUI nutzbar.
+Eine zweite Wartungsaktion wird unabhängig vom verwendeten Zugang gesperrt. Die vorhandenen Shell-Kommandos bleiben für einen Administrator auch bei nicht erreichbarer WebUI nutzbar.
 
 ## Was eine Vollsicherung enthält
 
 - PostgreSQL-Dump mit allen Benutzern, Einstellungen, LLM-Anbietern/-Modellen und deren verschlüsselten Zugangsdaten, benutzerspezifischen Prompts, Coach-Verläufen, Trainingsplänen und Analysen.
 - Effektive App-Umgebung einschließlich `PENGUCOACH_ENCRYPTION_KEY`. Ohne diesen Schlüssel wären gesicherte API-Zugänge und andere verschlüsselte Inhalte auf einem neuen System nicht lesbar.
-- Reguläre Dateien des App-Datenverzeichnisses, einschließlich gespeicherter Aktivitätsdateien, Telemetrie und Cache-Dateien.
+- Die Anwendungsdaten im Datenverzeichnis: `fit` (Original-FIT-Dateien), `parquet` (Telemetrie), `user-assets` (Avatare/App-Icons) und `exports`.
+
+Andere Inhalte des Datenverzeichnisses – etwa Dateien des Dienstbenutzers oder npm-/pip-Caches – sind nicht Teil der Sicherung und werden bei einer Wiederherstellung nicht verändert. Sicherungen aus Alpha.73/74 bleiben lesbar; daraus werden ebenfalls nur diese Anwendungsdaten übernommen.
 
 Sicherungen sichern sich nicht rekursiv selbst. Redis-Warteschlangen und Celerybeat-Laufzeitdateien werden nicht wieder eingespielt; nach Restore werden alte Aufträge als beendet markiert und Warteschlangen verworfen. Gespeicherte Antworten und Fortsetzungs-Checkpoints bleiben erhalten. Die vollständigen Anwendungsdaten liegen in Datenbank und Datenverzeichnis. Docker-Images, Betriebssystem, externe Dienste, Reverse-Proxy-/TLS-Konfiguration und individuelle Host-/Compose-Dateien sind keine Bestandteile dieses App-Backups. Ziel-Datenbank, Redis, Datenpfad und die explizite Zieladresse bleiben beim Restore erhalten.
 
-Unterstützt werden die von der Standardinstallation verwaltete lokale PostgreSQL-Datenbank `pengucoach` auf Port 5432 und Redis-Datenbank 0 auf Port 6379. Bei abweichender Infrastruktur stoppt die Aktion vor der Änderung. Backups benötigen zusätzlichen Plattenplatz für Dump, Dateikopie und verschlüsseltes Archiv; die Übertragung und Verschlüsselung arbeiten in begrenzten Blöcken.
+Unterstützt werden die von der Standardinstallation verwaltete lokale PostgreSQL-Datenbank `pengucoach` auf Port 5432 und Redis-Datenbank 0 auf Port 6379. Bei abweichender Infrastruktur stoppt die Aktion vor der Änderung. Eine Sicherung wird in einem Durchgang geschrieben (Dateien → tar → gzip → Verschlüsselung). Außer dem Datenbank-Dump entsteht keine unverschlüsselte Kopie; Prüfen und Exportieren entpacken nichts auf die Platte, eine Wiederherstellung entpackt einmal und verschiebt die Dateien danach an ihren Platz.
+
+## Speicherplatz und Aufbewahrung
+
+Vor jeder Aktion schätzt der Dienst den Platzbedarf (Datenbank plus Anwendungsdaten) und bricht ab, **bevor** ein Dienst angehalten wird, wenn danach weniger als die Reserve frei bliebe (`min_free_bytes`, Standard 1 GiB). Während des Schreibens stoppt eine zweite Prüfung, bevor der Datenträger vollläuft.
+
+Von den automatischen Sicherheitskopien vor Updates und Wiederherstellungen bleiben die neuesten drei erhalten (`keep_automatic_backups`). Ältere werden nach einer erfolgreichen Aktion entfernt. Eigene Sicherungen aus der WebUI, Shell-Sicherungen, hochgeladene und exportierte Sicherungen sowie alle Sicherungen von vor Alpha.75 werden nie automatisch gelöscht. Der Bereich Sicherungen zeigt belegten und freien Speicher.
 
 ## Passwortgeschützt oder lokal gesichert
 
@@ -80,7 +106,7 @@ Unterstützt werden die von der Standardinstallation verwaltete lokale PostgreSQ
 
 **Automatische Sicherung vor Update/Restore** und `pengucoach-backup` ohne Zusatzparameter: mit dem privaten Schlüssel des Wartungsdiensts verschlüsselte lokale Sicherung. In der Liste als „Lokal gesichert“ markiert. Für einen anderen Host zuerst **„Mit Passwort exportieren“** wählen und den erzeugten portablen Export herunterladen. Nur die lokale Datei ohne deren privaten Dienstschlüssel reicht für einen neuen Host nicht aus.
 
-Das Archiv verwendet AES-256-GCM in authentifizierten 1-MiB-Blöcken und PBKDF2-SHA256 mit zufälligem Salt. Ein authentifizierter Abschluss erkennt abgeschnittene Dateien. Vor einem Restore werden Dateiliste, Größen, Hashes und zulässige Pfade geprüft; Symlinks, Spezialdateien und Pfadtraversierungen werden abgelehnt. Uploads erfolgen in kleinen, bei verloren gegangener Antwort erneut prüfbaren Blöcken; die Obergrenze beträgt 100 GiB. Automatische Sicherungen bleiben bis zur expliziten Löschung erhalten.
+Das Archiv verwendet AES-256-GCM in authentifizierten 1-MiB-Blöcken und PBKDF2-SHA256 mit zufälligem Salt. Ein authentifizierter Abschluss erkennt abgeschnittene Dateien. Vor einem Restore werden Dateiliste, Größen, Hashes und zulässige Pfade geprüft; Symlinks, Spezialdateien und Pfadtraversierungen werden abgelehnt. Uploads erfolgen in kleinen, bei verloren gegangener Antwort erneut prüfbaren Blöcken; die Obergrenze beträgt 100 GiB. Ein Upload verfällt 24 Stunden nach dem zuletzt empfangenen Block.
 
 ## Auf einem neuen System wiederherstellen
 
@@ -90,6 +116,15 @@ Das Archiv verwendet AES-256-GCM in authentifizierten 1-MiB-Blöcken und PBKDF2-
 4. „Wiederherstellung vorbereiten“ wählen und `WIEDERHERSTELLEN` bestätigen. Die Daten aller Benutzer werden ersetzt.
 5. Der Dienst stellt den Dump zunächst in einer separaten Datenbank wieder her und prüft die Migrationen. Erst danach hält er die App an, sichert den aktuellen Stand und ersetzt Datenbank und Dateien.
 6. Anschließend mit einem Benutzerkonto **aus der Sicherung** anmelden. Der Anmeldeschlüssel wird erneuert; Sitzungen von vor dem Restore gelten nicht weiter.
+
+### Eigene Umgebungsdateien bleiben unverändert
+
+Eine Wiederherstellung bearbeitet weder `/etc/pengucoach/pengucoach.env` noch die Docker-`.env`. Sie schreibt nur den Verschlüsselungsschlüssel aus der Sicherung und einen neuen Anmeldeschlüssel in eine eigene Wartungsdatei, die nach der Hauptdatei geladen wird und deren Werte überschreibt:
+
+- LXC: `/etc/pengucoach/pengucoach.managed.env`, eingebunden über systemd-Drop-ins `pengucoach-{api,worker,scheduler}.service.d/10-pengucoach-maintenance-env.conf` (legt der Dienst bei Bedarf selbst an).
+- Docker: `.env.maintenance` im Projektverzeichnis, eingebunden als optionale `env_file` in der mitgelieferten Compose-Datei (Docker Compose 2.24 oder neuer). Eigene Compose-Dateien müssen diesen Eintrag ebenfalls enthalten.
+
+Vor dem Start prüft der Dienst, dass API, Worker und Scheduler die Datei tatsächlich laden; sonst wird die Wiederherstellung zurückgesetzt. Diese Datei nicht bearbeiten oder löschen – ohne sie wären die wiederhergestellten Zugangsdaten nicht mehr lesbar. Andere Einstellungen der Sicherung (z. B. Zeitlimits) werden nicht übernommen; es gelten die Einstellungen des Zielsystems. Updates schreiben keine Umgebungsdatei mehr.
 
 Eine Sicherung einer neueren, inkompatiblen Datenbank kann bei der Vorprüfung scheitern. Dann bleibt die aktive Installation unverändert. Bestehende Sicherungsverzeichnisse aus Versionen vor Alpha.73 bleiben erhalten, werden aber nicht in `.pcbackup` umgewandelt oder von dieser Oberfläche eingelesen.
 
@@ -131,9 +166,27 @@ pengucoach-maintenance status
 pengucoach-maintenance recover
 ```
 
+Die Wiederherstellung lässt sich auch unter Admin → System & Wartung mit **„Wiederherstellung ausführen“** starten. Fehlt zu einer gesperrten Aktion das Journal, wird die Sperre aufgehoben, sobald die Anwendung wieder startet und antwortet; sonst bleibt sie bestehen.
+
 Bei Docker `docker logs <Helfername>` und die CLI im Helfer nutzen. `recover` verwendet dieselbe Sperre und läuft nicht parallel zu einem aktiven Auftrag. Die WebUI zeigt nur feste Fehlercodes und Ablaufmeldungen, keine Passwörter, rohen Datenbankausgaben oder Providerantworten.
 
-## Prüfung dieser Version
+## Einstellungen des Wartungsdiensts
+
+In `/etc/pengucoach-maintenance.json` (Docker: `/state/config.json` im Wartungscontainer; bleibt bei erneuter Einrichtung erhalten). Nach einer Änderung den Dienst neu starten (`systemctl restart pengucoach-maintenance` bzw. `docker restart <Helfername>`).
+
+| Schlüssel | Standard | Bedeutung |
+|---|---|---|
+| `update_source` | `release` | `release`: neuestes passendes Release-Tag; `branch`: Stand von `branch` |
+| `branch` | `main` | Branch für `update_source: branch` |
+| `keep_automatic_backups` | `3` | Anzahl aufbewahrter Sicherheitskopien vor Update/Restore |
+| `min_free_bytes` | `1073741824` | Freie Reserve, die nach einer Sicherung bleiben muss |
+| `drain_timeout` | `600` | Sekunden, die auf laufende Hintergrundaufgaben gewartet wird |
+
+## Prüfung dieser Version (Alpha.75)
+
+Automatisiert geprüft: Auswahl des Release-Tags gegen ein echtes lokales Git-Repository (unveröffentlichter `main`-Stand wird nicht installiert, kein Zurücksetzen eines neueren Stands), Systemschritte (Reihenfolge, Bereich, einmalige Ausführung, Rollback bei Fehler, nginx-Schritt mit simulierten Befehlen), Inhalt und Streaming der Sicherung ohne Klartextkopie, Wiederherstellung einer Alpha.73-Sicherung, Export ohne Entpacken, Beschädigungen, Aufbewahrung, Platzprüfung vor dem Anhalten, Wartungsmodus in API und Scheduler, Abwarten und Schutz von Garmin-Exporten, getrennte Wartungs-Umgebungsdatei inkl. Ladeprüfung, systemd-Drop-ins, Build-Cache, Wiederherstellung über die WebUI und Shell-Fehlermeldungen. Ein realer Proxmox-LXC, Dockerdaemon, PostgreSQL- und Redis-Dienst stehen in der Entwicklungsumgebung nicht zur Verfügung. Das erste Update auf Alpha.75 deshalb zuerst auf einer Testinstallation mit separat gesichertem Datenstand ausführen.
+
+## Prüfung von Alpha.73/74
 
 701 Backendtests, 21 JavaScript-Tests und 13 Browserfälle zur Sitzungswiederherstellung sind bestanden; der Produktionsbuild und die Shell-Syntaxprüfung sind erfolgreich. Geprüft wurden HTTP 5xx, Verbindungsfehler, eine hängende Sitzungsprüfung, begrenzte Wiederholungen, manuelle Prüfung, echte HTTP 401 und die Rückkehr nach einer Sicherung ohne doppelten Auftrag. Die neue Verbindungsanzeige wurde in Hell und Dunkel bei 320 Pixeln geprüft. Die bestehende Alpha.73-Browserprüfung umfasste 24 Wartungsfälle mit 14 vorgegebenen Themes und zwei eigenen Farbpaletten.
 

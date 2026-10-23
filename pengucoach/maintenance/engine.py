@@ -1,10 +1,12 @@
 """Persistent, single-operation host maintenance with recoverable transactions."""
+import errno
 import fcntl
 import json
 import os
 import re
 import secrets
 import shutil
+import subprocess
 import threading
 import time
 import uuid
@@ -12,7 +14,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from . import archive
-from .drivers import Driver, read_env, write_env
+from .drivers import Driver, write_env
+from .versions import display, newest_tag, version_key
 
 
 def utc():return datetime.now(timezone.utc).isoformat()
@@ -38,25 +41,14 @@ def atomic_json(path, value):
     sync_directory(Path(path).parent)
 
 
-def copy_data(source, target):
-    source, target = Path(source), Path(target)
-    target.mkdir(parents=True,exist_ok=True,mode=0o700)
-    for root, dirs, files in os.walk(source):
-        relative = Path(root).relative_to(source)
-        if relative == Path('.'):
-            dirs[:] = [name for name in dirs if name not in archive.EXCLUDED]
-            files = [name for name in files if name not in archive.EXCLUDED]
-        for name in dirs:
-            if (Path(root)/name).is_symlink():raise ValueError('BACKUP_SYMLINK_NOT_SUPPORTED')
-        for name in files:
-            path = Path(root)/name
-            if path.is_symlink() or not path.is_file():raise ValueError('BACKUP_SPECIAL_FILE_NOT_SUPPORTED')
-            destination = target/relative/name
-            destination.parent.mkdir(parents=True,exist_ok=True,mode=0o700)
-            fd = os.open(path,os.O_RDONLY|os.O_NOFOLLOW)
-            with os.fdopen(fd,'rb') as src, destination.open('xb') as dst:
-                os.chmod(destination,0o600)
-                shutil.copyfileobj(src,dst,archive.CHUNK)
+OPERATIONS = {'backup','update','inspect','restore','export','recover'}
+CONFIRMED = {'update','restore','recover'}
+# Interrupting these would leave half-written workouts in the user's Garmin account.
+PROTECTED_TASKS = ('worker.tasks.garmin_workouts.',)
+HOST_STEP = re.compile(r'(\d{3})-[a-z0-9][a-z0-9-]*\.(native|docker|all)\.sh')
+NOOP = {'current':'Bereits auf dem aktuellen Stand',
+        'newer_installed':'Die installierte Version ist neuer als das letzte Release',
+        'contained':'Der installierte Stand enthält das letzte Release bereits'}
 
 
 class Engine:
@@ -69,19 +61,35 @@ class Engine:
         self.driver_factory = driver_factory
         self.lock = threading.Lock()
         self._lock_file = None
+        self._preview = (0.0, None)
+        self._preview_lock = threading.Lock()
+        # The shell fallback runs operations in-process and must not exit itself.
+        self.allow_restart = True
         key = self.state/'backup.key'
         if not key.exists():
             fd = os.open(key,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)
             with os.fdopen(fd,'w') as out:out.write(secrets.token_urlsafe(48))
 
+    # --- Settings ------------------------------------------------------------
+
+    @property
+    def keep_automatic(self):return max(1,int(self.config.get('keep_automatic_backups',3)))
+    @property
+    def min_free(self):return max(0,int(self.config.get('min_free_bytes',1024**3)))
+    @property
+    def update_mode(self):return 'branch' if self.config.get('update_source') == 'branch' else 'release'
+
     def machine_key(self):return (self.state/'backup.key').read_text()
+
+    # --- State -----------------------------------------------------------------
 
     def jobs(self, limit=30):
         result = []
         for path in sorted((self.state/'jobs').glob('*.json'),reverse=True):
             try:result.append(json.loads(path.read_text()))
             except (OSError,ValueError):pass
-        return sorted(result,key=lambda x:x.get('created_at',''),reverse=True)[:limit] if limit else result
+        result = sorted(result,key=lambda x:x.get('created_at',''),reverse=True)
+        return result[:limit] if limit else result
 
     def backups(self):
         result = []
@@ -89,15 +97,25 @@ class Engine:
             try:
                 row = json.loads(path.read_text())
                 payload = self.state/'backups'/(identifier(row['id'])+'.pcbackup')
-                if payload.is_file():result.append({**row,'bytes':payload.stat().st_size})
+                if payload.is_file():
+                    kind = row.get('kind') or ('imported' if row.get('imported') else 'legacy' if row.get('automatic') else 'manual')
+                    result.append({**row,'kind':kind,'bytes':payload.stat().st_size})
             except (OSError,ValueError,KeyError):pass
         return sorted(result,key=lambda x:x['created_at'],reverse=True)
 
+    def storage(self, backups=None):
+        rows = self.backups() if backups is None else backups
+        return {'backups_bytes':sum(r['bytes'] for r in rows),'free_bytes':archive.free_bytes(self.state),
+                'keep_automatic':self.keep_automatic,'min_free_bytes':self.min_free}
+
     def status(self):
-        return {'available':True,'protocol':1,'deployment':self.config['deployment'],
-                'jobs':self.jobs(),'backups':self.backups(),'max_upload_bytes':archive.MAX_BYTES,
-                'recovery_required':any(j.get('recovery_required') for j in self.jobs(limit=None)),
-                'can_update':(Path(self.config['project'])/'.git').exists()}
+        jobs = self.jobs(limit=None)
+        backups = self.backups()
+        return {'available':True,'protocol':2,'deployment':self.config['deployment'],
+                'jobs':jobs[:30],'backups':backups,'max_upload_bytes':archive.MAX_BYTES,
+                'recovery_required':any(j.get('recovery_required') for j in jobs),
+                'can_update':(Path(self.config['project'])/'.git').exists(),
+                'update_source':self.update_mode,'storage':self.storage(backups)}
 
     def driver(self, job=None):
         def log(message):
@@ -123,10 +141,30 @@ class Engine:
         if self._lock_file:self._lock_file.close();self._lock_file = None
         self.lock.release()
 
+    def prune_jobs(self, keep=200):
+        rows = self.jobs(limit=None)
+        for row in rows[keep:]:
+            if row.get('recovery_required') or row.get('status') in {'queued','running'}:continue
+            if (self.state/'work'/str(row.get('id'))).exists():continue
+            try:(self.state/'jobs'/(identifier(row['id'])+'.json')).unlink(missing_ok=True)
+            except (ValueError,KeyError):pass
+
+    def prune_backups(self, protect=()):
+        """Keep the newest safety backups; manual, shell, imported and exported backups stay."""
+        safety = [r for r in self.backups() if r.get('kind') == 'safety']
+        removed = []
+        for row in safety[self.keep_automatic:]:
+            if row['id'] in protect:continue
+            for suffix in ('.pcbackup','.json'):(self.state/'backups'/(row['id']+suffix)).unlink(missing_ok=True)
+            removed.append(row['id'])
+        return removed
+
+    # --- Submission ------------------------------------------------------------
+
     def submit(self, payload, *, asynchronous=True):
         operation = payload.get('operation')
-        if operation not in {'backup','update','inspect','restore','export'}:raise ValueError('OPERATION_INVALID')
-        if operation in {'update','restore'} and payload.get('confirmation') != operation.upper():raise ValueError('CONFIRMATION_REQUIRED')
+        if operation not in OPERATIONS:raise ValueError('OPERATION_INVALID')
+        if operation in CONFIRMED and payload.get('confirmation') != operation.upper():raise ValueError('CONFIRMATION_REQUIRED')
         if operation in {'restore','inspect','export'}:identifier(payload.get('backup_id'))
         password = str(payload.get('password') or '')
         if len(password) > 1024:raise ValueError('BACKUP_PASSWORD_INVALID')
@@ -146,31 +184,44 @@ class Engine:
             if self.lock.locked():self.release()
             raise
 
+    # --- Backups -----------------------------------------------------------------
+
+    def check_space(self, driver, extra=0):
+        """Refuse before stopping anything when the safety backup would not fit."""
+        estimate = driver.database_size() + extra
+        for _, path in archive.data_entries(driver.data):
+            try:estimate += path.stat().st_size
+            except OSError:pass
+        if archive.free_bytes(self.state) < estimate + self.min_free:raise ValueError('MAINTENANCE_DISK_SPACE')
+        return estimate
+
     def snapshot(self, driver, stage):
         stage.mkdir(parents=True,exist_ok=True,mode=0o700)
         driver.log('Datenbank wird gesichert')
         driver.dump(stage/'database.pgdump')
         (stage/'environment.json').write_text(json.dumps(driver.environment()))
         os.chmod(stage/'environment.json',0o600)
-        driver.log('Dateien und gespeicherte Daten werden gesichert')
-        copy_data(driver.data,stage/'data')
         return {'app_version':driver.version(),'created_at':utc(),'deployment':driver.mode}
 
-    def store_backup(self, stage, metadata, password, automatic=False):
+    def _row(self, bid, target, manifest, kind):
+        row = {k:v for k,v in manifest.items() if k != 'files'}
+        row.update(id=bid,automatic=kind in {'safety','local'},kind=kind,file_count=len(manifest.get('files',{})))
+        atomic_json(target.with_suffix('.json'),row)
+        return row
+
+    def store_backup(self, driver, stage, metadata, password, kind):
         bid = uuid.uuid4().hex
-        compressed = stage.parent/(bid+'.tar.gz')
-        manifest = archive.pack(stage,compressed,metadata)
         target = self.state/'backups'/(bid+'.pcbackup')
         staging = target.with_suffix('.partial')
+        driver.log('Datenbank, Einstellungen und gespeicherte Dateien werden verschlüsselt gesichert')
+        entries = [('database.pgdump',stage/'database.pgdump'),('environment.json',stage/'environment.json'),
+                   *archive.data_entries(driver.data)]
         try:
-            archive.encrypt(compressed,staging,password)
+            manifest = archive.write_backup(staging,password,metadata,entries,archive.space_guard(self.state,self.min_free//4))
             staging.replace(target)
-            row = {k:v for k,v in manifest.items() if k != 'files'}
-            row.update(id=bid,automatic=automatic)
-            atomic_json(target.with_suffix('.json'),row)
-            return row
+            return self._row(bid,target,manifest,kind)
         finally:
-            compressed.unlink(missing_ok=True);staging.unlink(missing_ok=True)
+            staging.unlink(missing_ok=True)
 
     def source_backup(self, bid):
         bid = identifier(bid)
@@ -178,47 +229,222 @@ class Engine:
         if not meta.is_file():raise ValueError('BACKUP_NOT_FOUND')
         return self.state/'backups'/(bid+'.pcbackup'),json.loads(meta.read_text())
 
+    def _source_password(self, info, password):
+        return self.machine_key() if info.get('automatic') else password
+
+    def _verified(self, path, info, manifest):
+        atomic_json(path.with_suffix('.json'),{**info,**{k:v for k,v in manifest.items() if k!='files'},
+                                                'file_count':len(manifest.get('files',{})),'verified':True})
+
+    def inspect_backup(self, bid, password):
+        path, info = self.source_backup(bid)
+        manifest = archive.read_backup(path,self._source_password(info,password))
+        self._verified(path,info,manifest)
+        return manifest
+
     def decode(self, bid, password, work):
         path, info = self.source_backup(bid)
-        compressed = work/'input.tar.gz'
-        archive.decrypt(path,compressed,self.machine_key() if info.get('automatic') else password)
         stage = work/'input'
-        metadata = archive.unpack(compressed,stage)
-        atomic_json(path.with_suffix('.json'),{**info,**{k:v for k,v in metadata.items() if k!='files'},'verified':True})
-        compressed.unlink()
-        return stage,metadata
+        if archive.free_bytes(self.state) < path.stat().st_size + self.min_free:raise ValueError('MAINTENANCE_DISK_SPACE')
+        manifest = archive.read_backup(path,self._source_password(info,password),extract_to=stage,
+                                       guard=archive.space_guard(self.state,self.min_free//4))
+        self._verified(path,info,manifest)
+        return stage,manifest
+
+    def export_backup(self, bid, source_password, password):
+        path, info = self.source_backup(bid)
+        if archive.free_bytes(self.state) < path.stat().st_size + self.min_free:raise ValueError('MAINTENANCE_DISK_SPACE')
+        new = uuid.uuid4().hex
+        target = self.state/'backups'/(new+'.pcbackup')
+        staging = target.with_suffix('.partial')
+        writer = archive.BackupWriter(staging,password,archive.space_guard(self.state,self.min_free//4))
+        try:
+            manifest = archive.read_backup(path,self._source_password(info,source_password),writer=writer)
+            final = writer.finish({k:v for k,v in manifest.items() if k in {'app_version','created_at','deployment'}})
+        except BaseException:
+            writer.abort()
+            raise
+        staging.replace(target)
+        self._verified(path,info,manifest)
+        return self._row(new,target,final,'export')
+
+    # --- Update source ---------------------------------------------------------
+
+    def _git(self, *args, cwd=None, timeout=180, check=True):
+        command = ['git','-c','core.hooksPath=/dev/null',*args]
+        if cwd:command[1:1] = ['-C',str(cwd)]
+        result = subprocess.run(command,stdin=subprocess.DEVNULL,stdout=subprocess.PIPE,stderr=subprocess.PIPE,
+                                timeout=timeout,env={**os.environ,'GIT_TERMINAL_PROMPT':'0'},text=True)
+        if check and result.returncode:raise RuntimeError('UPDATE_FETCH_FAILED')
+        return result.stdout.strip() if check else result.returncode == 0
+
+    def release_tags(self, timeout=30):
+        output = self._git('ls-remote','--tags','--refs',self.config['repository'],timeout=timeout)
+        return [line.split('refs/tags/',1)[1] for line in output.splitlines() if 'refs/tags/' in line]
+
+    def release_target(self, installed, timeout=30):
+        if self.update_mode == 'branch':
+            return {'source':'branch','branch':self.config.get('branch','main')}
+        tag, key = newest_tag(self.release_tags(timeout),installed)
+        if not tag:raise ValueError('UPDATE_NO_RELEASE_FOUND')
+        current = version_key(installed)
+        return {'source':'release','tag':tag,'version':display(tag[1:] if tag[:1] in 'vV' else tag),
+                'newer':current is None or key > current}
+
+    def update_preview(self, refresh=False):
+        """Which version an update would install; cached briefly, no lock needed."""
+        with self._preview_lock:
+            stamp, cached = self._preview
+            if cached and not refresh and time.monotonic()-stamp < 60:return cached
+            installed = self.driver().version()
+            result = {'installed':installed,'source':self.update_mode,'checked_at':utc(),
+                      'can_update':(Path(self.config['project'])/'.git').exists()}
+            try:
+                target = self.release_target(installed,timeout=10)
+                if target['source'] == 'release':
+                    result.update(target=target['version'],tag=target['tag'],available=target['newer'])
+                else:result.update(branch=target['branch'],available=None)
+            except (ValueError,RuntimeError,OSError,subprocess.TimeoutExpired) as exc:
+                result.update(available=False,error=str(exc) if str(exc) == 'UPDATE_NO_RELEASE_FOUND' else 'UPDATE_CHECK_FAILED')
+            self._preview = (time.monotonic(),result)
+            return result
 
     def fetch_source(self, driver):
         source = self.state/'source'
         if not source.exists():
             driver.run(['git','-c','core.hooksPath=/dev/null','clone','--no-checkout',self.config['repository'],str(source)],timeout=180)
         # Root owns this repository. Never use application-controlled Git config.
-        import subprocess
-        base = ['git','-C',str(source),'-c','core.hooksPath=/dev/null']
-        for args in [['fetch','origin',self.config.get('branch','main')],['checkout','--force','FETCH_HEAD']]:
-            result = subprocess.run([*base,*args],stdin=subprocess.DEVNULL,stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=180)
-            if result.returncode:raise RuntimeError('UPDATE_FETCH_FAILED')
-        commit = subprocess.check_output([*base,'rev-parse','HEAD'],text=True).strip()
+        self._git('remote','set-url','origin',self.config['repository'],cwd=source)
+        branch = self.config.get('branch','main')
+        target = self.release_target(driver.version())
+        self._git('fetch','--no-tags','origin',branch,cwd=source)
+        if target['source'] == 'release':
+            ref = 'refs/tags/'+target['tag']
+            self._git('fetch','--no-tags','--force','origin',ref+':'+ref,cwd=source)
+            self._git('checkout','--force','--detach',ref,cwd=source)
+        else:
+            self._git('checkout','--force','--detach','FETCH_HEAD',cwd=source)
+        commit = self._git('rev-parse','HEAD',cwd=source)
         if not re.fullmatch('[a-f0-9]{40,64}',commit):raise ValueError('UPDATE_REVISION_INVALID')
-        return source,commit
+        return source,commit,target
+
+    def update_needed(self, source, previous, commit, installed, target):
+        if previous == commit:return 'current'
+        if target.get('source') == 'release':
+            new, old = version_key(target.get('version')), version_key(installed)
+            if new and old and new < old:return 'newer_installed'
+            # A checkout that already contains the tagged commit (e.g. main after a release) is not downgraded.
+            if (self._git('cat-file','-e',previous+'^{commit}',cwd=source,check=False)
+                    and self._git('merge-base','--is-ancestor',commit,previous,cwd=source,check=False)):
+                return 'contained'
+        return None
+
+    # --- Host steps --------------------------------------------------------------
+
+    def applied_steps(self):
+        try:return json.loads((self.state/'host-steps.json').read_text()).get('applied',{})
+        except (OSError,ValueError):return {}
+
+    def pending_steps(self, driver, source):
+        directory = Path(source)/'install/host-steps'
+        if not directory.is_dir():return []
+        applied, result = self.applied_steps(), []
+        for path in sorted(directory.iterdir()):
+            match = HOST_STEP.fullmatch(path.name)
+            if not match or path.name in applied or match[2] not in {'all',driver.mode}:continue
+            if path.is_symlink() or not path.is_file():raise ValueError('HOST_STEP_INVALID')
+            result.append(path)
+        return result
+
+    def run_steps(self, driver, source):
+        done = []
+        for path in self.pending_steps(driver,source):
+            driver.log('Systemschritt '+path.name[:-3]+' wird ausgeführt')
+            try:driver.host_step(path,source)
+            except Exception:raise RuntimeError('HOST_STEP_FAILED:'+path.name[:3]) from None
+            done.append(path.name)
+        return done
+
+    def mark_steps(self, names, commit=None):
+        if not names:return
+        applied = self.applied_steps()
+        for name in names:applied[name] = {'at':utc(),'commit':commit}
+        atomic_json(self.state/'host-steps.json',{'applied':applied})
+
+    def startup(self):
+        """Wiring and host steps that an older updater could not run yet."""
+        driver = self.driver()
+        try:driver.ensure_env_wiring()
+        except Exception:pass
+        source = self.state/'source'
+        if not (source/'.git').is_dir() or not (Path(self.config['project'])/'.git').exists():return
+        try:
+            if driver.run(['git','rev-parse','HEAD'],target=True,quiet=True) != self._git('rev-parse','HEAD',cwd=source):return
+            if not self.pending_steps(driver,source):return
+            self.acquire()
+        except Exception:return
+        job = {'id':uuid.uuid4().hex,'operation':'host_steps','status':'running','created_at':utc(),
+               'actor':'system','message':'Systemschritte werden nachgeholt','events':[]}
+        try:
+            self.save(job)
+            steps_driver = self.driver(job)
+            done = self.run_steps(steps_driver,source)
+            self.mark_steps(done,self._git('rev-parse','HEAD',cwd=source))
+            job.update(status='succeeded',message='Abgeschlossen',finished_at=utc(),steps=done)
+        except Exception as exc:
+            job.update(status='failed',finished_at=utc(),error=str(exc) if re.fullmatch(r'HOST_STEP_[A-Z_]+(:\d{3})?',str(exc)) else 'HOST_STEP_FAILED')
+        finally:
+            try:self.save(job)
+            finally:self.release()
+
+    # --- Maintenance mode ------------------------------------------------------
+
+    def drain(self, driver, job):
+        """Stop accepting new work, then wait for running background tasks."""
+        try:driver.set_maintenance(job['id'])
+        except Exception:driver.log('Wartungsmodus konnte nicht gemeldet werden; laufende Aufgaben werden trotzdem abgewartet')
+        deadline = time.monotonic()+float(self.config.get('drain_timeout',600))
+        last = None
+        while True:
+            tasks = driver.background_tasks()
+            if tasks is None:
+                driver.log('Hintergrundaufgaben sind nicht abfragbar; die Dienste werden angehalten');return
+            if not tasks:return
+            protected = [t for t in tasks if t['name'].startswith(PROTECTED_TASKS)]
+            if time.monotonic() >= deadline:
+                if protected:raise ValueError('MAINTENANCE_PROTECTED_TASK_RUNNING')
+                driver.log(f'{len(tasks)} Hintergrundaufgabe(n) werden beim Anhalten beendet');return
+            if len(tasks) != last:
+                last = len(tasks)
+                driver.log(f'Wartungsmodus aktiv: warte auf {last} laufende Hintergrundaufgabe(n)')
+            time.sleep(float(self.config.get('drain_poll_seconds',3)))
+
+    # --- Transactions ------------------------------------------------------------
 
     def swap_data(self, driver, stage, work):
         journal = driver.data/'.maintenance-rollback'
         journal.mkdir(mode=0o700,exist_ok=False)
-        atomic_json(work/'data-journal.json',{'directory':str(journal),'moved':[],'installed':[]})
-        state = json.loads((work/'data-journal.json').read_text())
-        for path in list(driver.data.iterdir()):
-            if path.name in archive.EXCLUDED:continue
+        state = {'directory':str(journal),'moved':[],'installed':[]}
+        atomic_json(work/'data-journal.json',state)
+        for name in archive.DATA_INCLUDE:
+            path = driver.data/name
             if path.is_symlink():raise ValueError('RESTORE_TARGET_SYMLINK')
-            state['moved'].append(path.name);atomic_json(work/'data-journal.json',state)
-            path.rename(journal/path.name)
+            if not path.exists():continue
+            state['moved'].append(name);atomic_json(work/'data-journal.json',state)
+            path.rename(journal/name)
         incoming = stage/'data'
-        if incoming.exists():
-            for path in incoming.iterdir():
-                state['installed'].append(path.name);atomic_json(work/'data-journal.json',state)
-                destination = driver.data/path.name
-                if path.is_dir():shutil.copytree(path,destination)
-                else:shutil.copy2(path,destination)
+        for name in archive.DATA_INCLUDE:
+            path = incoming/name
+            if not path.is_dir():continue
+            state['installed'].append(name);atomic_json(work/'data-journal.json',state)
+            destination = driver.data/name
+            try:path.rename(destination)
+            except OSError as exc:
+                if exc.errno != errno.EXDEV:raise
+                shutil.copytree(path,destination)
+        if incoming.is_dir():
+            ignored = [p.name for p in incoming.iterdir() if p.name not in archive.DATA_INCLUDE]
+            if ignored:driver.log(f'{len(ignored)} Einträge außerhalb der Anwendungsdaten wurden nicht übernommen')
         driver.fix_ownership()
 
     def rollback_data(self, driver, work):
@@ -228,13 +454,27 @@ class Engine:
         journal = driver.data/'.maintenance-rollback'
         for name in state['installed']:
             target = driver.data/name
-            if target.is_dir():shutil.rmtree(target)
+            if target.is_dir() and not target.is_symlink():shutil.rmtree(target)
             else:target.unlink(missing_ok=True)
         for name in state['moved']:
             original = journal/name
             if original.exists():original.rename(driver.data/name)
         if journal.exists():shutil.rmtree(journal)
         entry.unlink()
+
+    def save_managed(self, driver, work):
+        path = driver.managed_env
+        value = {'exists':path.is_file(),'content':path.read_text() if path.is_file() else ''}
+        atomic_json(work/'managed.before',value)
+
+    def restore_managed(self, driver, work):
+        value = json.loads((work/'managed.before').read_text())
+        if value.get('exists'):
+            temporary = driver.managed_env.with_name(driver.managed_env.name+'.new')
+            fd = os.open(temporary,os.O_WRONLY|os.O_CREAT|os.O_TRUNC,0o600)
+            with os.fdopen(fd,'w') as out:out.write(value['content']);out.flush();os.fsync(out.fileno())
+            temporary.replace(driver.managed_env)
+        else:driver.managed_env.unlink(missing_ok=True)
 
     def transaction(self, driver, job, work, values):
         atomic_json(work/'transaction.json',values)
@@ -262,7 +502,9 @@ class Engine:
             # Reuse the rename recovery path: it handles a crash between either rename.
             driver.rollback_database(name,old)
         self.rollback_data(driver,work)
+        if (work/'managed.before').exists():self.restore_managed(driver,work)
         if (work/'environment.before').exists():
+            # Alpha.73/74 journals rewrote the main environment file.
             write_env(driver.env_file,json.loads((work/'environment.before').read_text()))
         driver.start();driver.healthy()
         entry.unlink()
@@ -272,34 +514,48 @@ class Engine:
         work = self.state/'work'/job['id'];work.mkdir(mode=0o700,exist_ok=True)
         driver = self.driver(job)
         restart_agent = False
+        maintenance = False
         try:
             job['status']='running';self.save(job)
             operation = job['operation']
             password = str(payload.get('password') or '')
-            if operation in {'inspect','export','restore'}:
+            if operation == 'recover':
+                self._recover(skip=job['id'])
+            elif operation == 'inspect':
+                driver.log('Sicherung wird entschlüsselt und vollständig geprüft')
+                metadata = self.inspect_backup(payload['backup_id'],password)
+                job['inspection'] = {k:v for k,v in metadata.items() if k!='files'}
+                job['inspection']['file_count'] = len(metadata['files'])
+            elif operation == 'export':
+                driver.log('Sicherung wird geprüft und mit dem neuen Passwort verschlüsselt')
+                job['backup'] = self.export_backup(payload['backup_id'],password,password)
+            if operation == 'restore':
                 driver.log('Sicherung wird entschlüsselt und vollständig geprüft')
                 stage, metadata = self.decode(payload['backup_id'],password,work)
-                if operation == 'inspect':
-                    job['inspection'] = {k:v for k,v in metadata.items() if k!='files'}
-                    job['inspection']['file_count'] = len(metadata['files'])
-                elif operation == 'export':
-                    job['backup'] = self.store_backup(stage,{k:v for k,v in metadata.items() if k not in {'files','format'}},password)
             if operation in {'backup','update','restore'}:
                 driver.ensure_managed()
-                source = commit = None
+                source = commit = target = None
+                steps = []
                 if operation == 'update':
                     if not (Path(self.config['project'])/'.git').exists():raise ValueError('UPDATE_REQUIRES_GIT_CHECKOUT')
                     driver.log('Neue Programmversion wird abgerufen')
-                    source,commit = self.fetch_source(driver)
+                    source,commit,target = self.fetch_source(driver)
+                    job['target'] = target;self.save(job)
                     previous = driver.run(['git','rev-parse','HEAD'],target=True,quiet=True)
-                    if previous == commit:
-                        job.update(status='succeeded',message='Bereits auf dem aktuellen Stand',finished_at=utc());self.save(job);return
+                    reason = self.update_needed(source,previous,commit,driver.version(),target)
+                    if reason:
+                        job.update(status='succeeded',message=NOOP[reason],finished_at=utc(),noop=reason);self.save(job);return
                 if operation == 'restore':
                     # Fully restore/migrate a scratch DB before touching the live database.
                     temporary = 'pc_new_'+job['id'][:16]
                     env = json.loads((stage/'environment.json').read_text())
                     job['prepared_database']=temporary;self.save(job)
+                    driver.log('Datenbank wird in einer Testkopie vorbereitet und migriert')
                     driver.prepare_database(stage/'database.pgdump',temporary,env.get('PENGUCOACH_ENCRYPTION_KEY'))
+                driver.log('Freier Speicherplatz wird geprüft')
+                self.check_space(driver)
+                maintenance = True
+                self.drain(driver,job)
                 driver.log('Dienste werden für eine konsistente Sicherung angehalten')
                 try:
                     driver.quiesce()
@@ -308,20 +564,19 @@ class Engine:
                     driver.start()
                     raise
                 try:
-                    automatic = operation != 'backup' or bool(payload.get('local'))
-                    backup = self.store_backup(work/'safety',before,self.machine_key() if automatic else password,automatic)
+                    kind = 'safety' if operation != 'backup' else 'local' if payload.get('local') else 'manual'
+                    backup = self.store_backup(driver,work/'safety',before,self.machine_key() if kind in {'safety','local'} else password,kind)
                     job['backup']=backup;self.save(job)
                     if operation == 'update':
                         driver.log('Programm und Abhängigkeiten werden aktualisiert')
-                        (work/'environment.before').write_text(json.dumps(driver.environment()))
                         self.transaction(driver,job,work,{'old_commit':previous,'images':driver.images(),'database_may_have_changed':True})
                         if driver.mode == 'native':driver.run(['systemctl','stop','pengucoach-web'])
                         driver.update_source(source,commit)
                         driver.build();driver.migrate()
-                        values = read_env(driver.env_file);values['PENGUCOACH_APP_VERSION']=driver.version();write_env(driver.env_file,values)
+                        steps = self.run_steps(driver,source)
                     elif operation == 'restore':
-                        (work/'environment.before').write_text(json.dumps(driver.environment()))
                         old = 'pc_old_'+job['id'][:16]
+                        self.save_managed(driver,work)
                         self.transaction(driver,job,work,{'old_database':old,'discard_database':'pc_bad_'+job['id'][:16]})
                         driver.swap_database(temporary,old)
                         self.swap_data(driver,stage,work)
@@ -334,12 +589,18 @@ class Engine:
                 driver.log('Dienste starten; Erreichbarkeit wird geprüft')
                 driver.start();driver.healthy()
                 # Persist commit before deleting the rollback journal. Recovery then only cleans up.
-                atomic_json(work/'committed.json',{'operation':operation,'old_database':old if operation=='restore' else None})
+                atomic_json(work/'committed.json',{'operation':operation,'old_database':old if operation=='restore' else None,'steps':steps,'commit':commit})
                 (work/'transaction.json').unlink(missing_ok=True);sync_directory(work)
                 shutil.rmtree(driver.data/'.maintenance-rollback',ignore_errors=True)
+                self.mark_steps(steps,commit)
                 if operation == 'restore':
                     try:driver.drop_database(old)
                     except Exception:job.update(cleanup_pending=True,cleanup_database=old)
+                if operation in {'update','restore'}:
+                    try:
+                        removed = self.prune_backups(protect={backup['id']})
+                        if removed:job['pruned_backups'] = len(removed)
+                    except OSError:pass
                 if operation == 'update':
                     # Update agent code only from the root-owned, fixed upstream checkout.
                     program = self.config.get('program')
@@ -347,9 +608,9 @@ class Engine:
                         try:
                             for path in (source/'pengucoach/maintenance').glob('*.py'):
                                 if path.is_symlink():raise ValueError('UPDATE_AGENT_SYMLINK')
-                                target=Path(program)/path.name
-                                temporary=target.with_suffix('.new')
-                                shutil.copyfile(path,temporary);temporary.replace(target)
+                                target_file=Path(program)/path.name
+                                temporary_file=target_file.with_suffix('.new')
+                                shutil.copyfile(path,temporary_file);temporary_file.replace(target_file)
                             restart_agent = True
                         except Exception:job['agent_refresh_required']=True
             job['status']='succeeded';job['message']='Abgeschlossen';job['finished_at']=utc();self.save(job)
@@ -364,44 +625,64 @@ class Engine:
             self.save(job)
         finally:
             payload.clear()  # passwords are never persisted in operation history.
+            if maintenance:
+                try:driver.clear_maintenance()
+                except Exception:pass
             if not job.get('recovery_required'):
                 if job.get('prepared_database'):
                     try:
                         if driver.database_exists(job['prepared_database']):driver.drop_database(job['prepared_database'])
                     except Exception:pass
                 if not job.get('cleanup_pending'):shutil.rmtree(work,ignore_errors=True)
+            try:self.prune_jobs()
+            except OSError:pass
             self.release()
-        if restart_agent and self.config.get('restart_after_update'):
+        if restart_agent and self.allow_restart and self.config.get('restart_after_update'):
             # systemd Restart=always / Docker unless-stopped starts the new code.
             os._exit(0)
 
     def recover(self):
         self.acquire()
-        try:
-            for partial in (self.state/'backups').glob('*.partial'):partial.unlink(missing_ok=True)
-            for row in self.jobs(limit=None):
-                if row.get('status') in {'queued','running'} and not (self.state/'work'/row['id']).exists():
-                    row.update(status='failed',error='MAINTENANCE_INTERRUPTED',finished_at=utc());self.save(row)
-            for work in (self.state/'work').iterdir():
-                path = self.state/'jobs'/(work.name+'.json')
-                if not path.exists():continue
-                job = json.loads(path.read_text())
-                if job.get('status') not in {'queued','running'} and not job.get('recovery_required') and not (work/'committed.json').exists():continue
-                try:
-                    driver = self.driver(job)
-                    if (work/'committed.json').exists():
-                        committed=json.loads((work/'committed.json').read_text())
-                        if committed.get('old_database') and driver.database_exists(committed['old_database']):
-                            driver.drop_database(committed['old_database'])
-                        shutil.rmtree(driver.data/'.maintenance-rollback',ignore_errors=True)
-                        job.update(status='succeeded',message='Abgeschlossen',finished_at=utc(),recovery_required=False,cleanup_pending=False)
-                    else:
-                        if (work/'transaction.json').exists():self.rollback(driver,work,job)
-                        else:driver.start()
-                        job.update(status='failed',error='MAINTENANCE_INTERRUPTED',finished_at=utc(),recovery_required=False)
-                    if job.get('prepared_database') and driver.database_exists(job['prepared_database']):
-                        driver.drop_database(job['prepared_database'])
-                    shutil.rmtree(work)
-                except Exception:job.update(status='failed',error='MAINTENANCE_RECOVERY_REQUIRED',recovery_required=True)
-                self.save(job)
+        try:self._recover()
         finally:self.release()
+
+    def _recover(self, skip=None):
+        for partial in (self.state/'backups').glob('*.partial'):partial.unlink(missing_ok=True)
+        for row in self.jobs(limit=None):
+            if row.get('id') == skip:continue
+            if row.get('status') in {'queued','running'} and not (self.state/'work'/row['id']).exists():
+                row.update(status='failed',error='MAINTENANCE_INTERRUPTED',finished_at=utc());self.save(row)
+        for work in (self.state/'work').iterdir():
+            if work.name == skip:continue
+            path = self.state/'jobs'/(work.name+'.json')
+            if not path.exists():continue
+            job = json.loads(path.read_text())
+            if job.get('status') not in {'queued','running'} and not job.get('recovery_required') and not (work/'committed.json').exists():continue
+            try:
+                driver = self.driver(job)
+                if (work/'committed.json').exists():
+                    committed=json.loads((work/'committed.json').read_text())
+                    if committed.get('old_database') and driver.database_exists(committed['old_database']):
+                        driver.drop_database(committed['old_database'])
+                    shutil.rmtree(driver.data/'.maintenance-rollback',ignore_errors=True)
+                    self.mark_steps(committed.get('steps') or [],committed.get('commit'))
+                    job.update(status='succeeded',message='Abgeschlossen',finished_at=utc(),recovery_required=False,cleanup_pending=False)
+                else:
+                    if (work/'transaction.json').exists():self.rollback(driver,work,job)
+                    else:driver.start()
+                    job.update(status='failed',error='MAINTENANCE_INTERRUPTED',finished_at=utc(),recovery_required=False)
+                if job.get('prepared_database') and driver.database_exists(job['prepared_database']):
+                    driver.drop_database(job['prepared_database'])
+                shutil.rmtree(work)
+            except Exception:job.update(status='failed',error='MAINTENANCE_RECOVERY_REQUIRED',recovery_required=True)
+            self.save(job)
+        # Without a journal nothing can be rolled back. Release the block only when
+        # the application demonstrably runs again; otherwise keep it for an administrator.
+        for row in self.jobs(limit=None):
+            if row.get('id') == skip or not row.get('recovery_required') or (self.state/'work'/row['id']).exists():continue
+            try:
+                driver = self.driver(row)
+                driver.start();driver.healthy()
+                row.update(recovery_required=False,recovery_note='NO_JOURNAL_SERVICES_HEALTHY')
+            except Exception:pass
+            self.save(row)

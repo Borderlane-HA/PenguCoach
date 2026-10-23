@@ -45,3 +45,12 @@ test('successful reads keep credentials and cancellation; only mutations invalid
   await api('/settings/appearance',{method:'PUT',body:'{}'});
   assert.deepEqual(events,['pengucoach-data-changed']);
 });
+test('maintenance mode becomes a readable message without expiring the session',async()=>{
+  const events=[];global.window={dispatchEvent:event=>events.push(event.type)};
+  global.fetch=async()=>Response.json({detail:'MAINTENANCE_ACTIVE'},{status:503});
+  await assert.rejects(api('/settings/appearance',{method:'PUT',body:'{}'}),error=>error.status===503&&/Systemwartung/.test(error.message));
+  global.localStorage={getItem:()=> 'en'};
+  await assert.rejects(api('/settings/appearance',{method:'PUT',body:'{}'}),error=>/maintenance is in progress/.test(error.message));
+  delete global.localStorage;
+  assert.deepEqual(events,[]);
+});

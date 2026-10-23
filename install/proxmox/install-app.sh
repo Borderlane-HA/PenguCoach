@@ -254,6 +254,16 @@ PrivateTmp=true
 WantedBy=multi-user.target
 UNIT
 
+# Maintenance restores write the backup's encryption key and a new session secret
+# to a separate, optional file that systemd loads after the main environment.
+for svc in api worker scheduler; do
+  mkdir -p "/etc/systemd/system/pengucoach-$svc.service.d"
+  printf '[Service]\nEnvironmentFile=-%s\n' "$ENV_DIR/pengucoach.managed.env" \
+    > "/etc/systemd/system/pengucoach-$svc.service.d/10-pengucoach-maintenance-env.conf"
+done
+# Build caches stay outside the data directory (the service user's home).
+install -d -m 0750 -o "$APP_USER" -g "$APP_USER" /var/cache/pengucoach-build
+
 cat > /etc/nginx/sites-available/pengucoach <<'NGINX'
 server {
     listen 80 default_server;

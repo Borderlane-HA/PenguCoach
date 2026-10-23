@@ -1,21 +1,15 @@
 """Admin-only bridge to the host's independent maintenance service."""
-import asyncio
 from typing import Literal
 
 import httpx
-from celery.result import AsyncResult
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from pengucoach.auth.dependencies import admin_user
-from pengucoach.db.models import BackgroundJob, User
-from pengucoach.db.session import get_db
+from pengucoach.db.models import User
 from pengucoach.maintenance import client
 from pengucoach.maintenance.engine import identifier
-from worker.celery_app import app
 
 router = APIRouter(prefix='/admin/system',tags=['admin-system'])
 MAX_CHUNK = 8*1024**2
@@ -23,7 +17,7 @@ MAX_CHUNK = 8*1024**2
 
 class JobIn(BaseModel):
     model_config = ConfigDict(extra='forbid')
-    operation: Literal['update','backup','inspect','restore','export']
+    operation: Literal['update','backup','inspect','restore','export','recover']
     password: str = Field(default='',max_length=1024)
     backup_id: str | None = Field(default=None,pattern=r'^[a-f0-9]{32}$')
     confirmation: str = Field(default='',max_length=20)
@@ -52,23 +46,16 @@ async def status(_:User=Depends(admin_user)):
         raise
 
 
-async def ensure_no_active_jobs(db):
-    from datetime import datetime,timedelta,timezone
-    rows = (await db.scalars(select(BackgroundJob).where(BackgroundJob.created_at>=datetime.now(timezone.utc)-timedelta(hours=12))
-                            .order_by(BackgroundJob.created_at.desc()).limit(200))).all()
-    def active():
-        for row in rows:
-            if row.status in {'finished','cancelled','cancel_requested','failed'}:continue
-            if AsyncResult(str(row.id),app=app).state in {'PROGRESS','STARTED','RETRY'}:return True
-        return False
-    try:busy = await asyncio.wait_for(asyncio.to_thread(active),3)
-    except Exception:raise HTTPException(409,'BACKGROUND_JOB_STATUS_UNAVAILABLE') from None
-    if busy:raise HTTPException(409,'BACKGROUND_JOBS_RUNNING')
+@router.get('/update')
+async def update_preview(refresh:bool=Query(default=False),_:User=Depends(admin_user)):
+    # The host agent resolves the newest eligible release tag; no request data reaches Git.
+    return await proxy('GET','/update?refresh=1' if refresh else '/update',timeout=25)
 
 
 @router.post('/jobs',status_code=202)
-async def start_job(payload:JobIn,user:User=Depends(admin_user),db:AsyncSession=Depends(get_db)):
-    if payload.operation in {'update','restore','backup'}:await ensure_no_active_jobs(db)
+async def start_job(payload:JobIn,user:User=Depends(admin_user)):
+    # Running background work is drained by the host agent (maintenance mode), which
+    # sees every Celery task instead of only database-tracked AI jobs.
     return await proxy('POST','/jobs',json={**payload.model_dump(),'actor':str(user.id)})
 
 

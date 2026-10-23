@@ -894,3 +894,11 @@ html[data-theme="custom"] .maintenance-tabs button.ghost.active{color:var(--text
 .auth-loading>p,.auth-loading>small{max-width:460px;max-width:min(460px,calc(100vw - 40px));text-align:center;line-height:1.6;color:var(--text)}
 .auth-loading>small{font-size:.8rem}
 .auth-loading>button.ghost{background:var(--panel);color:var(--text);border:1px solid var(--border);box-shadow:none}
+
+/* Alpha.75 maintenance: update target, storage and recovery */
+.maintenance-target{display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;margin-top:14px;padding:12px 14px;border:1px solid var(--border);border-radius:13px;background:var(--panel2);font-size:.85rem;color:var(--text)}
+.maintenance-target strong{font-weight:750}.maintenance-target .ghost.compact{margin-left:auto}
+.maintenance-storage{margin:6px 0 0;font-size:.8rem;color:var(--text);line-height:1.5}
+.maintenance-recovery{display:flex;gap:16px;align-items:center;justify-content:space-between;flex-wrap:wrap}.maintenance-recovery p{margin:0}
+.maintenance-dialog-target{display:block;margin-bottom:8px;font-size:1.05rem}
+@media(max-width:480px){.maintenance-target .ghost.compact{margin-left:0}.maintenance-recovery>button{width:100%}}

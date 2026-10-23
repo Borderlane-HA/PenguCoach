@@ -45,19 +45,25 @@ def main():
     elif args.operation in {'restore','inspect','export'}:payload['password']=getpass.getpass('Backup password (empty for a local automatic backup): ')
     elif args.operation=='backup':payload['local']=True
     try:job=call(config,'POST','/jobs',payload)
+    except RuntimeError as exc:raise SystemExit('[PenguCoach] '+str(exc)) from None
     except (OSError,ConnectionError,http.client.HTTPException):
-        engine=Engine(config);engine.recover();job=engine.submit(payload,asynchronous=False)
+        # Agent not running: execute in this process; never exit before reporting.
+        engine=Engine(config);engine.allow_restart=False;engine.recover()
+        try:job=engine.submit(payload,asynchronous=False)
+        except ValueError as exc:raise SystemExit('[PenguCoach] '+str(exc)) from None
     last=None
     while job.get('status') in {'queued','running'}:
         if last!=job.get('message'):print('[PenguCoach] '+job.get('message',''),flush=True);last=job.get('message')
         time.sleep(1)
         try:
             rows=call(config,'GET','/status')['jobs'];job=next(row for row in rows if row['id']==job['id'])
-        except (OSError,ConnectionError,http.client.HTTPException):
+        except (OSError,ConnectionError,http.client.HTTPException,RuntimeError,StopIteration):
             # A committed job remains readable even while its service restarts.
             rows=Engine(config).jobs(limit=None)
             job=next((row for row in rows if row['id']==job['id']),job)
-    if job.get('status')!='succeeded':raise SystemExit(job.get('error','MAINTENANCE_FAILED'))
+    if job.get('status')!='succeeded':raise SystemExit('[PenguCoach] '+job.get('error','MAINTENANCE_FAILED'))
+    if job.get('target',{}).get('version'):print('[PenguCoach] Target release: '+job['target']['version'])
+    if job.get('noop'):print('[PenguCoach] '+job.get('message',''))
     if job.get('backup'):print(str(Path(config['state'])/'backups'/(job['backup']['id']+'.pcbackup')))
     if job.get('inspection'):print(json.dumps(job['inspection'],indent=2))
     if args.operation=='update':print('[PenguCoach] Update completed.')

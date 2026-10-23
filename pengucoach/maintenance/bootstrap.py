@@ -189,6 +189,8 @@ with open('/state/operation.lock','a+') as lock:
     path=pathlib.Path('/state/config.json')
     previous=json.loads(path.read_text()) if path.exists() else {}
     config['branch']=previous.get('branch','main')
+    for key in ('update_source','keep_automatic_backups','min_free_bytes','drain_timeout'):
+        if key in previous:config[key]=previous[key]
     fd=os.open(str(path)+'.new',os.O_WRONLY|os.O_CREAT|os.O_TRUNC,0o600)
     with os.fdopen(fd,'w') as out:os.chmod(str(path)+'.new',0o600);json.dump(config,out)
     pathlib.Path(str(path)+'.new').replace(path)
