@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.ruff_cache/
+.venv/
+
+# Next.js / Node
+apps/web/node_modules/
+apps/web/.next/
+apps/web/next-env.d.ts
+
+# Runtime / local
+.env
+.env.maintenance
+*.log
+.DS_Store
+
+*.tsbuildinfo
