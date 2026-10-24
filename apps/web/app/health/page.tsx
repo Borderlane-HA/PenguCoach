@@ -3,7 +3,6 @@ import NumberInput from "../../components/NumberInput";
 
 import {useMemo,useState} from "react";
 import {sourceLabel,measuredLabel,localDate} from "../../lib/sources";
-import SourceOverview from "../../components/SourceOverview";
 import AppShell from "../../components/AppShell";
 import HealthDevelopment from "../../components/HealthDevelopment";
 import ProfessionalLineChart from "../../components/ProfessionalLineChart";
@@ -104,7 +103,7 @@ export default function Health(){
   ];
 
   return <AppShell>
-    <SourceOverview/>
+    
     <section className="page-head-modern"><div><span className="eyebrow">{bi(lang,"Physiologie & Erholung","Physiology & recovery")}</span><h1>{bi(lang,"Gesundheit","Health")}</h1><p>{bi(lang,"Deine Gesundheitswerte im Verlauf – mit Quelle je Messwert und aktuellen Körperwerten aus allen verfügbaren Daten.","Your health trends, with a source for every reading and current body metrics from all available data.")}</p></div><div className="period-control"><span>{bi(lang,"Zeitraum","Period")}</span><select value={period} onChange={e=>setPeriod(e.target.value)}><option value="today">{bi(lang,"Heute","Today")}</option><option value="last7">{bi(lang,"Letzte 7 Tage","Last 7 days")}</option><option value="week">{bi(lang,"Diese Woche","This week")}</option><option value="month">{bi(lang,"Dieser Monat","This month")}</option><option value="3m">{bi(lang,"Letzte 3 Monate","Last 3 months")}</option><option value="6m">{bi(lang,"Letzte 6 Monate","Last 6 months")}</option><option value="year">{bi(lang,"Dieses Jahr","This year")}</option><option value="all">{bi(lang,"Alle","All")}</option></select></div></section>
 
     <section className="health-metric-grid health-page-metrics">{cards.filter(c=>c.tone!=="battery"||c.value!=="—").map(c=>c.tone==="steps"?<StepGoalCard key={c.label} summary={data.step_goal} value={String(c.value)} note={rangeQuery.error&&!rangeQuery.data?bi(lang,"Messwerte nicht verfügbar","Readings unavailable"):c.note} loading={!rangeQuery.data&&!rangeQuery.error} error={!!rangeQuery.error&&!rangeQuery.data} period/>:<MetricCard key={c.label} label={c.label} value={String(c.value)} note={rangeQuery.error&&!rangeQuery.data?bi(lang,"Messwerte nicht verfügbar","Readings unavailable"):c.note} tone={c.tone} loading={!rangeQuery.data&&!rangeQuery.error} error={!!rangeQuery.error&&!rangeQuery.data}/>)}</section>

@@ -7,7 +7,8 @@ import {api} from "../lib/api";
 import {bi,useI18n} from "../lib/i18n";
 import {useSession} from "../lib/session";
 import UpdateNotice from "./UpdateNotice";
-type IconName="today"|"health"|"activities"|"training"|"coach"|"garmin"|"sparky"|"weather"|"maps"|"privacy"|"appearance"|"about"|"ai"|"users"|"logout"|"settings"|"admin"|"panel-open"|"panel-close";
+import StatusMenu from "./StatusMenu";
+type IconName="today"|"health"|"activities"|"training"|"coach"|"garmin"|"sparky"|"weather"|"maps"|"privacy"|"appearance"|"about"|"help"|"ai"|"users"|"logout"|"settings"|"admin"|"panel-open"|"panel-close";
 
 function Icon({name}:{name:IconName}){
   const common={width:20,height:20,viewBox:"0 0 24 24",fill:"none",stroke:"currentColor",strokeWidth:1.8,strokeLinecap:"round" as const,strokeLinejoin:"round" as const,"aria-hidden":true};
@@ -25,6 +26,7 @@ function Icon({name}:{name:IconName}){
   if(name==="maps")return <svg {...common}><path d="m3 6 6-3 6 3 6-3v15l-6 3-6-3-6 3V6ZM9 3v15M15 6v15"/></svg>;
   if(name==="privacy")return <svg {...common}><path d="M12 3 5 6v5c0 4.7 2.7 8.1 7 10 4.3-1.9 7-5.3 7-10V6l-7-3Z"/><path d="m9.5 12 1.6 1.6 3.4-3.6"/></svg>;
   if(name==="appearance")return <svg {...common}><circle cx="12" cy="12" r="9"/><path d="M12 3v18M3 12h18M6.2 6.2l11.6 11.6M17.8 6.2 6.2 17.8"/></svg>;
+  if(name==="help")return <svg {...common}><circle cx="12" cy="12" r="9"/><path d="M9.5 9.3a2.6 2.6 0 0 1 5 .9c0 1.7-2.5 2.2-2.5 3.8M12 17h.01"/></svg>;
   if(name==="about")return <svg {...common}><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>;
   if(name==="ai")return <svg {...common}><rect x="6" y="6" width="12" height="12" rx="3"/><path d="M9 10h6M9 14h4M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M18 9h4M2 15h4M18 15h4"/></svg>;
   if(name==="logout")return <svg {...common}><path d="M10 5H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h4"/><path d="m15 16 4-4-4-4M19 12H9"/></svg>;
@@ -86,15 +88,15 @@ export default function AppShell({children,title}:{children:React.ReactNode;titl
     {href:"/settings/maps",icon:"maps" as IconName,label:bi(lang,"Karten & Straßenansicht","Maps & street view")},
     {href:"/settings/appearance",icon:"appearance" as IconName,label:bi(lang,"Darstellung","Appearance")},
     {href:"/settings/privacy",icon:"privacy" as IconName,label:bi(lang,"Datenschutz","Privacy")},
-    {href:"/settings/about",icon:"about" as IconName,label:bi(lang,"Über PenguCoach","About PenguCoach")},
   ],[lang]);
   const admin=useMemo(()=>[
-    {href:"/admin/system",icon:"settings" as IconName,label:bi(lang,"System & Wartung","System & maintenance")},
+    {href:"/admin/system",icon:"settings" as IconName,label:bi(lang,"System & Updates","System & updates")},
     {href:"/admin/ai",icon:"ai" as IconName,label:"AI Studio"},
     {href:"/admin/users",icon:"users" as IconName,label:bi(lang,"Benutzer","Users")},
   ],[lang]);
   const active=(href:string)=>pathname===href||pathname.startsWith(`${href}/`);
-  const current=[...nav,...settings,...admin].find(x=>active(x.href));
+  const help={href:"/help",icon:"help" as IconName,label:bi(lang,"Hilfe","Help")};
+  const current=[...nav,...settings,...admin,help].find(x=>active(x.href));
   const initials=(me?.username||"PC").slice(0,2).toUpperCase();
   const avatar=appearance?.has_avatar?`/api/v1/settings/avatar?v=${appearance.avatar_version??0}`:null;
   const appIcon=appearance?.has_app_icon?`/api/v1/settings/app-icon?v=${appearance.app_icon_version??0}`:"/pengucoach-icon.svg";
@@ -141,6 +143,7 @@ export default function AppShell({children,title}:{children:React.ReactNode;titl
         <div className="side-section"><div className="side-label">{bi(lang,"Übersicht","Overview")}</div>{nav.map(x=>link(x))}</div>
         {group("settings")}
         {me.role==="admin"&&group("admin")}
+        <div className="side-section side-help">{link(help)}</div>
       </nav>
       <div className="side-account">
         <Link prefetch={false} className="side-user" href="/settings/appearance" aria-label={bi(lang,`${me.username} – Darstellung`,`${me.username} – Appearance`)} title={sidebar.collapsed?me.username:undefined}><span className={`side-avatar ${avatar?"photo":""}`}>{avatar?<img src={avatar} alt=""/>:initials}</span><span><strong>{me.username}</strong><small>{me.role}</small></span></Link>
@@ -149,7 +152,7 @@ export default function AppShell({children,title}:{children:React.ReactNode;titl
       </div>
     </aside>
 
-    <section className="app-main"><header className="topbar"><div className="top-heading"><div className="top-context"><span className="top-kicker">PenguCoach</span><strong>{title??current?.label??bi(lang,"Übersicht","Overview")}</strong></div></div><div className="top-actions"><details ref={mobileMenu} className="mobile-more"><summary aria-label={bi(lang,"Navigationsmenü öffnen","Open navigation menu")} title={settingsLabel}><Icon name="settings"/></summary><nav aria-label={settingsLabel}>{group("settings",true)}{me.role==="admin"&&group("admin",true)}<UpdateNotice version={me.app_version} mobile/></nav></details><span className="health-live"><i/>{bi(lang,"System aktiv","System online")}</span><button className="language-switch" onClick={()=>setLang(lang==="de"?"en":"de")} aria-label={bi(lang,"Sprache wechseln","Change language")}>{lang==="de"?"DE":"EN"}<span>⌄</span></button><Link prefetch={false} className={`top-avatar ${avatar?"photo":""}`} href="/settings/appearance" title={me.username}>{avatar?<img src={avatar} alt=""/>:initials}</Link><button className="top-logout" type="button" onClick={()=>void logout()} disabled={loggingOut} title={bi(lang,"Abmelden","Sign out")} aria-label={bi(lang,"Abmelden","Sign out")}><Icon name="logout"/></button></div></header><main className="stack page">{title&&<div className="page-title"><h1>{title}</h1></div>}{children}</main></section>
+    <section className="app-main"><header className="topbar"><div className="top-heading"><div className="top-context"><span className="top-kicker">PenguCoach</span><strong>{title??current?.label??bi(lang,"Übersicht","Overview")}</strong></div></div><div className="top-actions"><details ref={mobileMenu} className="mobile-more"><summary aria-label={bi(lang,"Navigationsmenü öffnen","Open navigation menu")} title={settingsLabel}><Icon name="settings"/></summary><nav aria-label={settingsLabel}>{group("settings",true)}{me.role==="admin"&&group("admin",true)}<div className="mobile-nav-group">{link(help,true)}</div><UpdateNotice version={me.app_version} mobile/></nav></details><StatusMenu/><button className="language-switch" onClick={()=>setLang(lang==="de"?"en":"de")} aria-label={bi(lang,"Sprache wechseln","Change language")}>{lang==="de"?"DE":"EN"}<span>⌄</span></button><Link prefetch={false} className={`top-avatar ${avatar?"photo":""}`} href="/settings/appearance" title={me.username}>{avatar?<img src={avatar} alt=""/>:initials}</Link><button className="top-logout" type="button" onClick={()=>void logout()} disabled={loggingOut} title={bi(lang,"Abmelden","Sign out")} aria-label={bi(lang,"Abmelden","Sign out")}><Icon name="logout"/></button></div></header><main className="stack page">{title&&<div className="page-title"><h1>{title}</h1></div>}{children}</main></section>
 
     <nav className="mobile-dock" aria-label={bi(lang,"Mobile Navigation","Mobile navigation")}>{nav.map(x=><Link prefetch={false} className={active(x.href)?"active":""} href={x.href} key={x.href} aria-current={active(x.href)?"page":undefined}><Icon name={x.icon}/><span>{x.label}</span></Link>)}</nav>
   </div>;

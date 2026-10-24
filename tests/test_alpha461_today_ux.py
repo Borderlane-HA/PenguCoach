@@ -6,21 +6,22 @@ import tomllib
 def test_alpha461_versions_and_display_fallback():
     project = tomllib.loads(Path("pyproject.toml").read_text())
     package = json.loads(Path("apps/web/package.json").read_text())
-    assert project["project"]["version"] == "0.1.0-alpha.81"
-    assert package["version"] == "0.1.0-alpha.81"
+    assert project["project"]["version"] == "0.1.0-alpha.82"
+    assert package["version"] == "0.1.0-alpha.82"
     config = Path("pengucoach/common/config.py").read_text()
     about = Path("apps/web/app/settings/about/page.tsx").read_text()
-    assert 'app_version: str = "0.1.0-alpha.81"' in config
-    assert '0.1.0-alpha.81' in about
+    assert 'app_version: str = "0.1.0-alpha.82"' in config
+    assert '0.1.0-alpha.82' in about
 
 
 def test_today_hero_is_compact_and_has_no_decorative_artwork():
+    # alpha.82: the hero became a compact header with greeting, plan line and one settings button.
     page = Path("apps/web/app/today/page.tsx").read_text()
     css = Path("apps/web/app/globals.css").read_text()
     assert "today-focus-hero.svg" not in page
-    assert 'className="today-focus-card today-focus-card-hero"' in page
-    assert ".today-hero{grid-template-columns:" in css
-    assert ".today-focus-card-hero" in css
+    assert 'className="today-header"' in page and "<TodaySettings" in page
+    assert "SourceOverview" not in page and "Coach frei öffnen" not in page
+    assert ".today-header{" in css and ".today-grid{" in css
 
 
 def test_checkin_controls_are_theme_safe_and_explained():

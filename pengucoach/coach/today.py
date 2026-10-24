@@ -8,8 +8,27 @@ from pengucoach.db.models import Activity, ActivityFeedback, CoachCheckin
 from pengucoach.coach.readiness import compute_readiness, soreness_level
 
 LEGACY_TODAY_ORDER = ['preparation', 'weather', 'reflection', 'progress', 'load', 'metrics', 'trend', 'activities']
-TODAY_CARDS = ['progress', 'preparation', 'weather', 'reflection', 'load', 'metrics', 'trend', 'activities']
+PREVIOUS_TODAY_CARDS = ['progress', 'preparation', 'weather', 'reflection', 'load', 'metrics', 'trend', 'activities']
+# alpha.82: every block of Today is a card the user can show, hide and move.
+# "reflection" is the evening tile inside the check-in card, toggled but not placed.
+TODAY_CARDS = ['readiness', 'checkin', 'metrics', 'dayphases', 'preparation', 'weather', 'progress',
+               'load', 'trend', 'activities', 'week', 'reflection']
+NEW_TODAY_CARDS = ['readiness', 'checkin', 'dayphases', 'week']
 TODAY_METRICS = ['steps', 'sleep', 'resting_hr', 'hrv', 'stress', 'hydration', 'body_battery_high', 'weight', 'body_fat', 'training_readiness', 'vo2max']
+TODAY_DENSITIES = ['comfortable', 'compact']
+DEFAULT_METRICS = ['steps', 'sleep', 'resting_hr', 'hrv', 'weight', 'stress']
+
+
+def _with_new_cards(order):
+    """Place cards a stored layout does not know yet at their default position."""
+    result = list(order)
+    for key in TODAY_CARDS:
+        if key in result:
+            continue
+        index = TODAY_CARDS.index(key)
+        before = [k for k in TODAY_CARDS[:index] if k in result]
+        result.insert(result.index(before[-1]) + 1 if before else 0, key)
+    return result
 
 
 def today_preferences(pref):
@@ -21,16 +40,17 @@ def today_preferences(pref):
         values = values if isinstance(values, list) else default
         return list(dict.fromkeys(k for k in values if isinstance(k, str) and k in allowed))
     order = keys('order', TODAY_CARDS)
-    order += [k for k in TODAY_CARDS if k not in order]
-    if order == LEGACY_TODAY_ORDER:
-        order = list(TODAY_CARDS)
-    pinned = keys('pinned_metrics', TODAY_METRICS, ['steps', 'sleep', 'resting_hr', 'hrv', 'weight', 'stress'])[:len(TODAY_METRICS)]
+    if order in (LEGACY_TODAY_ORDER, PREVIOUS_TODAY_CARDS):
+        order = []
+    order = _with_new_cards(order) if order else list(TODAY_CARDS)
+    pinned = keys('pinned_metrics', TODAY_METRICS, DEFAULT_METRICS)[:len(TODAY_METRICS)]
     start, end = raw.get('preferred_start_hour', 7), raw.get('preferred_end_hour', 21)
     if type(start) is not int or type(end) is not int or not 0 <= start < end <= 24:
         start, end = 7, 21
+    density = raw.get('density') if raw.get('density') in TODAY_DENSITIES else 'comfortable'
     return {'order': order, 'hidden': keys('hidden', TODAY_CARDS),
-            'pinned_metrics': pinned or ['steps', 'sleep', 'resting_hr', 'hrv', 'weight', 'stress'],
-            'preferred_start_hour': start, 'preferred_end_hour': end}
+            'pinned_metrics': pinned or list(DEFAULT_METRICS),
+            'preferred_start_hour': start, 'preferred_end_hour': end, 'density': density}
 
 
 def day_phase(today, hour, upcoming, activities, comparisons, checkin):

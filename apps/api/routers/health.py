@@ -369,5 +369,8 @@ async def sources_status(user: User = Depends(safety_confirmed_user), db: AsyncS
     result = []
     for model, key, name in ((GarminConnection, "garmin", "Garmin"), (SparkyFitnessConnection, "sparkyfitness", "SparkyFitness")):
         conn = await db.scalar(select(model).where(model.user_id == user.id))
-        result.append({"source": key, "name": name, "connected": bool(conn and conn.status == "connected"), "last_synced_at": getattr(conn, "last_successful_sync_at", None)})
+        result.append({"source": key, "name": name, "connected": bool(conn and conn.status == "connected"),
+                       "status": conn.status if conn else "disconnected",
+                       "last_error_code": getattr(conn, "last_error_code", None) if conn else None,
+                       "last_synced_at": getattr(conn, "last_successful_sync_at", None)})
     return {"connections": result}

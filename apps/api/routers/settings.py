@@ -13,7 +13,7 @@ from pengucoach.auth.dependencies import safety_confirmed_user
 from pengucoach.common.config import settings
 from pengucoach.db.models import User, UserPreference
 from pengucoach.db.session import get_db
-from pengucoach.coach.today import TODAY_CARDS, today_preferences
+from pengucoach.coach.today import TODAY_CARDS, TODAY_METRICS, today_preferences
 from pengucoach.common.dates import user_today
 from pengucoach.health.steps import goal_config, step_goal_payload
 
@@ -294,12 +294,17 @@ async def delete_app_icon(user: User = Depends(safety_confirmed_user), db: Async
     return await _delete_image("app-icon", user, db)
 
 
+TodayCard = Literal[tuple(TODAY_CARDS)]  # type: ignore[valid-type]
+TodayMetric = Literal[tuple(TODAY_METRICS)]  # type: ignore[valid-type]
+
+
 class TodaySettingsIn(BaseModel):
-    order: list[Literal['preparation','weather','reflection','progress','load','metrics','trend','activities']] = Field(default_factory=lambda: list(TODAY_CARDS), max_length=8)
-    hidden: list[Literal['preparation','weather','reflection','progress','load','metrics','trend','activities']] = Field(default_factory=list, max_length=8)
-    pinned_metrics: list[Literal['steps','sleep','resting_hr','hrv','stress','hydration','body_battery_high','weight','body_fat','training_readiness','vo2max']] = Field(default_factory=lambda: ['steps','sleep','resting_hr','hrv','weight','stress'], min_length=1, max_length=11)
+    order: list[TodayCard] = Field(default_factory=lambda: list(TODAY_CARDS), max_length=len(TODAY_CARDS))
+    hidden: list[TodayCard] = Field(default_factory=list, max_length=len(TODAY_CARDS))
+    pinned_metrics: list[TodayMetric] = Field(default_factory=lambda: ['steps','sleep','resting_hr','hrv','weight','stress'], min_length=1, max_length=len(TODAY_METRICS))
     preferred_start_hour: int = Field(default=7, ge=0, le=23)
     preferred_end_hour: int = Field(default=21, ge=1, le=24)
+    density: Literal['comfortable', 'compact'] = 'comfortable'
 
     @model_validator(mode='after')
     def validate_layout(self):

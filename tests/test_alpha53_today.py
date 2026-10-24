@@ -103,7 +103,7 @@ async def test_today_settings_merge_isolation_and_read_only_get(data):
     pref=UserPreference(user_id=user.id,theme='slate',dashboard_config={'weather':{'enabled':True},'maps':{'secret':'preserved'}})
     db.add(pref); await db.flush()
     result=await settings.save_today_settings(settings.TodaySettingsIn(order=['reflection'],hidden=['weather'],pinned_metrics=['hrv'],preferred_start_hour=16,preferred_end_hour=22),user,db)
-    assert result['order'][0]=='reflection' and len(result['order'])==8
+    assert result['order'][0]=='reflection' and len(result['order'])==len(TODAY_CARDS)
     assert pref.dashboard_config['maps']=={'secret':'preserved'} and pref.theme=='slate'
     assert (await settings.get_today_settings(other,db))['hidden']==[]
 
@@ -116,7 +116,7 @@ def test_today_settings_reject_invalid_inputs(kwargs):
 @pytest.mark.parametrize('raw',[None,[],{'order':None,'hidden':42,'pinned_metrics':{},'preferred_start_hour':'x'}, {'order':[{},'weather','weather'],'preferred_start_hour':23,'preferred_end_hour':2}])
 def test_settings_recover_malformed_legacy_values(raw):
     result=today_preferences(SimpleNamespace(dashboard_config={'today':raw}))
-    assert len(result['order'])==8 and result['preferred_start_hour']==7
+    assert len(result['order'])==len(TODAY_CARDS) and result['preferred_start_hour']==7
 
 
 def test_day_phase_never_treats_ambiguous_match_as_completed():

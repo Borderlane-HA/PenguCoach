@@ -51,7 +51,7 @@ def test_alpha44_ui_keeps_training_intelligence_progressively_disclosed():
     calendar = Path("apps/web/components/TrainingPlanCalendar.tsx").read_text()
     companion = Path("apps/web/components/PlanCompanion.tsx").read_text()
     personal = Path("apps/web/components/CoachPersonal.tsx").read_text()
-    about = Path("apps/web/app/settings/about/page.tsx").read_text()
+    about = Path("apps/web/components/AboutPenguCoach.tsx").read_text()  # alpha.82: About moved into System & Updates
     assert "training-weather-badge" in calendar
     assert "Indoor-Alternative" in calendar
     assert "Plan-Konflikte" in companion

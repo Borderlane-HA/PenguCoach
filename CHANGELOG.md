@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.1.0-alpha.82
+
+- **"Today" rebuilt – compact, modern and fully yours:**
+  - A short header with date, greeting and today's planned session. One **Customize** button opens a side panel with three tabs: *Sections* (switch every block on or off and change the order), *Readings* (which values appear) and *View* (compact or comfortable, preferred training time).
+  - Every block is now optional and movable, including the daily readiness, the check-in and the day timeline. Two half-width cards share a row; a card on its own takes the full width.
+  - **New daily readiness:** a ring with the 0–100 score and the colour of the day, the most important reasons as small chips (↑/↓), exactly one next step, and "Why?" for the details (data basis and how much each value counts).
+  - New card **Week comparison**: these 7 days against the 7 before.
+  - Removed from Today: the connection row, "View updated/Refresh", "Choose readings", "Open activities/health" and "Open Coach freely" (the coach is in the sidebar).
+  - Existing layouts keep their order; the new cards are placed where they belong.
+- **Status menu instead of "System online":** a small pill at the top right of every page. Hover or tap it to see the system, every data connection with its last sync, and a refresh button. Health no longer shows the connection row either.
+- **New help page** (sidebar → Help) in German and English, with search, one section per area and links straight to the matching settings. Customize on Today links to its help.
+- **Update check in the sidebar:** the round icon next to the version now checks in place and shows "Up to date" or "Update available". Only clicking that result opens the update area.
+- **About PenguCoach** moved out of Settings: admins find it as a tab in *Admin → System & updates* (renamed from "System & maintenance"), everyone else on the versions page. Old links redirect.
+- No database migration.
+
 ## 0.1.0-alpha.81
 
 - **Design refresh for the whole app:**
