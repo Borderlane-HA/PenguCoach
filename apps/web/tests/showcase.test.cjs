@@ -26,7 +26,7 @@ test('headline figures suit the sport and never turn missing data into zero',()=
 });
 test('routes keep their real shape, stay inside the box and split at gaps',()=>{
   const data=[];for(let i=0;i<50;i++)data.push({position_lat:48+i*.0001,position_long:11,elapsed_s:i});
-  for(let i=0;i<50;i++)data.push({position_lat:48.005,position_long:11+i*.0001,elapsed_s:500+i});
+  for(let i=0;i<50;i++)data.push({position_lat:48.3,position_long:11+i*.0001,elapsed_s:500+i}); // impossible jump: new segment
   const box={x:10,y:20,w:400,h:300},route=S.projectRoute(data,box);
   assert.equal(route.segments.length,2);
   for(const p of route.segments.flat()){assert.ok(p.x>=box.x-.01&&p.x<=box.x+box.w+.01);assert.ok(p.y>=box.y-.01&&p.y<=box.y+box.h+.01)}

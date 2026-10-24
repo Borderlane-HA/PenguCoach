@@ -63,6 +63,11 @@ export function nearestIndex(positions:number[], fraction:number):number {
   return lo > 0 && value-positions[lo-1] < positions[lo]-value ? lo-1 : lo;
 }
 
+export function metresBetween(lat1:number,lon1:number,lat2:number,lon2:number):number {
+  const r=Math.PI/180, a=Math.sin((lat2-lat1)*r/2)**2+Math.cos(lat1*r)*Math.cos(lat2*r)*Math.sin((lon2-lon1)*r/2)**2;
+  return 2*6371000*Math.asin(Math.min(1,Math.sqrt(a)));
+}
+
 export function routeSegments(data:Sample[]):RoutePoint[][] {
   const segments:RoutePoint[][] = [];
   let current:RoutePoint[] = [];
@@ -74,7 +79,11 @@ export function routeSegments(data:Sample[]):RoutePoint[][] {
     }
     const previous = current.at(-1);
     const elapsed = finite(sample.elapsed_s), before = previous ? finite(previous.sample.elapsed_s) : null;
-    if (previous && ((elapsed != null && before != null && elapsed-before>120) || sample.track_segment !== previous.sample.track_segment)) {
+    // A long pause alone does not cut the line: simplified tracks (SparkyFitness)
+    // keep fixes minutes apart on straight roads. Only an impossible jump does.
+    const gap = previous && elapsed != null && before != null ? elapsed-before : 0;
+    const jump = previous && gap > 120 ? metresBetween(previous.lat,previous.lon,lat,lon)/gap > 45 : false;
+    if (previous && (jump || sample.track_segment !== previous.sample.track_segment)) {
       segments.push(current); current=[];
     }
     current.push({index,lat,lon,sample});

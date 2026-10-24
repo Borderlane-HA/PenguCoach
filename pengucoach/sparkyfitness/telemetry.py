@@ -108,11 +108,14 @@ def frame(raw: dict | None) -> pd.DataFrame:
     if not records:
         return pd.DataFrame()
     out = pd.DataFrame(records).sort_values("timestamp", kind="stable").drop_duplicates("timestamp", keep="first").reset_index(drop=True)
-    out["track_segment"] = (out["timestamp"].diff().dt.total_seconds() > 120).cumsum()
+    # SparkyFitness stores Douglas-Peucker simplified tracks: on straight roads
+    # fixes can be minutes apart. Splitting on time alone dropped those stretches
+    # from the map, so only impossible jumps start a new segment.
+    from pengucoach.fit.track import add_distance_speed, segment_ids
+    out["track_segment"] = segment_ids(out)
     # Phone and Health Connect tracks often have positions but no cumulative
     # distance; without it there are no splits and no distance axis.
-    from pengucoach.fit.track import add_distance_speed
-    return add_distance_speed(out)
+    return add_distance_speed(out, smooth=False)
 
 
 def laps(raw):

@@ -26,11 +26,16 @@ test('missing, constant and non-monotonic axes are explicitly point order',()=>{
   for(const data of [[{},{}],[{elapsed_s:1},{elapsed_s:1}],[{elapsed_s:5},{elapsed_s:2}],[{elapsed_s:0},{elapsed_s:null}]])assert.equal(makeAxis(data,'time').kind,'points');
   assert.deepEqual(makeAxis([],'time').positions,[]);
 });
-test('GPS gaps, invalid coordinates, time gaps and GPX boundaries split rather than bridge routes',()=>{
+test('GPS gaps, invalid coordinates, impossible jumps and GPX boundaries split rather than bridge routes',()=>{
   const point=(index,extra={})=>({position_lat:48+index*.001,position_long:11,elapsed_s:index*10,...extra});
-  const segments=routeSegments([point(0),point(1),point(2,{position_lat:null}),point(3),point(4,{track_segment:1}),point(5,{track_segment:1,elapsed_s:300}),point(6,{position_long:181})]);
+  const segments=routeSegments([point(0),point(1),point(2,{position_lat:null}),point(3),point(4,{track_segment:1}),point(5,{track_segment:1,elapsed_s:300,position_lat:49}),point(6,{position_long:181})]);
   assert.deepEqual(segments.map(s=>s.map(p=>p.index)),[[0,1],[3],[4],[5]]);
   assert.equal(segments[0][0].sample.elapsed_s,0);
+});
+test('simplified tracks with fixes minutes apart stay one line',()=>{
+  // SparkyFitness keeps only the ends of a straight road: 1.2 km in 4 minutes.
+  const data=[{position_lat:48,position_long:11,elapsed_s:0},{position_lat:48.0108,position_long:11,elapsed_s:240},{position_lat:48.011,position_long:11.001,elapsed_s:250}];
+  assert.deepEqual(routeSegments(data).map(s=>s.length),[3]);
 });
 test('missing sensor values leave line gaps and are not formatted as measurements',()=>{
   const metric=METRICS.find(m=>m.key==='power');

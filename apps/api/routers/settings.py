@@ -21,7 +21,7 @@ router = APIRouter(prefix="/settings", tags=["settings"])
 
 THEMES = {
     "light", "dark", "ocean", "forest", "lavender", "sand", "rose", "slate", "aurora",
-    "alpine", "arctic", "espresso", "ember", "mono", "custom",
+    "alpine", "arctic", "espresso", "ember", "mono", "nightrun", "daylight", "carbon", "dusk", "custom",
 }
 MAX_IMAGE_BYTES = 3 * 1024 * 1024
 ALLOWED_IMAGE_TYPES = {
@@ -44,7 +44,7 @@ class CustomThemeIn(BaseModel):
 
 
 class AppearanceIn(BaseModel):
-    theme: str = Field(pattern=r"^(light|dark|ocean|forest|lavender|sand|rose|slate|aurora|alpine|arctic|espresso|ember|mono|custom)$")
+    theme: str = Field(pattern=r"^(light|dark|ocean|forest|lavender|sand|rose|slate|aurora|alpine|arctic|espresso|ember|mono|nightrun|daylight|carbon|dusk|custom)$")
     custom_theme: CustomThemeIn | None = None
 
 

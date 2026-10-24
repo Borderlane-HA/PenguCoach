@@ -70,11 +70,13 @@ def _segments(df: pd.DataFrame) -> pd.Series:
     return pd.Series(0, index=df.index)
 
 
-def add_distance_speed(df: pd.DataFrame) -> pd.DataFrame:
+def add_distance_speed(df: pd.DataFrame, *, smooth: bool = True) -> pd.DataFrame:
     """Fill cumulative ``distance`` and missing ``speed`` from positions.
 
     A device distance column with values is kept as-is. Distance does not grow
     across segment breaks: the gap between two GPX segments is not ridden.
+    ``smooth=False`` for tracks that were already simplified at the source
+    (SparkyFitness keeps only the corner points of straight stretches).
     """
     if df.empty:
         return df
@@ -97,7 +99,7 @@ def add_distance_speed(df: pd.DataFrame) -> pd.DataFrame:
         # would cut corners instead of removing noise.
         gaps = seconds.loc[rows].diff().dropna()
         interval = float(gaps.median()) if len(gaps) else float("nan")
-        window = SMOOTH_POINTS if interval == interval and interval <= 2 else 3 if interval == interval and interval <= 5 else 1
+        window = 1 if not smooth else SMOOTH_POINTS if interval == interval and interval <= 2 else 3 if interval == interval and interval <= 5 else 1
         smooth_lat = lat.loc[rows].rolling(window, center=True, min_periods=1).mean()
         smooth_lon = lon.loc[rows].rolling(window, center=True, min_periods=1).mean()
         d = pd.Series(_haversine(smooth_lat.shift(), smooth_lon.shift(), smooth_lat, smooth_lon), index=rows).fillna(0.0)
@@ -129,7 +131,10 @@ def add_distance_speed(df: pd.DataFrame) -> pd.DataFrame:
             right = np.maximum(np.searchsorted(tt, tt + half, side="right") - 1, np.arange(len(tt)) + 1).clip(max=len(tt) - 1)
             span = tt[right] - tt[left]
             with np.errstate(divide="ignore", invalid="ignore"):
-                values = np.where((span > 0) & (span <= PAUSE_GAP_S * 2), (dd[right] - dd[left]) / span, np.nan)
+                values = np.where(span > 0, (dd[right] - dd[left]) / span, np.nan)
+            # Long spans are only trusted when they show movement: a simplified
+            # straight road has fixes minutes apart, a pause has none in between.
+            values = np.where((span <= PAUSE_GAP_S * 2) | (values >= MOVING_SPEED), values, np.nan)
             values = np.where((values >= 0) & (values <= MAX_PLAUSIBLE_SPEED), values, np.nan)
             full = np.full(len(t), np.nan)
             full[ok] = values
@@ -159,6 +164,33 @@ def moving_seconds(df: pd.DataFrame) -> int | None:
         moving_by_distance = (dd / dt) >= MOVING_SPEED
         moving_by_speed = sp >= MOVING_SPEED
         has_motion_data = dd.notna() | sp.notna()
-        moving = (dt > 0) & (dt <= PAUSE_GAP_S) & (moving_by_distance | moving_by_speed | ~has_motion_data)
+        short = (dt > 0) & (dt <= PAUSE_GAP_S) & (moving_by_distance | moving_by_speed | ~has_motion_data)
+        # Simplified tracks: a long interval still counts when the distance shows
+        # steady movement (a pause leaves the position where it was).
+        rate = dd / dt
+        long_moving = (dt > PAUSE_GAP_S) & (rate >= 2 * MOVING_SPEED) & (rate <= MAX_PLAUSIBLE_SPEED)
+        moving = short | long_moving
         total += float(dt[moving].sum())
     return int(round(total)) if total > 0 else None
+
+
+def segment_ids(df: pd.DataFrame, max_gap_s: float = 120.0) -> pd.Series:
+    """Track segments for a frame without device segments.
+
+    A time gap alone does not split a route: sources that simplify tracks keep
+    fixes minutes apart on straight roads, and drawing those as gaps hid whole
+    straight stretches of a loop. A gap splits only when the jump between the
+    two fixes is impossible to cover (GPS jump, transport) or when the samples
+    have no positions at all (sensor-only data).
+    """
+    if df.empty or "timestamp" not in df.columns:
+        return pd.Series(0, index=df.index)
+    seconds = _seconds(df)
+    dt = seconds.diff()
+    lat, lon = _column(df, "position_lat"), _column(df, "position_long")
+    jump = pd.Series(_haversine(lat.shift(), lon.shift(), lat, lon), index=df.index)
+    has_pos = lat.notna() & lon.notna() & lat.shift().notna() & lon.shift().notna()
+    with np.errstate(divide="ignore", invalid="ignore"):
+        rate = jump / dt
+    split = (dt > max_gap_s) & (~has_pos | (rate > MAX_PLAUSIBLE_SPEED))
+    return split.fillna(False).cumsum()

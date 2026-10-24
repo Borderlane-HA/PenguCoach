@@ -1,3 +1,5 @@
+import "@fontsource-variable/inter";
+import "@fontsource-variable/space-grotesk";
 import "./globals.css";
 import "leaflet/dist/leaflet.css";
 import type {Metadata,Viewport} from "next";

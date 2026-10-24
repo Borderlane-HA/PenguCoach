@@ -22,6 +22,8 @@ export function customThemeVars(raw:CustomTheme){
   "--fitness-lilac":tone("#8662b5"),"--fitness-peach":tone("#b56a26"),"--mint":accent,"--rose":tone("#b95079"),"--rose-soft":mix(panel,tone("#b95079"),.10),
   "--chart-a":accent,"--chart-b":tone("#397db8"),"--chart-c":tone("#b56a26"),"--chart-d":tone("#8662b5")};
 }
+/** Built-in dark themes; the custom theme sets its own mode. */
+export const DARK_THEMES=["dark","slate","aurora","espresso","ember","mono","nightrun","carbon","dusk"];
 const CUSTOM_KEYS=Object.keys(customThemeVars(DEFAULT_CUSTOM));
 export function applyAppearance(value:Pick<Appearance,"theme"|"custom_theme">){
  const root=document.documentElement;
@@ -33,6 +35,7 @@ export function applyAppearance(value:Pick<Appearance,"theme"|"custom_theme">){
   try{localStorage.setItem("pengucoach_custom_theme",JSON.stringify({mode:custom.mode,vars}))}catch{}
  }
  document.documentElement.dataset.theme=theme;
+ if(theme!=="custom"&&DARK_THEMES.includes(theme))root.dataset.colorMode="dark";
  try{localStorage.setItem("pengucoach_theme",theme)}catch{}
 }
 export const themeBoot=`(()=>{try{const t=localStorage.getItem("pengucoach_theme");if(t)document.documentElement.dataset.theme=t;if(t==="custom"){const c=JSON.parse(localStorage.getItem("pengucoach_custom_theme")||"null");if(c&&(c.mode==="light"||c.mode==="dark")){const root=document.documentElement;root.dataset.colorMode=c.mode;root.style.colorScheme=c.mode;const keys=${JSON.stringify(CUSTOM_KEYS)};for(const key of keys){const v=c.vars?.[key];if(typeof v==="string"&&/^#[0-9a-f]{6}$/i.test(v))root.style.setProperty(key,v)}}}}catch{}})();`;

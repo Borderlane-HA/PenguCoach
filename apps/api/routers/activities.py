@@ -234,6 +234,19 @@ def _recap_routes(paths: list[tuple[str, str]]) -> list[dict]:
     return routes
 
 
+def _sparky_recap_routes(rows) -> list[dict]:
+    from pengucoach.coach.recap import downsample
+    from pengucoach.sparkyfitness.telemetry import telemetry
+    routes = []
+    for activity_id, raw in rows:
+        points = [(p.get("lat"), p.get("lon")) for p in telemetry(raw).get("gps", []) if isinstance(p, dict)]
+        points = [(float(a), float(b)) for a, b in points if isinstance(a, (int, float)) and isinstance(b, (int, float)) and not isinstance(a, bool) and not isinstance(b, bool)]
+        thinned = downsample(points)
+        if thinned:
+            routes.append({"id": str(activity_id), "points": thinned})
+    return routes
+
+
 @router.get("/recap")
 async def activity_recap(
     period: Literal["today", "week", "month", "year", "all"] = "month",
@@ -279,8 +292,17 @@ async def activity_recap(
             FitFile.user_id == user.id, FitFile.activity_id.in_(ids), FitFile.parquet_path.is_not(None)))).all()
         order = {activity_id: index for index, activity_id in enumerate(ids)}
         paths = sorted(((str(a), p) for a, p in fits), key=lambda item: order.get(uuid.UUID(item[0]), 0))[:RECAP_ROUTE_LIMIT]
-        result["routes"] = await asyncio.to_thread(_recap_routes, paths)
-        result["routes_limited"] = len(fits) > RECAP_ROUTE_LIMIT
+        routes_found = await asyncio.to_thread(_recap_routes, paths)
+        # SparkyFitness activities have no FIT file; their track lives in the activity row.
+        with_fit = {a for a, _ in fits}
+        sparky_ids = [i for i in ids if i not in with_fit][: max(0, RECAP_ROUTE_LIMIT - len(routes_found))]
+        if sparky_ids:
+            raws = (await db.execute(select(Activity.id, Activity.raw).where(
+                Activity.user_id == user.id, Activity.id.in_(sparky_ids), Activity.raw.has_key("sparkyfitness")))).all()  # noqa: W601
+            routes_found += _sparky_recap_routes(raws)
+        routes_found.sort(key=lambda r: order.get(uuid.UUID(r["id"]), 0))
+        result["routes"] = routes_found[:RECAP_ROUTE_LIMIT]
+        result["routes_limited"] = len(fits) + len(sparky_ids) > RECAP_ROUTE_LIMIT
     return result
 
 

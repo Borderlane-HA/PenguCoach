@@ -1,6 +1,6 @@
 {
   "name": "pengucoach-web",
-  "version": "0.1.0-alpha.80",
+  "version": "0.1.0-alpha.81",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -11,6 +11,8 @@
     "test:personalization": "node --test tests/personalization.test.cjs"
   },
   "dependencies": {
+    "@fontsource-variable/inter": "5.2.8",
+    "@fontsource-variable/space-grotesk": "5.2.8",
     "leaflet": "1.9.4",
     "next": "15.5.26",
     "react": "19.1.1",

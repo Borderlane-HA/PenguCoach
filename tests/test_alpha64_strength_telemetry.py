@@ -101,6 +101,10 @@ def test_bad_samples_times_and_coordinates_stay_missing():
     assert rows[1]['heart_rate'] is None and rows[1]['speed'] is None and rows[1]['position_lat'] is None
     assert rows[1]['position_long'] is None and rows[1]['temperature'] is None
     points[5]['t']='2026-10-17T12:45:00Z'
+    # alpha.80: a time gap alone no longer splits a simplified track ...
+    assert frame(raw).iloc[-1]['track_segment']==0
+    # ... an impossible jump after the gap does.
+    points[5]['lat']=points[0]['lat']+1
     assert frame(raw).iloc[-1]['track_segment']==1
 
 

@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.1.0-alpha.81
+
+- **Design refresh for the whole app:**
+  - New typography: Space Grotesk for headings and figures, Inter for text. Both fonts are bundled through npm (`@fontsource-variable/*`), so no font is loaded from Google at runtime.
+  - Large numbers use tabular figures, cards and controls have slightly larger radii, and keyboard focus is clearly visible.
+  - Buttons, chips and badges on the accent colour now pick a readable text colour per theme. This fixes white text on light accents in the dark themes.
+  - The Garmin page shows the API key's remaining time as a ring.
+- **Four new themes** under *Settings → Appearance*: **Night Run** (near-black with mint), **Daylight** (bright with deep green), **Carbon** (graphite with neon lime) and **Dusk** (indigo with coral). The theme tiles mark them as new. All text, secondary text and accent colours meet WCAG AA contrast on every surface (checked in the tests).
+- **Fixed: SparkyFitness routes with missing stretches.** SparkyFitness stores simplified tracks: on straight roads it keeps only the end points, sometimes minutes apart. PenguCoach treated every gap of more than two minutes as a break, so loops lost whole straight stretches on the map, in the Showcase and in the analysis. A gap now splits the route only when the jump between two fixes is physically impossible (GPS error, transport). Speed and moving time are also correct across these long intervals. Existing SparkyFitness activities are fixed without a new sync.
+- The Recap map ("Rückblick") now also shows SparkyFitness routes, not only activities with a FIT file.
+- Fixed: the "set your step goal" link was dark on dark in the dark themes, and the Today hero had a light border in dark themes. The source counters above the activity journal were white chips in every theme; they now use the theme surface, and the Recap button takes the accent colour of the new themes.
+- No database migration. New web dependencies: `@fontsource-variable/inter`, `@fontsource-variable/space-grotesk` (OFL).
+
 ## 0.1.0-alpha.80
 
 - **Garmin: API key and login together.** With the Personal API key, a Garmin login can now be added under *Settings → Garmin → Training & calendar* that is used **only** to send training plans to Garmin. The daily data sync stays on the API key, so a Garmin sign-in prompt no longer interrupts the data. When switching from the login to an API key, the existing login can be kept for export with one switch. An expired export login is flagged on its own and never stops the data sync. Users who only want one method keep using either the login or the API key as before.

@@ -992,3 +992,53 @@ html[data-theme="custom"] .maintenance-tabs button.ghost.active{color:var(--text
 .garmin-export-login{display:grid;gap:10px;padding:12px;border:1px solid var(--border);border-radius:13px;background:var(--panel)}.garmin-export-login .grid2{gap:10px}.garmin-export-login-head{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}.garmin-export-login-head>div{display:grid;gap:2px}.garmin-export-login-head small{color:var(--muted)}
 .metric-unavailable{opacity:.6;filter:grayscale(.7)}.metric-unavailable .metric-value{color:var(--muted)}
 .garmin-feature-hint{display:block;font-size:.72rem;color:var(--muted);line-height:1.4}.zone-sync-pills span.unavailable{opacity:.55;text-decoration:line-through;text-decoration-color:color-mix(in srgb,var(--muted) 50%,transparent)}
+/* ===== alpha.81 design refresh: applies to every theme ===== */
+:root{--font-body:"Inter Variable",Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;--font-display:"Space Grotesk Variable","Inter Variable",ui-sans-serif,system-ui,sans-serif;--font-mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;--radius-card:20px;--radius-control:12px}
+html,body{font-family:var(--font-body);font-feature-settings:"cv11","ss01";-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+h1,h2,h3,.top-heading,.brand,.side-brand strong{font-family:var(--font-display);letter-spacing:-.02em}
+h1{font-weight:700;letter-spacing:-.03em}.page-head-modern h1,.garmin-head h1{font-size:clamp(2rem,3.4vw,2.9rem);line-height:1.04}
+h2{font-weight:650}
+.eyebrow{letter-spacing:.14em;font-weight:700;color:var(--accent)}
+:is(.metric-value,.detail-metric-value,.garmin-sync-meta strong,.activity-summary-strip strong,.activity-row-stat strong,.chart-readout strong,.history-progress-meta,.zone-sync-pills,.goal-score>strong){font-family:var(--font-display);font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+:is(.metric-value,.detail-metric-value){font-weight:700}
+.card{border-radius:var(--radius-card)}
+button,.upload-button,.primary-link,input,select,textarea{border-radius:var(--radius-control)}
+button{font-weight:650;letter-spacing:.005em;transition:transform .12s ease,box-shadow .12s ease,background-color .12s ease}
+button:not(:disabled):active{transform:translateY(1px)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.code,code,kbd{font-family:var(--font-mono)}
+.badge,.connection-pill,.tag{letter-spacing:.02em}
+/* Text on accent surfaces follows the theme (white on dark accents, dark on bright ones). */
+:is(.logo,.bubble.user,.ai-task-switcher>button.active>span,.ai-prompt-tabs button.active,.coach-message.user .coach-message-body,.loading-mark span,.primary-link,.theme-check,.upload-button,.dropzone-icon,.context-preset-row button.active,.activity-pager button.active,.ai-quality-buttons button.active,.ai-usage-periods button.active,.manual-body-actions .primary,.feeling-scale button.active,.day-chips button.active,.planner-stepper button.active>span,.choice-chip.active){color:var(--primary-ink)}
+/* Garmin page: status tiles and key ring */
+.garmin-key-ring{flex:none}.garmin-key-ring circle.track{stroke:var(--border)}.garmin-key-ring circle.value{stroke:var(--accent)}.garmin-key-card.warn .garmin-key-ring circle.value{stroke:var(--warn)}.garmin-key-card.error .garmin-key-ring circle.value{stroke:var(--danger)}
+.garmin-key-ring text{fill:var(--text);font-family:var(--font-display)}.garmin-key-ring text.unit{fill:var(--muted);font-family:var(--font-body)}
+.garmin-key-card>.garmin-key-main{display:flex;align-items:center;gap:18px;min-width:0}
+.theme-tile .theme-new{position:absolute;left:9px;top:9px;font-size:.62rem;font-weight:800;letter-spacing:.08em;padding:3px 7px;border-radius:999px;background:var(--accent);color:var(--primary-ink)}
+
+/* ===== alpha.81 themes ===== */
+html[data-theme="nightrun"]{color-scheme:dark;--bg:#0b100f;--bg-soft:#0b100f;--panel:#121a18;--panel2:#17211f;--panel3:#1c2825;--surface-2:#17211f;--text:#e8efec;--text-strong:#ffffff;--muted:#9cada7;--muted-2:#95a7a1;--border:#22302c;--border-strong:#3a4b46;--accent:#5ee6b8;--accent-strong:#9df3d3;--accent-soft:#143a2f;--accent-pale:#0f241e;--danger:#ff9a90;--warn:#f2b544;--blue:#8ec5ff;--violet:#c3a8ff;--orange:#ffb27a;--green:#7fe0a3;--rose:#ff9fc0;--mint:#5ee6b8;--chart-a:#5ee6b8;--chart-b:#8ec5ff;--chart-c:#f2b544;--chart-d:#c3a8ff;--shadow:none}
+html[data-theme="daylight"]{color-scheme:light;--bg:#f4f7f5;--bg-soft:#f4f7f5;--panel:#ffffff;--panel2:#f7faf8;--panel3:#eef4f1;--surface-2:#f7faf8;--text:#0f1a17;--text-strong:#07110e;--muted:#55665f;--muted-2:#5f7069;--border:#dce5e1;--border-strong:#b7c6c0;--accent:#0b7a5a;--accent-strong:#075e45;--accent-soft:#ddf3ea;--accent-pale:#eff9f5;--danger:#b3392f;--warn:#8a5a06;--chart-a:#0b7a5a;--chart-b:#2f6fb0;--chart-c:#b1621d;--chart-d:#7451b0;--shadow:0 1px 0 rgba(15,26,23,.04),0 12px 32px rgba(15,26,23,.06)}
+html[data-theme="carbon"]{color-scheme:dark;--bg:#0e0f10;--bg-soft:#0e0f10;--panel:#17191b;--panel2:#1e2023;--panel3:#25282b;--surface-2:#1e2023;--text:#eceef0;--text-strong:#ffffff;--muted:#a9afb5;--muted-2:#959ca3;--border:#2c3034;--border-strong:#474d53;--accent:#c8f25a;--accent-strong:#ddf98f;--accent-soft:#2b3416;--accent-pale:#1d2312;--danger:#ff9b92;--warn:#f2c063;--blue:#8cc4ff;--violet:#c4abff;--orange:#ffb27a;--green:#c8f25a;--rose:#ff9fc0;--mint:#c8f25a;--chart-a:#c8f25a;--chart-b:#8cc4ff;--chart-c:#ffb27a;--chart-d:#c4abff;--shadow:none}
+html[data-theme="dusk"]{color-scheme:dark;--bg:#12111f;--bg-soft:#12111f;--panel:#1b1a2e;--panel2:#222138;--panel3:#2a2842;--surface-2:#222138;--text:#eeedf7;--text-strong:#ffffff;--muted:#b4b1cc;--muted-2:#9f9cbd;--border:#312f4c;--border-strong:#4c4970;--accent:#ff8c6b;--accent-strong:#ffae95;--accent-soft:#43283a;--accent-pale:#2a1f31;--danger:#ff9a9a;--warn:#f5c26b;--blue:#8fb8ff;--violet:#c8a8ff;--orange:#ff8c6b;--green:#8fe3b5;--rose:#ff9fc0;--mint:#8fe3b5;--chart-a:#ff8c6b;--chart-b:#8fb8ff;--chart-c:#f5c26b;--chart-d:#c8a8ff;--shadow:0 12px 40px #0004}
+html[data-theme="nightrun"],html[data-theme="carbon"],html[data-theme="dusk"]{--primary-ink:var(--bg);--blue-soft:#1a2a3a;--violet-soft:#2a2340;--orange-soft:#3a2a1e;--rose-soft:#3a2230;--danger-soft:#3a2222;--warn-soft:#352b17;--fitness-lilac:var(--violet);--fitness-peach:var(--orange)}
+html[data-theme="daylight"]{--primary-ink:#ffffff;--blue-soft:#e6eff9;--violet-soft:#efe9f8;--orange-soft:#f8ede3;--rose-soft:#f8e6ee;--danger-soft:#f8e4e2;--warn-soft:#f6eedd}
+html[data-theme="nightrun"] body{background:radial-gradient(1200px 600px at 85% -10%,rgba(94,230,184,.07),transparent 60%),var(--bg)}
+html[data-theme="carbon"] .card,html[data-theme="nightrun"] .card,html[data-theme="dusk"] .card{box-shadow:none}
+html[data-theme="nightrun"] .topbar,html[data-theme="carbon"] .topbar,html[data-theme="dusk"] .topbar{background:color-mix(in srgb,var(--bg) 82%,transparent)}
+html:is([data-theme="nightrun"],[data-theme="carbon"],[data-theme="dusk"]) .activity-search input{background:transparent}
+html:is([data-theme="nightrun"],[data-theme="carbon"],[data-theme="dusk"]) .mobile-dock{box-shadow:0 15px 45px rgba(0,0,0,.35)}
+html:is([data-theme="nightrun"],[data-theme="carbon"],[data-theme="dusk"]) .health-metric-card:after{opacity:.18}
+html:is([data-theme="nightrun"],[data-theme="carbon"],[data-theme="dusk"]) .wellness-ring{background:radial-gradient(circle at center,var(--panel) 55%,transparent 56%),conic-gradient(var(--accent) 0 68%,var(--border) 68% 100%)}
+html:is([data-theme="nightrun"],[data-theme="carbon"],[data-theme="dusk"]) :is(.dashboard-hero,.coach-modern-head,.ai-studio-head){background:linear-gradient(120deg,color-mix(in srgb,var(--accent-soft) 70%,var(--panel)),var(--panel))}
+html:is([data-theme="nightrun"],[data-theme="carbon"],[data-theme="dusk"]) :is(.metric-board>.detail-metric,.stat-group,.ai-content.modern,.coach-message.assistant .coach-message-body){background:var(--panel)}
+html:is([data-theme="nightrun"],[data-theme="carbon"],[data-theme="dusk"]) :is(.chart-stage,.coach-messages,.coach-thread-top){background:var(--panel2)}
+html:is([data-theme="nightrun"],[data-theme="carbon"],[data-theme="dusk"]) .training-zone-status{background:linear-gradient(135deg,color-mix(in srgb,var(--accent-soft) 35%,var(--panel)),var(--panel))}
+.garmin-key-main>div{display:grid;gap:4px;min-width:0}
+.dashboard-hero{border-color:var(--border)}
+.metric-card-modern :is(.step-goal-text,.step-suggestion){color:var(--accent-strong)!important}
+/* alpha.81: theme-aware chips (were white in every theme) and room under the theme heading */
+.activity-summary-strip>div{background:var(--panel)}
+.appearance-card .theme-grid{margin-top:14px}
+html:is([data-theme="nightrun"],[data-theme="carbon"],[data-theme="dusk"],[data-theme="daylight"]) .recap-trigger{background:color-mix(in srgb,var(--accent) 16%,var(--panel));color:var(--text);border-color:color-mix(in srgb,var(--accent) 45%,transparent);box-shadow:none}
+html:is([data-theme="nightrun"],[data-theme="carbon"],[data-theme="dusk"],[data-theme="daylight"]) .recap-trigger svg{color:var(--accent)}
