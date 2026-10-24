@@ -8,8 +8,8 @@ def test_all_available_readings_can_be_selected_and_survive_normalization():
     payload = TodaySettingsIn(pinned_metrics=list(reversed(TODAY_METRICS)))
     result = today_preferences(SimpleNamespace(dashboard_config={'today': payload.model_dump()}))
     assert result['pinned_metrics'] == list(reversed(TODAY_METRICS))
-    assert len(result['pinned_metrics']) == 11
-    assert {'vo2max', 'body_fat', 'training_readiness'} <= set(result['pinned_metrics'])
+    assert len(result['pinned_metrics']) == len(TODAY_METRICS) == 12
+    assert {'vo2max', 'body_fat', 'training_readiness', 'floors'} <= set(result['pinned_metrics'])
 
 
 def test_existing_favorite_selection_and_hidden_cards_are_preserved():

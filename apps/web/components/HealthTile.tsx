@@ -18,8 +18,8 @@ export default function HealthTile({def,s,lang,periodLabel,loading,extra}:{def:M
     <div className="health-tile-foot">
       {s.trend&&<span className={`health-trend ${trendClass}`}><i aria-hidden="true">{s.trend==="up"?"↗":s.trend==="down"?"↘":"→"}</i>{changeText(def,s,lang)}</span>}
       <small>{s.count?bi(lang,`Ø ${periodLabel}`,`avg ${periodLabel}`):bi(lang,"Keine Daten","No data")}</small>
+      {extra}
     </div>
     {path&&<svg className="health-tile-spark" viewBox="0 0 120 34" preserveAspectRatio="none" aria-hidden="true"><path d={path}/></svg>}
-    {extra}
   </article>;
 }

@@ -66,6 +66,8 @@ def _health(x: DailyHealth) -> dict:
         "spo2_avg": x.spo2_avg,
         "training_readiness": x.training_readiness,
         "vo2max_running": x.vo2max_running,
+        "floors_ascended": x.floors_ascended,
+        "floors_descended": x.floors_descended,
     }
     sources = {key: _metric_source(x.raw, key) for key, value in fields.items() if value is not None}
     return {

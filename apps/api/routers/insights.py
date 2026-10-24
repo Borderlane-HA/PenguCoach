@@ -16,6 +16,7 @@ from pengucoach.common.dates import day_start, user_today
 from pengucoach.db.models import Activity, ActivityFeedback, AiRun, CoachCheckin, DailyHealth, FitFile, HrvDaily, PlanActivityMatch, PlanSchedule, SleepSession
 from pengucoach.db.session import get_db
 from pengucoach.fit.service import load_recording_series
+from pengucoach.sparkyfitness.telemetry import telemetry
 from pengucoach.garmin.zones import training_zone_snapshot
 from apps.api.routers.activities import _owned_activity
 
@@ -106,8 +107,13 @@ async def route_comparison(activity_id: uuid.UUID, start: float = Query(default=
         return {"reference": route_metrics(reference), "items": [], "reason": "missing_gps", "scanned": 0}
     segment = start > 0 or end < 100
     now = datetime.now(timezone.utc)
-    candidates = (await db.execute(select(Activity, FitFile).join(FitFile, FitFile.activity_id == Activity.id).where(Activity.user_id == user.id, FitFile.user_id == user.id, Activity.id != activity.id, Activity.started_at >= now-timedelta(days=365), Activity.started_at <= now, FitFile.status == "parsed").order_by(Activity.started_at.desc()).limit(100))).all()
-    candidates = [(a, fit) for a, fit in candidates if sport_family(a.sport_type) == sport_family(activity.sport_type) and (segment or not activity.distance_m or not a.distance_m or .85 <= a.distance_m/activity.distance_m <= 1.15)][:20]
+    # FIT recordings and SparkyFitness GPS tracks both count as recordings (alpha.84);
+    # before, only activities with a parsed FIT file were ever compared.
+    rows = (await db.execute(select(Activity, FitFile).outerjoin(FitFile, (FitFile.activity_id == Activity.id) & (FitFile.user_id == user.id)).where(Activity.user_id == user.id, Activity.id != activity.id, Activity.started_at >= now-timedelta(days=365), Activity.started_at <= now).order_by(Activity.started_at.desc()).limit(400))).all()
+    family = sport_family(activity.sport_type)
+    candidates = [(a, fit if fit is not None and fit.status == "parsed" else None) for a, fit in rows
+        if sport_family(a.sport_type) == family and ((fit is not None and fit.status == "parsed") or telemetry(a.raw).get("gps"))
+        and (segment or not activity.distance_m or not a.distance_m or .85 <= a.distance_m/activity.distance_m <= 1.15)][:20]
     def compare():
         items = []
         current = route_metrics(reference)

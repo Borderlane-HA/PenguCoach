@@ -19,7 +19,7 @@ export const TODAY_CARDS:{key:string;span:number;de:string;en:string;descDe:stri
   {key:"reflection",span:0,de:"Tagesabschluss",en:"Daily wrap-up",descDe:"Abendlicher Rückblick im Check-in",descEn:"Evening reflection inside the check-in",placed:false},
 ];
 export const CARD_KEYS = TODAY_CARDS.map(c=>c.key);
-export const TODAY_METRICS = ["steps","sleep","resting_hr","hrv","stress","hydration","body_battery_high","weight","body_fat","training_readiness","vo2max"];
+export const TODAY_METRICS = ["steps","sleep","resting_hr","hrv","stress","hydration","body_battery_high","floors","weight","body_fat","training_readiness","vo2max"];
 
 export const DEFAULT_TODAY:TodayPrefs = {
   order:[...CARD_KEYS],hidden:[],pinned_metrics:["steps","sleep","resting_hr","hrv","weight","stress"],

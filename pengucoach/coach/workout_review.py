@@ -165,6 +165,34 @@ def gps_points(series):
     return points
 
 
+def nearest_on_track(point, track):
+    """Closest position on the polyline (not only its fixes) and that distance in metres.
+
+    Simplified tracks (SparkyFitness) keep only the corners of straight roads,
+    so the nearest *fix* can be hundreds of metres away while the route itself
+    passes right by. Returns the index of the closer segment end.
+    """
+    if len(track) == 1:
+        return 0, haversine(point, track[0])
+    lat0 = math.radians(point[0])
+    scale = 6371000 * math.pi / 180
+    def xy(p):
+        return ((p[1]-point[1]) * scale * math.cos(lat0), (p[0]-point[0]) * scale)
+    best, best_d = 0, float("inf")
+    previous = xy(track[0])
+    for i in range(1, len(track)):
+        current = xy(track[i])
+        dx, dy = current[0]-previous[0], current[1]-previous[1]
+        length = dx*dx + dy*dy
+        t = 0.0 if length == 0 else max(0.0, min(1.0, -(previous[0]*dx + previous[1]*dy) / length))
+        px, py = previous[0] + t*dx, previous[1] + t*dy
+        d = math.hypot(px, py)
+        if d < best_d:
+            best, best_d = (i-1 if t < .5 else i), d
+        previous = current
+    return best, best_d
+
+
 def sampled(points, count=48):
     return [points[round(i*(len(points)-1)/(min(count, len(points))-1))] for i in range(min(count, len(points)))] if len(points) > 1 else points
 
@@ -172,8 +200,8 @@ def sampled(points, count=48):
 def route_match(reference, candidate, *, segment=False):
     """Conservative ordered shape match; route length alone cannot match.
 
-    Require endpoints within 100m and 95% of sampled points within 80m in
-    both directions, monotonic progress and comparable recorded distance.
+    Require endpoints within 100m and 95% of sampled points within 80m of the
+    other route line in both directions, monotonic progress and comparable recorded distance.
     """
     a, b = gps_points(reference), gps_points(candidate)
     if len(a) < 12 or len(b) < 12 or len(a)/max(1, len(reference)) < .8 or len(b)/max(1, len(candidate)) < .8:
@@ -202,14 +230,29 @@ def route_match(reference, candidate, *, segment=False):
         for probe_index, p in enumerate(probes):
             # A closed loop's finish shares its start coordinate. Honour the
             # recording endpoints rather than matching the finish to index 0.
-            index = 0 if probe_index == 0 else len(target)-1 if probe_index == len(probes)-1 else min(range(len(target)), key=lambda i: haversine(p, target[i]))
+            if probe_index == 0:
+                index, gap = 0, haversine(p, target[0])
+            elif probe_index == len(probes)-1:
+                index, gap = len(target)-1, haversine(p, target[-1])
+            else:
+                index, gap = nearest_on_track(p, target)
             progress.append(index)
-            gaps.append(haversine(p, target[index]))
+            gaps.append(gap)
         if any(y < x-2 for x, y in zip(progress, progress[1:])):
             return None
     if sum(d <= 80 for d in gaps)/len(gaps) < .95:
         return None
     return {"start_index": b[0][2], "end_index": b[-1][2], "mean_gap_m": round(mean(gaps), 1)}
+
+
+def _bridgeable(a, b, seconds):
+    """Short steps always count; on simplified tracks a longer step counts while moving."""
+    if not 0 < seconds:
+        return False
+    if seconds <= 30:
+        return True
+    da, db = number(a.get("distance_km")), number(b.get("distance_km"))
+    return seconds <= 1800 and da is not None and db is not None and 0.5 <= (db-da)*1000/seconds <= 45
 
 
 def route_metrics(series):
@@ -226,7 +269,7 @@ def route_metrics(series):
         pairs = []
         for a, b in zip(series, series[1:]):
             ta, tb, value = number(a.get("elapsed_s")), number(b.get("elapsed_s")), number(a.get(metric))
-            if ta is not None and tb is not None and 0 < tb-ta <= 30 and value is not None and value >= 0 and (metric != "heart_rate" or value > 0) and a.get("track_segment") == b.get("track_segment"):
+            if ta is not None and tb is not None and _bridgeable(a, b, tb-ta) and value is not None and value >= 0 and (metric != "heart_rate" or value > 0) and a.get("track_segment") == b.get("track_segment"):
                 pairs.append((value, tb-ta))
         if pairs and "elapsed_seconds" in result and sum(w for _, w in pairs)/result["elapsed_seconds"] >= .7:
             result[output] = round(sum(v*w for v, w in pairs)/sum(w for _, w in pairs), 1)

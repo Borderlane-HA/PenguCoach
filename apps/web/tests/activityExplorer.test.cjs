@@ -6,7 +6,7 @@ const path=require('node:path');
 const {execFileSync}=require('node:child_process');
 const temporary=fs.mkdtempSync(path.join(os.tmpdir(),'pengucoach-explorer-'));
 execFileSync(process.execPath,[require.resolve('typescript/bin/tsc'),'lib/activityExplorer.ts','--module','commonjs','--target','ES2022','--skipLibCheck','--outDir',temporary],{cwd:path.resolve(__dirname,'..')});
-const {finite,makeAxis,nearestIndex,routeSegments,linePath,METRICS,metricLabel,bearing}=require(path.join(temporary,'activityExplorer.js'));
+const {finite,makeAxis,nearestIndex,routeSegments,linePath,METRICS,metricLabel,bearing,bridgeable}=require(path.join(temporary,'activityExplorer.js'));
 after(()=>fs.rmSync(temporary,{recursive:true,force:true}));
 
 test('missing values never become zero while zero watts and equator coordinates remain valid',()=>{
@@ -48,4 +48,11 @@ test('pace rounding carries seconds into the next minute and route bearing follo
   assert.equal(metricLabel(METRICS.find(m=>m.key==='pace_s_per_km'),299.9),'5:00 min/km');
   const points=routeSegments([{position_lat:0,position_long:0},{position_lat:0,position_long:1}]).flat();
   assert.equal(Math.round(bearing(points,0)),90);
+});
+test('sparse simplified tracks are bridged only while moving',()=>{
+  assert.equal(bridgeable(20,60),true);
+  assert.equal(bridgeable(300,420),true);   // 1.4 m/s over a straight path
+  assert.equal(bridgeable(600,20),false);   // standing: a pause, not a line
+  assert.equal(bridgeable(3600,5000),false);
+  assert.equal(bridgeable(0,10),false);
 });

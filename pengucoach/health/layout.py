@@ -1,7 +1,7 @@
 """Personal layout of the Health page (alpha.83): sections, readings and default period."""
 
 HEALTH_SECTIONS = ['overview', 'trends', 'development', 'body', 'coverage']
-HEALTH_METRICS = ['hrv', 'sleep', 'resting_hr', 'steps', 'body_battery_high', 'stress', 'hydration']
+HEALTH_METRICS = ['hrv', 'sleep', 'resting_hr', 'steps', 'floors', 'body_battery_high', 'stress', 'hydration']
 HEALTH_PERIODS = ['7', '30', '90', '180', '365', 'all']
 DEFAULT_HEALTH = {
     'order': list(HEALTH_SECTIONS),

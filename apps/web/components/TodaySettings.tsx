@@ -6,7 +6,7 @@ import {api} from "../lib/api";
 import {bi,type Lang} from "../lib/i18n";
 import {TODAY_CARDS,TODAY_METRICS,DEFAULT_TODAY,move,normalizeToday,toggle,type TodayPrefs} from "../lib/todayLayout";
 
-export const metricNames=(lang:Lang):Record<string,string>=>({steps:bi(lang,"Schritte","Steps"),sleep:bi(lang,"Schlaf","Sleep"),resting_hr:bi(lang,"Ruhepuls","Resting HR"),hrv:"HRV",stress:"Stress",hydration:bi(lang,"Trinkmenge","Water"),body_battery_high:"Body Battery",weight:bi(lang,"Gewicht","Weight"),body_fat:bi(lang,"Körperfett","Body fat"),training_readiness:bi(lang,"Geräte-Bereitschaft","Device readiness"),vo2max:"VO₂max"});
+export const metricNames=(lang:Lang):Record<string,string>=>({steps:bi(lang,"Schritte","Steps"),sleep:bi(lang,"Schlaf","Sleep"),resting_hr:bi(lang,"Ruhepuls","Resting HR"),hrv:"HRV",stress:"Stress",hydration:bi(lang,"Trinkmenge","Water"),body_battery_high:"Body Battery",floors:bi(lang,"Etagen","Floors"),weight:bi(lang,"Gewicht","Weight"),body_fat:bi(lang,"Körperfett","Body fat"),training_readiness:bi(lang,"Geräte-Bereitschaft","Device readiness"),vo2max:"VO₂max"});
 
 export function GearIcon(){return <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2.2"/><circle cx="10" cy="17" r="2.2"/></svg>}
 

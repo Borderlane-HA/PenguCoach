@@ -101,13 +101,13 @@ export function extent(data:Sample[], key:string):[number,number] {
   return [lo-padding,hi+padding];
 }
 
-export function linePath(data:Sample[], metric:Metric, positions:number[], width:number, height:number, padding:number):string {
+export function linePath(data:Sample[], metric:Metric, positions:number[], width:number, height:number, padding:number, top=padding, bottom=padding):string {
   const [lo,hi]=extent(data,metric.key);
   let started=false, path="";
   data.forEach((row,i)=>{
     const value=finite(row[metric.key]);
     if (value==null) {started=false;return;}
-    const x=padding+(positions[i]??0)*(width-padding*2), y=padding+(hi-value)/(hi-lo)*(height-padding*2);
+    const x=padding+(positions[i]??0)*(width-padding*2), y=top+(hi-value)/(hi-lo)*(height-top-bottom);
     path+=`${started?" L":"M"}${x.toFixed(2)} ${y.toFixed(2)}`; started=true;
   });
   return path;
@@ -120,4 +120,12 @@ export function bearing(points:RoutePoint[], index:number):number {
   const y=Math.sin(delta)*Math.cos(b.lat*radians);
   const x=Math.cos(a.lat*radians)*Math.sin(b.lat*radians)-Math.sin(a.lat*radians)*Math.cos(b.lat*radians)*Math.cos(delta);
   return (Math.atan2(y,x)/radians+360)%360;
+}
+
+/** Two neighbouring fixes may be joined by a line: short steps always, longer
+ * ones (simplified SparkyFitness tracks) only while they show steady movement. */
+export function bridgeable(seconds:number, metres:number):boolean {
+  if (!(seconds > 0) || !(metres >= 0)) return false;
+  if (seconds <= 120 && metres <= 250) return true;
+  return seconds <= 1800 && metres <= 3000 && metres/seconds >= .5 && metres/seconds <= 45;
 }

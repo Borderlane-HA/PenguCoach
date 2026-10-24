@@ -92,6 +92,21 @@ def best_efforts(series, windows=(60, 300, 1200)):
     return result
 
 
+def _plausible_step(seconds, metres):
+    """One step between two fixes that can be bridged.
+
+    Dense recordings: up to 2 minutes and 250 m. Simplified tracks
+    (SparkyFitness keeps only the corners of straight paths) may have fixes
+    minutes apart; such a gap still counts while it shows steady movement
+    (0.5–45 m/s), like the route segmentation does. A standstill is a break.
+    """
+    if seconds is None or metres is None or seconds <= 0 or metres < 0:
+        return False
+    if seconds <= 120 and metres <= 250:
+        return True
+    return seconds <= 1800 and metres <= 3000 and 0.5 <= metres/seconds <= 45
+
+
 def speed_passages(series):
     """Sustained recorded speed relative to this route, never a future target.
 
@@ -104,8 +119,8 @@ def speed_passages(series):
         d, e = number(left.get('distance_km')), number(right.get('distance_km'))
         speed, next_speed = number(left.get('speed_kmh')), number(right.get('speed_kmh'))
         coords = [(number(r.get('position_lat')), number(r.get('position_long'))) for r in (left, right)]
-        valid = (a is not None and b is not None and 0 < b-a <= 30
-                 and d is not None and e is not None and 0 <= (e-d)*1000 <= 250
+        valid = (a is not None and b is not None and d is not None and e is not None
+                 and 0 < b-a <= 120 and 0 <= (e-d)*1000 <= 1000 and _plausible_step(b-a, (e-d)*1000)
                  and speed is not None and next_speed is not None and 0 <= speed <= 200 and 0 <= next_speed <= 200
                  and left.get('track_segment') == right.get('track_segment')
                  and all(lat is not None and lon is not None and abs(lat) <= 90 and abs(lon) <= 180 for lat, lon in coords))
@@ -174,7 +189,7 @@ def route_briefing(series):
             previous=series[index-1]
             dt=number(row.get('elapsed_s'));pt=number(previous.get('elapsed_s'))
             pd=number(previous.get('distance_km'))
-            if row.get('track_segment') != previous.get('track_segment') or pd is None or dist < pd or (dt is not None and pt is not None and (dt <= pt or dt-pt > 120)) or (dist-pd)*1000 > 250:
+            if row.get('track_segment') != previous.get('track_segment') or pd is None or dist < pd or (dt is not None and pt is not None and (dt <= pt or not _plausible_step(dt-pt,(dist-pd)*1000))) or (dt is None and (dist-pd)*1000 > 250):
                 finish();anchor=None
         if anchor is None:
             anchor=(index,dist,alt);continue

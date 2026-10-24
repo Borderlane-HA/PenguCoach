@@ -70,10 +70,34 @@ def _segments(df: pd.DataFrame) -> pd.Series:
     return pd.Series(0, index=df.index)
 
 
+def device_distance_mode(device: pd.Series, gps_total_m: float) -> str:
+    """Decide whether a provider ``distance`` column can be trusted.
+
+    ``device``: a running total that grows with the track (FIT, most watches).
+    ``steps``: per-fix increments whose sum matches the GPS route.
+    ``gps``: zeros, resets or totals far off the positions – use the positions.
+    Without usable positions the device values are kept as they are.
+    """
+    values = pd.to_numeric(device, errors="coerce").dropna()
+    if len(values) < 2:
+        return "gps" if gps_total_m >= 50 else "device"
+    if gps_total_m < 50:
+        return "device"
+    diffs = values.diff().dropna()
+    growing = float((diffs >= -1.0).mean()) >= 0.98 if len(diffs) else False
+    total = float(values.iloc[-1] - values.iloc[0]) if growing else 0.0
+    if growing and 0.6 <= total / gps_total_m <= 1.6:
+        return "device"
+    increments = float(values.clip(lower=0).sum())
+    if not growing and 0.6 <= increments / gps_total_m <= 1.6:
+        return "steps"
+    return "gps"
+
+
 def add_distance_speed(df: pd.DataFrame, *, smooth: bool = True) -> pd.DataFrame:
     """Fill cumulative ``distance`` and missing ``speed`` from positions.
 
-    A device distance column with values is kept as-is. Distance does not grow
+    A plausible device distance column is kept (see device_distance_mode). Distance does not grow
     across segment breaks: the gap between two GPX segments is not ridden.
     ``smooth=False`` for tracks that were already simplified at the source
     (SparkyFitness keeps only the corner points of straight stretches).
@@ -108,8 +132,13 @@ def add_distance_speed(df: pd.DataFrame, *, smooth: bool = True) -> pd.DataFrame
         d = d.where(~((dt > 0) & (d / dt > MAX_PLAUSIBLE_SPEED)), 0.0)
         step.loc[rows] = d.values
 
-    if has_device_distance:
+    choice = device_distance_mode(device_distance, float(step.sum())) if has_device_distance else "gps"
+    if choice == "device":
         distance = device_distance.ffill().fillna(0.0)
+    elif choice == "steps":
+        # Some phone apps write the distance since the previous fix, not a running total.
+        distance = device_distance.clip(lower=0).fillna(0.0).cumsum()
+        out["distance"] = distance
     else:
         distance = step.cumsum()
         out["distance"] = distance

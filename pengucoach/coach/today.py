@@ -14,7 +14,7 @@ PREVIOUS_TODAY_CARDS = ['progress', 'preparation', 'weather', 'reflection', 'loa
 TODAY_CARDS = ['readiness', 'checkin', 'metrics', 'dayphases', 'preparation', 'weather', 'progress',
                'load', 'trend', 'activities', 'week', 'reflection']
 NEW_TODAY_CARDS = ['readiness', 'checkin', 'dayphases', 'week']
-TODAY_METRICS = ['steps', 'sleep', 'resting_hr', 'hrv', 'stress', 'hydration', 'body_battery_high', 'weight', 'body_fat', 'training_readiness', 'vo2max']
+TODAY_METRICS = ['steps', 'sleep', 'resting_hr', 'hrv', 'stress', 'hydration', 'body_battery_high', 'floors', 'weight', 'body_fat', 'training_readiness', 'vo2max']
 TODAY_DENSITIES = ['comfortable', 'compact']
 DEFAULT_METRICS = ['steps', 'sleep', 'resting_hr', 'hrv', 'weight', 'stress']
 

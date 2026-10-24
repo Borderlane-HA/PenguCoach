@@ -58,10 +58,13 @@ export default function ActivityPanorama({settings,point,points,de,onGoogleActiv
     finally{if(attempt===cancelled.current)setBusy(false);}
   }
 
+  if(!open)return <section className="activity-panorama closed">
+    <button type="button" className="ghost compact" disabled={!point||!settings} title={de?"Die Umgebung an der markierten Stelle ansehen":"See the surroundings of the marked point"} onClick={()=>{setError("");setOpen(true)}}>{de?"Straßenansicht":"Street view"}</button>
+    {error&&<p role="alert" className="status-bad">{error}</p>}
+  </section>;
   return <section className="activity-panorama">
     <div className="between"><div><strong>{de?"Straßenansicht":"Street-level view"}</strong><small className="panorama-subtitle">{de?"Die Umgebung zur ausgewählten Trainingsstelle ansehen":"See the surroundings of the selected training point"}</small></div>
-      {!open&&<button type="button" className="ghost compact" disabled={!point||!settings} onClick={()=>{setError("");setOpen(true)}}>{de?"Straßenansicht öffnen":"Open street-level view"}</button>}
-      {open&&<button type="button" className="ghost compact" onClick={close}>{de?"Schließen":"Close"}</button>}
+      <button type="button" className="ghost compact" onClick={close}>{de?"Schließen":"Close"}</button>
     </div>
     {open&&!credential&&<div className="panorama-consent">
       <label>{de?"Anbieter":"Provider"}<select value={provider} disabled={busy} onChange={e=>{setProvider(e.target.value as Provider);setError("")}}><option value="google">Google Street View</option><option value="apple">Apple Look Around</option></select></label>

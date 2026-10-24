@@ -49,3 +49,10 @@ test('recap only shows slides that have data',()=>{
 test('every metric has a plain explanation in both languages',()=>{
   for(const m of H.HEALTH_METRICS){assert.ok(m.info.de.length>30,m.key);assert.ok(m.info.en.length>30,m.key);assert.doesNotMatch(m.info.de,/API|Endpoint|Parquet|Celery/)}
 });
+test('missing readings are never zeros, real zero floors count',()=>{
+  const floors=H.HEALTH_METRICS.find(m=>m.key==='floors');
+  const s=H.summarize([{date:'2026-10-01',floors_ascended:0},{date:'2026-10-02',floors_ascended:null},{date:'2026-10-03',floors_ascended:10}],floors);
+  assert.equal(s.count,2);assert.equal(s.avg,5);
+  const h=H.summarize([{date:'2026-10-01',overnight_average:null},{date:'2026-10-02',overnight_average:50}],hrv);
+  assert.equal(h.count,1);assert.equal(h.avg,50);
+});

@@ -94,6 +94,16 @@ SparkyFitness v1.7.x can store wearable workout telemetry (heart rate, GPS, cade
 
 PenguCoach reads body/check-in values when SparkyFitness exposes them, including weight, height, BMI, body-fat percentage, body-water percentage, muscle mass and bone mass. These connected-source values remain read-only and keep per-metric provenance so Garmin values are not silently overwritten.
 
+Since alpha.84 the current check-in columns `muscle_mass_kg`, `bone_mass_kg` and `body_water_percentage` are read directly (earlier versions only knew the older `muscle_mass`/`bone_mass` names, so muscle and bone mass from newer SparkyFitness servers were missing). Manual or older custom measurement categories named like "Muscle Mass", "Bone Mass" or "Floors" are read as well; values in lbs are converted to kg.
+
+## Daily wearable metrics and floors (alpha.84)
+
+`GET /api/generic-health/metrics?startDate=…&endDate=…` (SparkyFitness 1.8+) returns per-day wearable totals. PenguCoach takes `floors_ascended` and `floors_descended` and fills `total_steps` and `resting_heart_rate` only where no other source has a value. Servers without the endpoint are skipped; the sync summary reports `daily_metrics.available=false`.
+
+## GPS tracks without usable distance (alpha.84)
+
+The per-point `dist` value is optional and some phone apps write `0` or a per-fix increment instead of a running total. PenguCoach now checks it against the GPS positions: a running total within 60–160 % of the GPS route is kept, per-fix increments are summed, everything else is replaced by the distance between the GPS points. This fixes the "0.00 km" readout, the route briefing axis and route comparison for such activities without a new sync. Route comparison also includes SparkyFitness GPS tracks (not only FIT files) and matches against the route line, so simplified tracks with fixes minutes apart are compared correctly.
+
 Users without a smart scale can enter the same body/profile values manually on the Health page. Manual values are stored locally in PenguCoach and remain the current fallback for each metric until a newer Garmin or SparkyFitness measurement for that metric becomes available. They are included in Coach/training context with `manual` provenance.
 
 

@@ -208,6 +208,8 @@ class DailyHealth(Base):
     spo2_avg: Mapped[float | None] = mapped_column(Float, nullable=True)
     training_readiness: Mapped[float | None] = mapped_column(Float, nullable=True)
     vo2max_running: Mapped[float | None] = mapped_column(Float, nullable=True)
+    floors_ascended: Mapped[float | None] = mapped_column(Float, nullable=True)
+    floors_descended: Mapped[float | None] = mapped_column(Float, nullable=True)
     raw: Mapped[dict] = mapped_column(JSONB, default=dict)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 

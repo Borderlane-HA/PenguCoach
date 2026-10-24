@@ -493,6 +493,7 @@ async def build_training_plan_context(
             if include_daily_activity:
                 item.update({
                     "steps": row.steps,
+                    "floors_ascended": row.floors_ascended,
                     "distance_m": row.distance_m,
                     "active_calories_kcal": row.active_calories,
                 })
@@ -501,7 +502,7 @@ async def build_training_plan_context(
                     "hydration_ml": row.hydration_ml,
                     "hydration_goal_ml": row.hydration_goal_ml,
                 })
-            for field in ("resting_hr", "stress_avg", "body_battery_high", "body_battery_low", "training_readiness", "vo2max_running", "steps", "hydration_ml", "hydration_goal_ml", "distance_m", "active_calories"):
+            for field in ("resting_hr", "stress_avg", "body_battery_high", "body_battery_low", "training_readiness", "vo2max_running", "steps", "floors_ascended", "hydration_ml", "hydration_goal_ml", "distance_m", "active_calories"):
                 alias = {"resting_hr": "resting_hr_bpm", "active_calories": "active_calories_kcal"}.get(field, field)
                 if alias in item and getattr(row, field, None) is not None:
                     item["sources"][field] = _metric_source(row.raw, field)

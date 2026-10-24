@@ -20,6 +20,8 @@ export const HEALTH_METRICS:MetricDef[] = [
    info:t("Dein Puls in völliger Ruhe, meist nachts gemessen. Sinkt er über Wochen, ist das oft ein Zeichen besserer Ausdauer. Ein plötzlicher Anstieg kann auf Stress, wenig Schlaf oder einen beginnenden Infekt hinweisen.","Your pulse at complete rest, usually measured overnight. A drop over weeks often reflects better endurance. A sudden rise can point to stress, short sleep or an emerging infection.")},
   {key:"steps",source:"health",field:"steps",label:t("Schritte","Steps"),unit:"",digits:0,better:"up",tone:"steps",
    info:t("Schritte pro Tag. Mehr Alltagsbewegung zählt – auch ohne Training. Dein Tagesziel stellst du auf „Heute“ an der Schritte-Kachel ein.","Steps per day. Everyday movement counts – even without training. Set your daily target on the steps tile on Today.")},
+  {key:"floors",source:"health",field:"floors_ascended",label:t("Etagen","Floors"),unit:"",digits:0,better:"up",tone:"steps",
+   info:t("Gestiegene Etagen pro Tag, gemessen vom Höhenmesser der Uhr (eine Etage ≈ 3 m). Treppen statt Aufzug zählen hier direkt.","Floors climbed per day, measured by the watch's barometer (one floor ≈ 3 m). Taking the stairs counts right here.")},
   {key:"body_battery_high",source:"health",field:"body_battery_high",label:t("Body Battery","Body Battery"),unit:"",digits:0,better:"up",tone:"battery",
    info:t("Garmins Schätzung deiner Energiereserve von 0 bis 100. Gezeigt wird der höchste Wert des Tages – meist morgens nach dem Schlaf. Ein hoher Morgenwert heißt: gut aufgeladen.","Garmin's estimate of your energy reserve from 0 to 100. Shown is the day's highest value – usually in the morning after sleep. A high morning value means well recharged.")},
   {key:"stress",source:"health",field:"stress_avg",label:t("Stress","Stress"),unit:"",digits:0,better:"down",tone:"stress",
@@ -42,8 +44,9 @@ export type Summary = {avg:number|null;count:number;latest:number|null;latestDat
 
 /** Average, latest value and the change between the first and second half of the period. */
 export function summarize(rows:Row[]|undefined,def:MetricDef):Summary{
-  const values=(rows??[]).map(r=>({date:String(r.date??"").slice(0,10),value:Number(r[def.field])})).filter(v=>v.date&&r(v.value));
-  function r(x:number){return Number.isFinite(x)&&x!==0||x===0&&def.key==="stress"}
+  // A missing reading (null) is not a zero; a real zero only counts where it can happen (stress, floors).
+  const values=(rows??[]).map(r=>({date:String(r.date??"").slice(0,10),value:r[def.field]==null||r[def.field]===""?NaN:Number(r[def.field])})).filter(v=>v.date&&r(v.value));
+  function r(x:number){return Number.isFinite(x)&&(x!==0||def.key==="stress"||def.key==="floors")}
   const n=values.length;
   if(!n)return {avg:null,count:0,latest:null,latestDate:null,first:null,second:null,change:null,trend:null,good:null,values:[]};
   const mean=(a:{value:number}[])=>a.length?a.reduce((s,x)=>s+x.value,0)/a.length:null;

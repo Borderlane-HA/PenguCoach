@@ -25,7 +25,7 @@ import {tileColumns} from "../../lib/healthInsights";
 
 type O=Record<string,any>;
 type Body={weight_kg?:number;body_fat_percent?:number;sources?:Record<string,string>;measured_at_by_metric?:Record<string,string>};
-type H={available:boolean;step_goal?:any;steps?:number;resting_hr?:number;stress_avg?:number;body_battery_high?:number;hydration_ml?:number;hydration_goal_ml?:number;training_readiness?:number;vo2max_running?:number;vo2max_cycling?:number;sources?:Record<string,string>;body?:Body;sleep?:{duration_seconds?:number;score?:number;source?:string};hrv?:{overnight_average?:number;status?:string;source?:string}};
+type H={available:boolean;step_goal?:any;steps?:number;floors_ascended?:number;resting_hr?:number;stress_avg?:number;body_battery_high?:number;hydration_ml?:number;hydration_goal_ml?:number;training_readiness?:number;vo2max_running?:number;vo2max_cycling?:number;sources?:Record<string,string>;body?:Body;sleep?:{duration_seconds?:number;score?:number;source?:string};hrv?:{overnight_average?:number;status?:string;source?:string}};
 type A={id:string;name?:string;sport_type?:string;distance_m?:number;duration_seconds?:number;started_at?:string};
 const dur=(s?:number)=>s?`${Math.floor(s/3600)}h ${Math.round((s%3600)/60)}m`:"—";
 const sportGlyph=(s?:string)=>{const v=(s||"").toLowerCase();if(v.includes("run"))return "RUN";if(v.includes("bik")||v.includes("cycl"))return "BIKE";if(v.includes("swim"))return "SWIM";if(v.includes("strength")||v.includes("weight"))return "GYM";return "MOVE"};
@@ -78,7 +78,8 @@ export default function Today(){
     {key:"sleep",label:bi(lang,"Schlaf","Sleep"),value:h?.sleep?.score!=null?`${h.sleep.score}`:sleepHours!=null?`${sleepHours.toFixed(1)} h`:"—",note:h?.sleep?[sourceLabel(h.sleep.source,lang),h.sleep.score!=null&&sleepHours!=null?`${sleepHours.toFixed(1)} h`:""].filter(Boolean).join(" · "):none,tone:"sleep"},
     {key:"hrv",label:"HRV",value:h?.hrv?.overnight_average!=null?`${h.hrv.overnight_average} ms`:"—",note:h?.hrv?[sourceLabel(h.hrv.source,lang),h.hrv.status].filter(Boolean).join(" · "):none,tone:"hrv"},
     {key:"resting_hr",label:bi(lang,"Ruhepuls","Resting HR"),value:h?.resting_hr!=null?`${h.resting_hr} bpm`:"—",note:h?.resting_hr!=null?src("resting_hr"):none,tone:"heart"},
-    {key:"steps",label:bi(lang,"Schritte","Steps"),value:h?.steps!=null?h.steps.toLocaleString(de?"de-DE":"en-US"):"—",note:h?.steps!=null?src("steps"):bi(lang,"Heute","Today"),tone:"steps"},
+    {key:"steps",label:bi(lang,"Schritte","Steps"),value:h?.steps!=null?h.steps.toLocaleString(de?"de-DE":"en-US"):"—",note:h?.steps!=null?[h.floors_ascended!=null?bi(lang,`↗ ${Math.round(h.floors_ascended)} Etagen`,`↗ ${Math.round(h.floors_ascended)} floors`):"",src("steps")].filter(Boolean).join(" · "):bi(lang,"Heute","Today"),tone:"steps"},
+    {key:"floors",label:bi(lang,"Etagen","Floors"),value:h?.floors_ascended!=null?Math.round(h.floors_ascended).toLocaleString(de?"de-DE":"en-US"):"—",note:h?.floors_ascended!=null?src("floors_ascended"):none,tone:"steps"},
     {key:"body_battery_high",label:"Body Battery",value:h?.body_battery_high??"—",note:h?.body_battery_high!=null?src("body_battery_high"):none,tone:"battery"},
     {key:"stress",label:"Stress",value:h?.stress_avg??"—",note:h?.stress_avg!=null?src("stress_avg"):none,tone:"stress"},
     {key:"hydration",label:bi(lang,"Trinkmenge","Water"),value:h?.hydration_ml!=null?`${(h.hydration_ml/1000).toFixed(1)} L`:"—",note:h?.hydration_ml!=null?[src("hydration_ml"),h.hydration_goal_ml?`${bi(lang,"Ziel","Goal")} ${(h.hydration_goal_ml/1000).toFixed(1)} L`:""].filter(Boolean).join(" · "):none,tone:"water"},

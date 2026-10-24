@@ -3,7 +3,9 @@
 import {useId,useMemo,useState} from "react";
 
 type Point={date:string;label?:string;value:number|null|undefined};
-type Series={label:string;points:Point[];axis?:"left"|"right";unit?:string;decimals?:number;dashed?:boolean};
+type Series={label:string;points:Point[];axis?:"left"|"right";unit?:string;decimals?:number;dashed?:boolean;
+  /** Join the line across days without a value (e.g. weigh-ins only on some days). */
+  connect?:boolean};
 type Props={series:Series[];height?:number;ariaLabel?:string;emptyLabel?:string};
 
 /** Fewest decimals that keep every axis label distinct (avoids "78, 78, 78"). */
@@ -26,7 +28,8 @@ export default function ProfessionalLineChart({series,height=300,ariaLabel="Tren
   const chart=useMemo(()=>{
     const rows=new Map<string,{date:string;label:string;values:(number|null)[]}>();
     series.forEach((s,si)=>s.points.forEach(p=>{
-      const n=Number(p.value),valid=Number.isFinite(n)?n:null;
+      // Number(null) is 0: a missing reading must stay missing, never become a zero.
+      const n=p.value==null||(typeof p.value==="string"&&!String(p.value).trim())?NaN:Number(p.value),valid=Number.isFinite(n)?n:null;
       const row=rows.get(p.date)??{date:p.date,label:humanLabel(p.label??p.date),values:Array(series.length).fill(null)};
       row.label=humanLabel(p.label??row.label);row.values[si]=valid;rows.set(p.date,row);
     }));
@@ -47,7 +50,7 @@ export default function ProfessionalLineChart({series,height=300,ariaLabel="Tren
   const ticks=(axis:"left"|"right")=>{const e=chart.scales[axis];if(!e)return[];return Array.from({length:5},(_,i)=>e[0]+(e[1]-e[0])*(i/4))};
   const pathFor=(si:number)=>{
     const axis=series[si].axis??"left";let d="",open=false;
-    chart.ordered.forEach((row,i)=>{const v=row.values[si];if(v==null){open=false;return}d+=`${open?" L":"M"} ${x(i).toFixed(1)} ${y(v,axis).toFixed(1)}`;open=true});
+    chart.ordered.forEach((row,i)=>{const v=row.values[si];if(v==null){if(!series[si].connect)open=false;return}d+=`${open?" L":"M"} ${x(i).toFixed(1)} ${y(v,axis).toFixed(1)}`;open=true});
     return d;
   };
   const tickIdx=[...new Set([0,Math.round((chart.ordered.length-1)*.25),Math.round((chart.ordered.length-1)*.5),Math.round((chart.ordered.length-1)*.75),chart.ordered.length-1])].filter(i=>i>=0);

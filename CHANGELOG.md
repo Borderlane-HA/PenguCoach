@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.1.0-alpha.84
+
+- **Activity detail – map, values and chart in one view:**
+  - The current values (time, distance, heart rate, speed/pace, elevation …) now sit directly on the map, so the route stays visible while you move through the workout. On phones they appear right below the map.
+  - Hovering anywhere near the route moves the marker – along the whole line, not only on the exact GPS points. It updates once per frame, so it no longer stutters, and samples without GPS show the nearest recorded position instead of no marker.
+  - Hover over the route or chart shows values live; a click, the slider or Replay sets a marker the view returns to. "Lock selection" is gone.
+  - Calmer chart: thinner lines, elevation as a soft area, dots on every line at the cursor. The slider sits right under the chart, the analysis range moved into a small menu next to Replay, explanations into an "i". Street view is a small button below the map until you open it.
+- **Fixed: SparkyFitness activities with "0.00 km".** Some apps send a GPS distance of 0 (or a per-point increment). PenguCoach now checks the provider distance against the GPS route and calculates it from the positions when it does not fit. This repairs the distance readout, the distance axis, splits, **"Prepare this route"** (axis "0.0 km – 0.0 km", zig-zag lines) and the route comparison – for existing activities, no new sync needed.
+- **Route briefing and comparison work with simplified tracks:** climbs, fast passages and averages bridge long steps between GPS fixes while you are moving (SparkyFitness keeps only the corners of straight paths). **Route comparison** now also finds earlier SparkyFitness recordings, not only FIT files, and matches the route line instead of single fixes.
+- **Health – body trend:** choose weight, body fat, muscle mass, body water, bone mass or BMI. Only days with a measurement are drawn, so days without weighing no longer appear as **0 kg**. The same bug (a missing value drawn as zero) is fixed in all charts.
+- **SparkyFitness smart-scale values:** muscle mass and bone mass from current SparkyFitness versions (`muscle_mass_kg`, `bone_mass_kg`) were not read – now they are, as well as older custom categories ("Muscle Mass", "Bone Mass", values in lbs converted).
+- **Floors climbed:** from Garmin (daily summary or floors timeline) and SparkyFitness (`/generic-health/metrics`, plus "Floors" custom categories). Shown on the steps tile in Health (daily average) and Today (today's floors), and selectable as their own "Floors" tile on both pages. The coach sees them too.
+- Fixed: the data coverage bars in an activity were white in dark themes.
+- Help and `docs/SPARKYFITNESS.md` updated.
+- **Database migration** `0018_daily_floors` (two new columns on `daily_health`); it runs automatically during the update.
+
 ## 0.1.0-alpha.83
 
 - **Health rebuilt – calm, explained and yours:**

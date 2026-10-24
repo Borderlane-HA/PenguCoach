@@ -140,6 +140,22 @@ def _parse_dt(value: Any) -> datetime | None:
     return None
 
 
+def _floors(summary: Any, floors: Any) -> tuple[float | None, float | None]:
+    """Floors climbed: the daily summary first, else the sum of the floors timeline."""
+    up = _first_number(summary, "floorsAscended", "floorsClimbed") if isinstance(summary, dict) else None
+    down = _first_number(summary, "floorsDescended") if isinstance(summary, dict) else None
+    if (up is None or down is None) and isinstance(floors, dict):
+        descriptors = [str(d.get("key") or "").lower() for d in floors.get("floorsValueDescriptorDTOList") or [] if isinstance(d, dict)]
+        values = [v for v in floors.get("floorValuesArray") or [] if isinstance(v, (list, tuple))]
+        def column(name: str, fallback: int) -> float | None:
+            index = descriptors.index(name) if name in descriptors else fallback
+            total = [v[index] for v in values if len(v) > index and isinstance(v[index], (int, float))]
+            return float(sum(total)) if total else None
+        up = up if up is not None else column("ascended", 2)
+        down = down if down is not None else column("descended", 3)
+    return up, down
+
+
 async def _upsert_health(db: AsyncSession, user: User, day: date, data: dict[str, Any], preserve_missing: bool = False) -> None:
     row = await db.scalar(select(DailyHealth).where(DailyHealth.user_id == user.id, DailyHealth.date == day))
     if not row:
@@ -169,6 +185,9 @@ async def _upsert_health(db: AsyncSession, user: User, day: date, data: dict[str
     apply("distance_m", _first_number(summary, "totalDistanceMeters", "totalDistanceInMeters", "distanceInMeters", "distance", "totalDistance"))
     apply("active_calories", _first_number(summary, "activeKilocalories", "activeKiloCalories", "activeCalories"))
     apply("resting_calories", _first_number(summary, "bmrKilocalories", "bmrKiloCalories", "restingCalories"))
+    up, down = _floors(summary, data.get("floors"))
+    apply("floors_ascended", up)
+    apply("floors_descended", down)
     resting_hr = int(_first_number(heart, "restingHeartRate") or _first_number(summary, "restingHeartRate") or 0) or None
     apply("resting_hr", resting_hr)
     if heart or not preserve_missing:
