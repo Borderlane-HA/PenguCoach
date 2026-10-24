@@ -62,7 +62,7 @@ def test_manual_body_fallback_and_sparky_detail_surfaces_are_shipped():
     assert '@router.put("/body/manual")' in api
     assert 'source": "manual_body"' in api
     assert 'body_all_rows = await _body_rows' in api
-    assert 'Manuell erfassen' in health
+    assert '/health/body/manual' in health and 'manual-body-editor' in health
     assert 'manual:lang' in Path('apps/web/lib/sources.ts').read_text()
     assert '/exercise-entries/{id}' in docs
     assert 'exercise_entry_details' in sync

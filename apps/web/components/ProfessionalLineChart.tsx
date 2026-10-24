@@ -6,6 +6,8 @@ type Point={date:string;label?:string;value:number|null|undefined};
 type Series={label:string;points:Point[];axis?:"left"|"right";unit?:string;decimals?:number;dashed?:boolean};
 type Props={series:Series[];height?:number;ariaLabel?:string;emptyLabel?:string};
 
+/** Fewest decimals that keep every axis label distinct (avoids "78, 78, 78"). */
+function tickDecimals(values:number[]){for(let d=0;d<3;d++){const seen=new Set(values.map(v=>v.toFixed(d)));if(seen.size===values.length)return d}return 2}
 function fmt(value:number,decimals=1){return new Intl.NumberFormat(undefined,{maximumFractionDigits:decimals,minimumFractionDigits:decimals}).format(value)}
 function humanLabel(value:string){
   if(/^\d{4}-\d{2}-\d{2}$/.test(value)){const d=new Date(`${value}T12:00:00`);return new Intl.DateTimeFormat(undefined,{day:"2-digit",month:"short"}).format(d)}
@@ -54,8 +56,8 @@ export default function ProfessionalLineChart({series,height=300,ariaLabel="Tren
   return <div className="pro-chart-shell">
     <svg className="pro-chart-svg" viewBox={`0 0 ${W} ${H}`} role="img" aria-label={ariaLabel} onMouseLeave={()=>setHover(null)}>
       <defs>{series.map((_,si)=><linearGradient key={si} id={`${id}-g${si}`} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" className={`pro-stop pro-stop-${si%4}`} stopOpacity=".20"/><stop offset="100%" className={`pro-stop pro-stop-${si%4}`} stopOpacity="0"/></linearGradient>)}</defs>
-      {ticks("left").map((v,i)=><g key={`g${i}`}><line className="pro-grid" x1={L} x2={W-R} y1={y(v,"left")} y2={y(v,"left")}/><text className="pro-axis-label" x={L-9} y={y(v,"left")+4} textAnchor="end">{fmt(v,Math.abs(v)<10?1:0)}</text></g>)}
-      {chart.scales.right&&ticks("right").map((v,i)=><text key={`r${i}`} className="pro-axis-label" x={W-R+9} y={y(v,"right")+4} textAnchor="start">{fmt(v,Math.abs(v)<10?1:0)}</text>)}
+      {(()=>{const t=ticks("left"),d=tickDecimals(t);return t.map((v,i)=><g key={`g${i}`}><line className="pro-grid" x1={L} x2={W-R} y1={y(v,"left")} y2={y(v,"left")}/><text className="pro-axis-label" x={L-9} y={y(v,"left")+4} textAnchor="end">{fmt(v,d)}</text></g>)})()}
+      {chart.scales.right&&(()=>{const t=ticks("right"),d=tickDecimals(t);return t.map((v,i)=><text key={`r${i}`} className="pro-axis-label" x={W-R+9} y={y(v,"right")+4} textAnchor="start">{fmt(v,d)}</text>)})()}
       <line className="pro-axis" x1={L} x2={W-R} y1={H-B} y2={H-B}/>
       {series.map((s,si)=>{
         const d=pathFor(si);if(!d)return null;

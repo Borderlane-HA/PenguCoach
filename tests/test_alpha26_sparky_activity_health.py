@@ -55,10 +55,12 @@ def test_activity_diary_exposes_sparky_provenance_and_filtering():
 
 def test_health_cards_keep_source_provenance_and_period_aggregation():
     page = Path("apps/web/app/health/page.tsx").read_text()
-    assert "function metricAverage" in page
-    assert 'metricAverage(data.sleep??[],"duration_seconds")' in page
-    assert 'metricAverage(data.health??[],"resting_hr")' in page
-    assert "Garmin + SparkyFitness" in page
+    insights = Path("apps/web/lib/healthInsights.ts").read_text()
+    # alpha.83: averages come from one shared helper; body values keep their per-metric source line.
+    assert "export function summarize" in insights
+    assert 'field:"duration_seconds"' in insights and 'field:"resting_hr"' in insights
+    assert "summarize(rowsOf(d,data),d)" in page
+    assert "bodyMetricSource(body,item.key)" in page
 
 
 def test_sparky_sync_supports_multi_year_and_all_data():

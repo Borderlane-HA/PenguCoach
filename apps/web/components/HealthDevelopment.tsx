@@ -3,6 +3,7 @@
 import {useMemo,useState} from "react";
 import ProfessionalLineChart from "./ProfessionalLineChart";
 import TrainingVolumeChart from "./TrainingVolumeChart";
+import InfoTip from "./InfoTip";
 import {bi} from "../lib/i18n";
 
 type Props={data:any;vo2:any;lang:"de"|"en";periodLabel:string};
@@ -51,20 +52,20 @@ export default function HealthDevelopment({data,vo2,lang,periodLabel}:Props){
   ];
 
   return <section className="card health-development-card">
-    <div className="section-heading health-development-heading"><div><span className="eyebrow">TRAINING & DEVELOPMENT</span><h2>{bi(lang,"Training & Entwicklung","Training & development")} · {periodLabel}</h2><p>{bi(lang,"Nicht nur VO₂max: Trainingsvolumen, Effizienz, Belastung und Erholung werden gemeinsam betrachtet. Details bleiben hinter Tabs, damit die Seite ruhig bleibt.","Beyond VO₂ max: volume, efficiency, load and recovery are viewed together. Details stay behind tabs to keep the page calm.")}</p></div><span className="period-badge">{summary.sessions??0} {bi(lang,"Einheiten","sessions")}</span></div>
+    <div className="section-heading health-development-heading"><div><span className="eyebrow">{periodLabel}</span><h2>{bi(lang,"Training & Entwicklung","Training & development")} <InfoTip label={bi(lang,"Was zeigt dieser Bereich?","What does this section show?")} text={bi(lang,"Wie sich deine Fitness entwickelt: Ausdauer (VO₂max), Effizienz bei gleicher Herzfrequenz, Trainingsbelastung und Erholung zusammen betrachtet.","How your fitness develops: endurance (VO₂max), efficiency at the same heart rate, training load and recovery, viewed together.")}/></h2></div><span className="period-badge">{summary.sessions??0} {bi(lang,"Einheiten","sessions")}</span></div>
     <div className="health-development-tabs" role="tablist">{tabs.map(([key,label])=><button key={key} type="button" className={tab===key?"active":""} onClick={()=>setTab(key)}>{label}</button>)}</div>
 
     {tab==="overview"&&<div className="health-development-pane">
       <div className="development-kpis">{cards.map(card=><div className="development-kpi" key={card.label}><small>{card.label}</small><strong>{card.value}</strong><span>{card.note}</span></div>)}</div>
       <div className="health-insight-grid">
-        <div className="insight-chart-card"><div className="insight-title"><div><span className="eyebrow">VOLUME</span><h3>{bi(lang,"Trainingsumfang","Training volume")}</h3></div><strong>{Math.round(summary.minutes??0)} min</strong></div><TrainingVolumeChart rows={data?.volume??[]} lang={lang}/></div>
-        <div className="insight-chart-card"><div className="insight-title"><div><span className="eyebrow">RECOVERY</span><h3>{bi(lang,"Belastung & Erholung","Load & recovery")}</h3></div></div><ProfessionalLineChart series={loadRecoverySeries} ariaLabel={bi(lang,"Trainingsbelastung und HRV Verlauf","Training load and HRV trend")}/></div>
+        <div className="insight-chart-card"><div className="insight-title"><div><h3>{bi(lang,"Trainingsumfang","Training volume")}</h3></div><strong>{Math.round(summary.minutes??0)} min</strong></div><TrainingVolumeChart rows={data?.volume??[]} lang={lang}/></div>
+        <div className="insight-chart-card"><div className="insight-title"><div><h3>{bi(lang,"Belastung & Erholung","Load & recovery")}</h3></div></div><ProfessionalLineChart series={loadRecoverySeries} ariaLabel={bi(lang,"Trainingsbelastung und HRV Verlauf","Training load and HRV trend")}/></div>
       </div>
       <ChangePanel changes={changes} lang={lang}/>
     </div>}
 
     {tab==="endurance"&&<div className="health-development-pane">
-      <div className="insight-chart-card wide"><div className="insight-title"><div><span className="eyebrow">VO₂MAX</span><h3>{bi(lang,"Ausdauerentwicklung","Endurance development")}</h3><p>{bi(lang,"Importierte Werte werden bevorzugt. Wenn kein Wert vorliegt, kann PenguCoach konservativ schätzen; die Linie ist dann gestrichelt und klar als Schätzung markiert.","Imported values take priority. If none exist, PenguCoach can estimate conservatively; estimated lines are dashed and clearly labelled.")}</p></div><Vo2Latest vo2={vo2} lang={lang}/></div><ProfessionalLineChart series={vo2Series} ariaLabel="VO2 max history"/></div>
+      <div className="insight-chart-card wide"><div className="insight-title"><div><h3>{bi(lang,"Ausdauerentwicklung","Endurance development")}</h3><InfoTip label={bi(lang,"Wie entsteht der VO₂max-Wert?","How is VO₂max obtained?")} text={bi(lang,"VO₂max ist die maximale Sauerstoffaufnahme – ein Maß für deine Ausdauer. Werte von Uhr oder Ring haben Vorrang. Fehlen sie, schätzt PenguCoach vorsichtig; geschätzte Werte sind gestrichelt.","VO₂max is the maximum oxygen uptake – a measure of your endurance. Values from your watch or ring come first. Without them PenguCoach estimates carefully; estimated values are dashed.")}/></div><Vo2Latest vo2={vo2} lang={lang}/></div><ProfessionalLineChart series={vo2Series} ariaLabel="VO2 max history"/></div>
       <div className="health-insight-grid">
         <EfficiencyCard item={eff.running} sport="running" lang={lang}/>
         <EfficiencyCard item={eff.cycling} sport="cycling" lang={lang}/>
@@ -74,14 +75,14 @@ export default function HealthDevelopment({data,vo2,lang,periodLabel}:Props){
 
     {tab==="load"&&<div className="health-development-pane">
       <div className="health-insight-grid">
-        <div className="insight-chart-card"><div className="insight-title"><div><span className="eyebrow">LOAD</span><h3>{bi(lang,"Belastungsverlauf","Load trend")}</h3><p>{data?.load_basis==="garmin_training_load"?bi(lang,"Garmin Training Load wird verwendet, wenn die Datenabdeckung ausreicht.","Garmin Training Load is used when coverage is sufficient."):bi(lang,"Fallback auf Trainingsminuten – kein erfundener Belastungsscore.","Fallback to training minutes – no invented load score.")}</p></div></div><ProfessionalLineChart series={loadSeries} ariaLabel={bi(lang,"Trainingsbelastung Verlauf","Training load trend")}/></div>
-        <div className="insight-chart-card"><div className="insight-title"><div><span className="eyebrow">SPORT MIX</span><h3>{bi(lang,"Sportartenmix","Sport mix")}</h3></div></div><SportMix rows={data?.sport_mix??[]} lang={lang}/></div>
+        <div className="insight-chart-card"><div className="insight-title"><div><h3>{bi(lang,"Belastungsverlauf","Load trend")}</h3><p>{data?.load_basis==="garmin_training_load"?bi(lang,"Garmin Training Load","Garmin Training Load"):bi(lang,"Gemessen in Trainingsminuten","Measured in training minutes")}</p></div></div><ProfessionalLineChart series={loadSeries} ariaLabel={bi(lang,"Trainingsbelastung Verlauf","Training load trend")}/></div>
+        <div className="insight-chart-card"><div className="insight-title"><div><h3>{bi(lang,"Sportartenmix","Sport mix")}</h3></div></div><SportMix rows={data?.sport_mix??[]} lang={lang}/></div>
       </div>
-      <div className="insight-chart-card wide"><div className="insight-title"><div><span className="eyebrow">VOLUME</span><h3>{bi(lang,"Volumen nach Sportart","Volume by sport")}</h3></div></div><TrainingVolumeChart rows={data?.volume??[]} lang={lang}/></div>
+      <div className="insight-chart-card wide"><div className="insight-title"><div><h3>{bi(lang,"Volumen nach Sportart","Volume by sport")}</h3></div></div><TrainingVolumeChart rows={data?.volume??[]} lang={lang}/></div>
     </div>}
 
     {tab==="recovery"&&<div className="health-development-pane">
-      <div className="insight-chart-card wide"><div className="insight-title"><div><span className="eyebrow">RECOVERY</span><h3>{bi(lang,"HRV & Ruhepuls","HRV & resting heart rate")}</h3><p>{bi(lang,"Zwei Achsen, damit beide Größen lesbar bleiben. Fehlende Tage werden nicht als Null gezeichnet.","Two axes keep both metrics readable. Missing days are never plotted as zero.")}</p></div></div><ProfessionalLineChart series={recoverySeries} ariaLabel={bi(lang,"Erholungsverlauf","Recovery trend")}/></div>
+      <div className="insight-chart-card wide"><div className="insight-title"><div><h3>{bi(lang,"HRV & Ruhepuls","HRV & resting heart rate")}</h3></div></div><ProfessionalLineChart series={recoverySeries} ariaLabel={bi(lang,"Erholungsverlauf","Recovery trend")}/></div>
       <ChangePanel changes={changes.filter((x:any)=>["hrv","resting_hr"].includes(x.key))} lang={lang}/>
     </div>}
   </section>;
@@ -94,17 +95,17 @@ function Vo2Latest({vo2,lang}:{vo2:any;lang:"de"|"en"}){
 
 function EfficiencyCard({item,sport,lang}:{item:any;sport:"running"|"cycling";lang:"de"|"en"}){
   const title=sport==="running"?bi(lang,"Lauf-Effizienz","Running efficiency"):bi(lang,"Rad-Effizienz","Cycling efficiency");
-  if(!item?.available)return <div className="insight-chart-card"><div className="insight-title"><div><span className="eyebrow">EFFICIENCY</span><h3>{title}</h3><p>{bi(lang,"Noch nicht genug vergleichbare Einheiten mit Herzfrequenzdaten.","Not enough comparable sessions with heart-rate data yet.")}</p></div></div><div className="pro-chart-empty">—</div></div>;
+  if(!item?.available)return <div className="insight-chart-card"><div className="insight-title"><div><h3>{title}</h3><p>{bi(lang,"Noch nicht genug vergleichbare Einheiten mit Herzfrequenzdaten.","Not enough comparable sessions with heart-rate data yet.")}</p></div></div><div className="pro-chart-empty">—</div></div>;
   const points=(item.points??[]).map((x:any)=>({date:x.date,label:x.label,value:x.value}));
   const unit=item.metric==="pace_min_km"?"min/km":"W";
   const displayChange=item.change_percent!=null?`${item.change_percent>0?"+":""}${item.change_percent.toFixed(1)} %`:"—";
-  return <div className="insight-chart-card"><div className="insight-title"><div><span className="eyebrow">EFFICIENCY</span><h3>{title}</h3><p>{bi(lang,"Nur Einheiten mit ähnlicher Ø Herzfrequenz","Only sessions with similar average HR")} · {item.hr_band?.[0]}–{item.hr_band?.[1]} bpm</p></div><strong className={item.change_percent>0?"trend-good":item.change_percent<0?"trend-bad":""}>{displayChange}</strong></div><ProfessionalLineChart series={[{label:item.metric==="pace_min_km"?bi(lang,"Pace","Pace"):bi(lang,"Leistung","Power"),points,unit,decimals:item.metric==="pace_min_km"?2:0}]} ariaLabel={title}/>{item.metric==="pace_min_km"&&points.length>0&&<div className="efficiency-foot">{bi(lang,"Letzter Wert","Latest")}: <b>{pace(points[points.length-1].value)} min/km</b></div>}</div>;
+  return <div className="insight-chart-card"><div className="insight-title"><div><h3>{title}</h3><p>{bi(lang,"Nur Einheiten mit ähnlicher Ø Herzfrequenz","Only sessions with similar average HR")} · {item.hr_band?.[0]}–{item.hr_band?.[1]} bpm</p></div><strong className={item.change_percent>0?"trend-good":item.change_percent<0?"trend-bad":""}>{displayChange}</strong></div><ProfessionalLineChart series={[{label:item.metric==="pace_min_km"?bi(lang,"Pace","Pace"):bi(lang,"Leistung","Power"),points,unit,decimals:item.metric==="pace_min_km"?2:0}]} ariaLabel={title}/>{item.metric==="pace_min_km"&&points.length>0&&<div className="efficiency-foot">{bi(lang,"Letzter Wert","Latest")}: <b>{pace(points[points.length-1].value)} min/km</b></div>}</div>;
 }
 
 function ChangePanel({changes,lang}:{changes:any[];lang:"de"|"en"}){
   if(!changes.length)return null;
   const labels:{[key:string]:[string,string]}={vo2:["VO₂max","VO₂ max"],efficiency:["Effizienz","Efficiency"],resting_hr:["Ruhepuls","Resting HR"],hrv:["HRV","HRV"],volume:["Trainingsvolumen","Training volume"]};
-  return <div className="change-panel"><div><span className="eyebrow">CHANGE</span><h3>{bi(lang,"Was hat sich verändert?","What changed?")}</h3><p>{bi(lang,"Vergleich zwischen früherem und aktuellem Teil des gewählten Zeitraums.","Comparison between the earlier and recent part of the selected period.")}</p></div><div className="change-list">{changes.map(row=>{const positive=row.positive_when==="up"?row.delta>0:row.positive_when==="down"?row.delta<0:null;return <div key={row.key}><span>{labels[row.key]?.[lang==="de"?0:1]??row.label}{row.key==="vo2"&&row.measurement_kind==="estimated"?` · ${bi(lang,"geschätzt","estimated")}`:""}</span><strong className={positive===true?"trend-good":positive===false?"trend-bad":""}>{row.delta>0?"+":""}{row.delta} {row.unit}</strong><small>{arrow(row.trend)} {statusText(row.trend,lang)}</small></div>})}</div></div>;
+  return <div className="change-panel"><div><h3>{bi(lang,"Was hat sich verändert?","What changed?")}</h3></div><div className="change-list">{changes.map(row=>{const positive=row.positive_when==="up"?row.delta>0:row.positive_when==="down"?row.delta<0:null;return <div key={row.key}><span>{labels[row.key]?.[lang==="de"?0:1]??row.label}{row.key==="vo2"&&row.measurement_kind==="estimated"?` · ${bi(lang,"geschätzt","estimated")}`:""}</span><strong className={positive===true?"trend-good":positive===false?"trend-bad":""}>{row.delta>0?"+":""}{row.delta} {row.unit}</strong><small>{arrow(row.trend)} {statusText(row.trend,lang)}</small></div>})}</div></div>;
 }
 
 function SportMix({rows,lang}:{rows:any[];lang:"de"|"en"}){

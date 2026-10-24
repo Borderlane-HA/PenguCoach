@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.1.0-alpha.83
+
+- **Health rebuilt – calm, explained and yours:**
+  - New header with a compact period switch (7 days, 30 days, 3/6 months, 12 months, all), **Recap**, **Assess** and **Customize**.
+  - **Key figure tiles:** average for the period, a trend chip (first half vs. second half; green = better, orange = worse, "stable" below 2 %), a small curve and a small **"i"** with a plain explanation of the value – hover on desktop, tap on phone and tablet. Six tiles share one row; more tiles form two balanced rows.
+  - **Coach per value:** the spark icon on each tile opens a new coach chat with your numbers and the question what the value means and how to improve it. **Assess** hands over a summary of all values. The question can be edited before sending.
+  - **Health recap:** an animated story (week, month, 3 months, year) with sleep, heart, steps and energy, each compared with the period before, ending with a summary and a link to the coach.
+  - **Customize:** show, hide and sort the sections (key figures, trends, training & development, body, data coverage), choose the values and the period the page opens with. Stored per user (`/settings/health-layout`). Data coverage is hidden by default.
+  - Texts shortened: long explanations moved into "i" tips, technical wording removed. Body values are labelled "Current" and keep their source line; "Add" opens the manual entry.
+  - The rolling periods replace the calendar choices (this week/month/year), so both halves of a period can be compared fairly.
+- **"Update available" banner:** a slim notice at the top of every page when a new version exists – also for phone and tablet users. Tap to see what is new (admins go straight to the update area); × hides it until the next version.
+- **Dark themes fixed:** values were unreadable in places (data coverage pills, chart chips and readout tiles in an activity, the AI task switcher, status pill and Customize button in Dark/Slate/Aurora, sport icons, avatar). Hard-coded white surfaces now use the theme colours, a legacy rule that painted dark text on every button in the old dark themes is gone, hover states are checked too, and the theme is applied before the first paint. Light themes got slightly stronger secondary labels.
+- The "NEW" badge on the theme tiles is removed.
+- **Today:** the reading tiles now fill one balanced row (up to six), more readings form two even rows instead of leaving a gap on the right.
+- The coach starts a new conversation when a question is handed over from another page.
+- Chart axes no longer repeat the same label (e.g. "78, 78, 78"), large recap numbers are no longer clipped, and the English labels above the development charts are gone.
+- Help updated (Health, update banner, themes).
+- No database migration.
+
 ## 0.1.0-alpha.82
 
 - **"Today" rebuilt – compact, modern and fully yours:**

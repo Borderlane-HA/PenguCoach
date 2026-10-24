@@ -11,7 +11,7 @@ from pengucoach.health.development import _vo2_from_hrr, estimate_summary, estim
 
 def test_alpha45_release_version():
     project=tomllib.loads(Path("pyproject.toml").read_text())["project"]
-    assert project["version"] == "0.1.0-alpha.82"
+    assert project["version"] == "0.1.0-alpha.83"
     assert project["license"] == "LicenseRef-PolyForm-Noncommercial-1.0.0"
 
 def _user():
@@ -92,9 +92,8 @@ def test_health_development_ui_is_professional_progressive_and_mobile_aware():
     component=Path("apps/web/components/HealthDevelopment.tsx").read_text()
     chart=Path("apps/web/components/ProfessionalLineChart.tsx").read_text()
     css=Path("apps/web/app/globals.css").read_text()
-    assert 'value="3m"' in page and 'value="6m"' in page
     assert '<HealthDevelopment' in page
-    assert '<details className="card health-secondary-details">' in page
+    assert 'id:"90"' in Path("apps/web/lib/healthInsights.ts").read_text()
     assert 'TrainingVolumeChart' in component and 'Belastung & Erholung' in component
     assert 'geschätzt' in component and 'keine Spiroergometrie' in component
     assert 'pro-tooltip' in chart and 'onTouchStart' in chart

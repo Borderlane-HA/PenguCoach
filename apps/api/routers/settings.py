@@ -14,6 +14,7 @@ from pengucoach.common.config import settings
 from pengucoach.db.models import User, UserPreference
 from pengucoach.db.session import get_db
 from pengucoach.coach.today import TODAY_CARDS, TODAY_METRICS, today_preferences
+from pengucoach.health.layout import HEALTH_METRICS, HEALTH_PERIODS, HEALTH_SECTIONS, health_preferences
 from pengucoach.common.dates import user_today
 from pengucoach.health.steps import goal_config, step_goal_payload
 
@@ -328,3 +329,35 @@ async def save_today_settings(payload: TodaySettingsIn, user: User = Depends(saf
     pref.dashboard_config = {**(pref.dashboard_config or {}), 'today': payload.model_dump()}
     await db.commit()
     return today_preferences(pref)
+
+
+HealthSection = Literal[tuple(HEALTH_SECTIONS)]  # type: ignore[valid-type]
+HealthMetric = Literal[tuple(HEALTH_METRICS)]  # type: ignore[valid-type]
+
+
+class HealthLayoutIn(BaseModel):
+    order: list[HealthSection] = Field(default_factory=lambda: list(HEALTH_SECTIONS), max_length=len(HEALTH_SECTIONS))
+    hidden: list[HealthSection] = Field(default_factory=list, max_length=len(HEALTH_SECTIONS))
+    metrics: list[HealthMetric] = Field(min_length=1, max_length=len(HEALTH_METRICS))
+    period: Literal[tuple(HEALTH_PERIODS)] = '30'  # type: ignore[valid-type]
+
+    @model_validator(mode='after')
+    def unique(self):
+        for values in [self.order, self.hidden, self.metrics]:
+            if len(values) != len(set(values)):
+                raise ValueError('DUPLICATE_HEALTH_ITEMS')
+        self.order += [k for k in HEALTH_SECTIONS if k not in self.order]
+        return self
+
+
+@router.get('/health-layout')
+async def get_health_layout(user: User = Depends(safety_confirmed_user), db: AsyncSession = Depends(get_db)):
+    return health_preferences(await db.get(UserPreference, user.id))
+
+
+@router.put('/health-layout')
+async def save_health_layout(payload: HealthLayoutIn, user: User = Depends(safety_confirmed_user), db: AsyncSession = Depends(get_db)):
+    pref = await _pref(db, user)
+    pref.dashboard_config = {**(pref.dashboard_config or {}), 'health': payload.model_dump()}
+    await db.commit()
+    return health_preferences(pref)

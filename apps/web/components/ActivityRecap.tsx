@@ -10,7 +10,7 @@ const DURATION:Partial<Record<Slide,number>>={intro:5200,map:8500,calendar:7500,
 const PREF="pengucoach_recap_period";
 const reducedMotion=()=>typeof window!=="undefined"&&window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 
-function CountUp({value,digits=0,lang,duration=1500,compactLarge=false}:{value:number;digits?:number;lang:Lang;duration?:number;compactLarge?:boolean}){
+export function CountUp({value,digits=0,lang,duration=1500,compactLarge=false}:{value:number;digits?:number;lang:Lang;duration?:number;compactLarge?:boolean}){
  const[shown,setShown]=useState(()=>reducedMotion()?value:0);
  useEffect(()=>{if(reducedMotion()){setShown(value);return}let frame=0;const begin=performance.now();const step=(now:number)=>{const t=easeOut((now-begin)/duration);setShown(value*t);if(t<1)frame=requestAnimationFrame(step)};frame=requestAnimationFrame(step);return()=>cancelAnimationFrame(frame)},[value,duration]);
  return <>{compactLarge&&value>=1e6?compact(shown,lang):format(shown,digits,lang)}</>;

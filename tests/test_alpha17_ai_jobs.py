@@ -55,7 +55,7 @@ def test_docs_keep_current_reference_material_not_per_release_change_lists():
 
 def test_coach_ui_restores_visible_history_and_offers_a_new_conversation():
     coach = Path("apps/web/app/coach/page.tsx").read_text()
-    assert 'if(id)await openConversation(id)' in coach
+    assert 'if(id&&!fresh)await openConversation(id)' in coach
     assert 'className="conversation-history"' in coach
     assert 'function newConversation()' in coach
     assert 'dataBits=[' in coach

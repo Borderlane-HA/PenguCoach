@@ -17,7 +17,7 @@ function checkNow(){
  notify();return checking;
 }
 function RefreshIcon(){return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5"/><path d="M6.1 7a7 7 0 0 1 11.6-1L20 9M4 15l2.3 3A7 7 0 0 0 17.9 17"/></svg>}
-function useUpdates(){
+export function useUpdates(){
  const query=useCachedQuery<UpdateStatus>(PATH,600000),[busy,setBusy]=useState(!!checking),[error,setError]=useState("");
  useEffect(()=>{const listener=()=>setBusy(!!checking);listeners.add(listener);setBusy(!!checking);return()=>{listeners.delete(listener)}},[]);
  useEffect(()=>{setError("")},[query.updatedAt]);
@@ -49,5 +49,20 @@ export default function UpdateNotice({version,mobile=false}:{version:string;mobi
    :<Link prefetch={false} className={`update-result ${available?"update-notice-link":"is-current"}`} href={target} role="status" aria-label={available?bi(lang,`Update verfügbar · ${data?.latest_version} · öffnen`,`Update available · ${data?.latest_version} · open`):bi(lang,`${result} · Updates öffnen`,`${result} · open updates`)}>
      {available?<><span className="update-notice-icon" aria-hidden="true">↑</span><span><strong>{result}</strong><small>{data?.latest_version}</small></span></>:<><span className="update-result-dot" aria-hidden="true"/><span><strong>{result}</strong><small>{bi(lang,"Details ansehen","View details")}</small></span></>}
    </Link>)}
+ </div>;
+}
+
+/** Slim banner above every page: an update exists. Dismissed per version, so the next release shows again. */
+export function UpdateBanner(){
+ const {lang}=useI18n(),{me}=useSession(),{data}=useUpdates();
+ const [dismissed,setDismissed]=useState<string|null>(null);
+ useEffect(()=>{try{setDismissed(localStorage.getItem("pengucoach_update_banner_dismissed"))}catch{}},[]);
+ const version=data?.latest_version;
+ if(data?.status!=="available"||!version||dismissed===version)return null;
+ const target=me?.role==="admin"?"/admin/system#updates":"/settings/updates";
+ return <div className="update-banner" role="status">
+  <span className="update-banner-dot" aria-hidden="true"/>
+  <Link prefetch={false} href={target}><strong>{bi(lang,"Update verfügbar","Update available")}</strong> <span>{version}</span> <span className="update-banner-cta">{me?.role==="admin"?bi(lang,"Ansehen & installieren →","View & install →"):bi(lang,"Was ist neu? →","What's new? →")}</span></Link>
+  <button type="button" className="update-banner-close" aria-label={bi(lang,"Hinweis ausblenden","Dismiss")} onClick={()=>{try{localStorage.setItem("pengucoach_update_banner_dismissed",version)}catch{};setDismissed(version)}}>✕</button>
  </div>;
 }

@@ -11,8 +11,8 @@ def test_health_vo2_history_accepts_same_period_filter_as_health_range():
 
 def test_health_page_applies_selected_period_to_every_chart_family():
     page = Path("apps/web/app/health/page.tsx").read_text()
-    assert 'useCachedQuery<any>(`/health/range${suffix}`)' in page
-    assert 'useCachedQuery<any>(`/health/development${suffix}`' in page
+    assert 'useCachedQuery<any>(loaded?`/health/range${suffix}`:null)' in page
+    assert '`/health/development${suffix}`' in page
     assert 'development?.vo2_display' in page
     assert 'HealthDevelopment' in page
     assert 'gesamter Verlauf' not in page

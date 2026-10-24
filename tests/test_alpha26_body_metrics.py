@@ -31,7 +31,7 @@ def test_health_api_and_ui_expose_body_metrics_and_per_metric_sources():
     assert 'body_fat_percent' in health
     assert 'bone_mass_kg' in health
     assert 'Muskelmasse' in health
-    assert 'Schritte' in health
+    assert 'Schritte' in Path("apps/web/lib/healthInsights.ts").read_text()
     assert 'body_fat_percent' in today
     assert 'Schritte' in today
 
