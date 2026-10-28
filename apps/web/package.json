@@ -1,0 +1,28 @@
+{
+  "name": "pengucoach-web",
+  "version": "0.1.0-alpha.84",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "test:explorer": "node --test tests/activityExplorer.test.cjs",
+    "test:numbers": "node --test tests/numberInput.test.cjs",
+    "test:personalization": "node --test tests/personalization.test.cjs"
+  },
+  "dependencies": {
+    "@fontsource-variable/inter": "5.2.8",
+    "@fontsource-variable/space-grotesk": "5.2.8",
+    "leaflet": "1.9.4",
+    "next": "15.5.26",
+    "react": "19.1.1",
+    "react-dom": "19.1.1"
+  },
+  "devDependencies": {
+    "@types/leaflet": "1.9.21",
+    "@types/node": "24.3.1",
+    "@types/react": "19.1.12",
+    "@types/react-dom": "19.1.9",
+    "typescript": "5.9.2"
+  }
+}

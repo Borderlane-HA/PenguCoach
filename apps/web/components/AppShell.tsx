@@ -1,0 +1,159 @@
+"use client";
+
+import {useEffect,useMemo,useRef,useState} from "react";
+import {usePathname} from "next/navigation";
+import Link from "next/link";
+import {api} from "../lib/api";
+import {bi,useI18n} from "../lib/i18n";
+import {useSession} from "../lib/session";
+import UpdateNotice,{UpdateBanner} from "./UpdateNotice";
+import StatusMenu from "./StatusMenu";
+type IconName="today"|"health"|"activities"|"training"|"coach"|"garmin"|"sparky"|"weather"|"maps"|"privacy"|"appearance"|"about"|"help"|"ai"|"users"|"logout"|"settings"|"admin"|"panel-open"|"panel-close";
+
+function Icon({name}:{name:IconName}){
+  const common={width:20,height:20,viewBox:"0 0 24 24",fill:"none",stroke:"currentColor",strokeWidth:1.8,strokeLinecap:"round" as const,strokeLinejoin:"round" as const,"aria-hidden":true};
+  if(name==="panel-open"||name==="panel-close")return <svg {...common}><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M9 4v16"/><path d={name==="panel-open"?"m13 9 3 3-3 3":"m16 9-3 3 3 3"}/></svg>;
+  if(name==="settings")return <svg {...common}><path d="m10 3-.5 2-2 .9-1.8-.6-2 3.4 1.5 1.4v2.3l-1.5 1.4 2 3.4 1.8-.6 2 .9.5 2h4l.5-2 2-.9 1.8.6 2-3.4-1.5-1.4v-2.3l1.5-1.4-2-3.4-1.8.6-2-.9-.5-2Z"/><circle cx="12" cy="11.3" r="3"/></svg>;
+  if(name==="admin")return <svg {...common}><path d="M12 3 5 6v5c0 4.7 2.7 8.1 7 10 4.3-1.9 7-5.3 7-10V6l-7-3Z"/><circle cx="12" cy="10" r="2"/><path d="M8.5 16a3.5 3.5 0 0 1 7 0"/></svg>;
+  if(name==="today")return <svg {...common}><rect x="4" y="4" width="16" height="16" rx="4"/><path d="M8 9h8M8 13h3M14 13h2M8 17h5"/></svg>;
+  if(name==="health")return <svg {...common}><path d="M20.8 5.8a5 5 0 0 0-7.1 0L12 7.5l-1.7-1.7a5 5 0 1 0-7.1 7.1L12 21l8.8-8.1a5 5 0 0 0 0-7.1Z"/><path d="M7 12h2l1-2 2 5 1.5-3H17"/></svg>;
+  if(name==="activities")return <svg {...common}><path d="M4 13h3l2-5 3 10 2-6h6"/><path d="M4 5v14"/></svg>;
+  if(name==="training")return <svg {...common}><path d="M6 7v10M18 7v10M3 10v4M21 10v4M6 12h12"/></svg>;
+  if(name==="coach")return <svg {...common}><path d="m12 3 1.2 3.4L16.5 8l-3.3 1.6L12 13l-1.2-3.4L7.5 8l3.3-1.6L12 3Z"/><path d="m18.5 13 .8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8.8-2.2ZM5.5 14l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7.7-1.8Z"/></svg>;
+  if(name==="garmin")return <svg {...common}><rect x="7" y="4" width="10" height="16" rx="3"/><path d="M9 1h6M9 23h6M10 9l2-2 2 2M10 14h4"/></svg>;
+  if(name==="sparky")return <svg {...common}><path d="M12 3 5 12h5l-1 9 7-10h-5l1-8Z"/></svg>;
+  if(name==="weather")return <svg {...common}><path d="M7 18h10a4 4 0 0 0 .7-7.9A6 6 0 0 0 6.5 9.2 4.5 4.5 0 0 0 7 18Z"/><path d="M12 3v2M4.9 5.9l1.4 1.4M19.1 5.9l-1.4 1.4"/></svg>;
+  if(name==="maps")return <svg {...common}><path d="m3 6 6-3 6 3 6-3v15l-6 3-6-3-6 3V6ZM9 3v15M15 6v15"/></svg>;
+  if(name==="privacy")return <svg {...common}><path d="M12 3 5 6v5c0 4.7 2.7 8.1 7 10 4.3-1.9 7-5.3 7-10V6l-7-3Z"/><path d="m9.5 12 1.6 1.6 3.4-3.6"/></svg>;
+  if(name==="appearance")return <svg {...common}><circle cx="12" cy="12" r="9"/><path d="M12 3v18M3 12h18M6.2 6.2l11.6 11.6M17.8 6.2 6.2 17.8"/></svg>;
+  if(name==="help")return <svg {...common}><circle cx="12" cy="12" r="9"/><path d="M9.5 9.3a2.6 2.6 0 0 1 5 .9c0 1.7-2.5 2.2-2.5 3.8M12 17h.01"/></svg>;
+  if(name==="about")return <svg {...common}><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>;
+  if(name==="ai")return <svg {...common}><rect x="6" y="6" width="12" height="12" rx="3"/><path d="M9 10h6M9 14h4M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M18 9h4M2 15h4M18 15h4"/></svg>;
+  if(name==="logout")return <svg {...common}><path d="M10 5H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h4"/><path d="m15 16 4-4-4-4M19 12H9"/></svg>;
+  return <svg {...common}><path d="M16 20v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 20v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/></svg>;
+}
+
+type SidebarPreferences={collapsed:boolean;settingsOpen:boolean;adminOpen:boolean};
+const defaultSidebar:SidebarPreferences={collapsed:false,settingsOpen:false,adminOpen:false};
+function readSidebar(username:string,pathname:string):SidebarPreferences{
+  let saved:Partial<SidebarPreferences>={};
+  try{saved=JSON.parse(localStorage.getItem(`pengucoach_sidebar_${username}`)||"{}")||{}}catch{}
+  return {collapsed:saved.collapsed===true,settingsOpen:pathname.startsWith("/settings/")||saved.settingsOpen===true,adminOpen:pathname.startsWith("/admin/")||saved.adminOpen===true};
+}
+
+export default function AppShell({children,title}:{children:React.ReactNode;title?:string}){
+  const{lang,setLang}=useI18n();
+  const pathname=usePathname();
+  const{me,appearance}=useSession();const[loggingOut,setLoggingOut]=useState(false);
+
+  const[sidebar,setSidebar]=useState<SidebarPreferences>(()=>me?readSidebar(me.username,pathname):defaultSidebar);
+  const[sidebarOwner,setSidebarOwner]=useState(me?.id);
+  const[flyout,setFlyout]=useState<"settings"|"admin"|null>(null),[flyoutTop,setFlyoutTop]=useState(80);
+  const mobileMenu=useRef<HTMLDetailsElement>(null);
+  useEffect(()=>{
+    setFlyout(null);
+    setSidebar(v=>pathname.startsWith("/settings/")?{...v,settingsOpen:true}:pathname.startsWith("/admin/")?{...v,adminOpen:true}:v);
+  },[pathname]);
+  useEffect(()=>{if(me&&sidebarOwner!==me.id){setSidebar(readSidebar(me.username,pathname));setSidebarOwner(me.id)}},[me?.id]);
+  useEffect(()=>{if(me&&sidebarOwner===me.id)try{localStorage.setItem(`pengucoach_sidebar_${me.username}`,JSON.stringify(sidebar))}catch{}},[sidebar,me,sidebarOwner]);
+  useEffect(()=>{
+    const dismiss=(event:PointerEvent)=>{
+      const target=event.target;
+      if(!(target instanceof Element))return;
+      if(!target.closest(".side-group"))setFlyout(null);
+      if(mobileMenu.current?.open&&!mobileMenu.current.contains(target))mobileMenu.current.open=false;
+    };
+    const escape=(event:KeyboardEvent)=>{
+      if(event.key!=="Escape")return;
+      if(flyout){event.preventDefault();setFlyout(null);document.querySelector<HTMLButtonElement>(`[data-side-group="${flyout}"]`)?.focus()}
+      if(mobileMenu.current?.open){event.preventDefault();mobileMenu.current.open=false;mobileMenu.current.querySelector("summary")?.focus()}
+    };
+    const resize=()=>setFlyout(null);
+    document.addEventListener("pointerdown",dismiss);document.addEventListener("keydown",escape);window.addEventListener("resize",resize);
+    return()=>{document.removeEventListener("pointerdown",dismiss);document.removeEventListener("keydown",escape);window.removeEventListener("resize",resize)};
+  },[flyout]);
+  useEffect(()=>{if(flyout)document.querySelector<HTMLAnchorElement>(`#side-${flyout}-links a`)?.focus()},[flyout]);
+
+  const nav=useMemo(()=>[
+    {href:"/today",icon:"today" as IconName,label:bi(lang,"Heute","Today")},
+    {href:"/health",icon:"health" as IconName,label:bi(lang,"Gesundheit","Health")},
+    {href:"/activities",icon:"activities" as IconName,label:bi(lang,"Aktivitäten","Activities")},
+    {href:"/training",icon:"training" as IconName,label:bi(lang,"Training","Training")},
+    {href:"/coach",icon:"coach" as IconName,label:bi(lang,"AI Coach","AI Coach")},
+  ],[lang]);
+  const settings=useMemo(()=>[
+    {href:"/settings/garmin",icon:"garmin" as IconName,label:"Garmin"},
+    {href:"/settings/sparkyfitness",icon:"sparky" as IconName,label:"SparkyFitness"},
+    {href:"/settings/weather",icon:"weather" as IconName,label:bi(lang,"Wetter","Weather")},
+    {href:"/settings/maps",icon:"maps" as IconName,label:bi(lang,"Karten & Straßenansicht","Maps & street view")},
+    {href:"/settings/appearance",icon:"appearance" as IconName,label:bi(lang,"Darstellung","Appearance")},
+    {href:"/settings/privacy",icon:"privacy" as IconName,label:bi(lang,"Datenschutz","Privacy")},
+  ],[lang]);
+  const admin=useMemo(()=>[
+    {href:"/admin/system",icon:"settings" as IconName,label:bi(lang,"System & Updates","System & updates")},
+    {href:"/admin/ai",icon:"ai" as IconName,label:"AI Studio"},
+    {href:"/admin/users",icon:"users" as IconName,label:bi(lang,"Benutzer","Users")},
+  ],[lang]);
+  const active=(href:string)=>pathname===href||pathname.startsWith(`${href}/`);
+  const help={href:"/help",icon:"help" as IconName,label:bi(lang,"Hilfe","Help")};
+  const current=[...nav,...settings,...admin,help].find(x=>active(x.href));
+  const initials=(me?.username||"PC").slice(0,2).toUpperCase();
+  const avatar=appearance?.has_avatar?`/api/v1/settings/avatar?v=${appearance.avatar_version??0}`:null;
+  const appIcon=appearance?.has_app_icon?`/api/v1/settings/app-icon?v=${appearance.app_icon_version??0}`:"/pengucoach-icon.svg";
+
+  async function logout(){
+    if(loggingOut)return;
+    setLoggingOut(true);
+    try{await api("/auth/logout",{method:"POST"})}catch{}
+    finally{
+      for(let i=localStorage.length-1;i>=0;i--){
+        const key=localStorage.key(i);
+        if(key?.startsWith("pengucoach_")&&key!=="pengucoach_lang")localStorage.removeItem(key);
+      }
+      location.replace("/");
+    }
+  }
+
+  if(!me)return <main className="auth-loading"><div className="loading-mark"><img src="/pengucoach-icon.svg" alt=""/></div><p>{bi(lang,"PenguCoach wird geladen…","Loading PenguCoach…")}</p></main>;
+
+  const settingsLabel=bi(lang,"Einstellungen","Settings");
+  const toggleLabel=sidebar.collapsed?bi(lang,"Seitenleiste ausklappen","Expand sidebar"):bi(lang,"Seitenleiste einklappen","Collapse sidebar");
+  const link=(x:{href:string;icon:IconName;label:string},mobile=false)=><Link className={mobile?undefined:`side-link ${active(x.href)?"active":""}`} href={x.href} prefetch={false} key={x.href} aria-label={x.label} title={sidebar.collapsed&&!mobile?x.label:undefined} aria-current={active(x.href)?"page":undefined}><Icon name={x.icon}/><span>{x.label}</span>{!mobile&&active(x.href)&&<i/>}</Link>;
+  const group=(name:"settings"|"admin",mobile=false)=>{
+    const label=name==="settings"?settingsLabel:"Admin",items=name==="settings"?settings:admin;
+    const open=mobile||!sidebar.collapsed?(name==="settings"?sidebar.settingsOpen:sidebar.adminOpen):flyout===name;
+    const selected=items.some(x=>active(x.href));
+    const id=`${mobile?"mobile":"side"}-${name}-links`;
+    return <div className={mobile?"mobile-nav-group":"side-section side-group"} key={name}>
+      <button className={`${mobile?"mobile-group-toggle":"side-group-toggle"} ${selected?"active":""}`} type="button" aria-label={label} title={!mobile&&sidebar.collapsed?label:undefined} aria-expanded={open} aria-controls={id} data-side-group={mobile?undefined:name} onClick={event=>{
+        if(!mobile&&sidebar.collapsed){setFlyoutTop(Math.max(12,Math.min(event.currentTarget.getBoundingClientRect().top,window.innerHeight-250)));setFlyout(open?null:name)}
+        else setSidebar(v=>({...v,[name==="settings"?"settingsOpen":"adminOpen"]:!open}));
+      }}><Icon name={name}/><span>{label}</span>{selected&&<i className="side-group-current"/>}</button>
+      <div id={id} hidden={!open} className={`${mobile?"mobile-group-links":"side-group-links"} ${!mobile&&sidebar.collapsed?"side-flyout":""}`} style={!mobile&&sidebar.collapsed?{top:flyoutTop,"--flyout-top":`${flyoutTop}px`} as React.CSSProperties:undefined}>
+        {!mobile&&sidebar.collapsed&&<div className="side-flyout-heading">{label}</div>}
+        {items.map(x=>link(x,mobile))}
+      </div>
+    </div>;
+  };
+
+  return <div className={`app-frame ${sidebar.collapsed?"sidebar-collapsed":""}`}>
+    <aside id="pengucoach-sidebar" className="side-nav" aria-label={bi(lang,"Hauptnavigation","Main navigation")}>
+      <div className="side-header"><Link prefetch={false} className="side-brand" href="/today" aria-label={bi(lang,"PenguCoach – Heute","PenguCoach – Today")} title={sidebar.collapsed?"PenguCoach":undefined}><span className="brand-mark custom"><img src={appIcon} alt=""/></span><span><strong>PenguCoach</strong><small>Training & Health</small></span></Link><button className="sidebar-toggle ghost" type="button" aria-label={toggleLabel} title={toggleLabel} aria-expanded={!sidebar.collapsed} aria-controls="pengucoach-sidebar" onClick={()=>{setFlyout(null);setSidebar(v=>({...v,collapsed:!v.collapsed}))}}><Icon name={sidebar.collapsed?"panel-open":"panel-close"}/></button></div>
+      <nav className="side-navigation" aria-label={bi(lang,"Seiten","Pages")} onWheel={event=>{if(!(event.target instanceof Element&&event.target.closest(".side-flyout")))setFlyout(null)}} onTouchMove={event=>{if(!(event.target instanceof Element&&event.target.closest(".side-flyout")))setFlyout(null)}}>
+        <div className="side-section"><div className="side-label">{bi(lang,"Übersicht","Overview")}</div>{nav.map(x=>link(x))}</div>
+        {group("settings")}
+        {me.role==="admin"&&group("admin")}
+        <div className="side-section side-help">{link(help)}</div>
+      </nav>
+      <div className="side-account">
+        <Link prefetch={false} className="side-user" href="/settings/appearance" aria-label={bi(lang,`${me.username} – Darstellung`,`${me.username} – Appearance`)} title={sidebar.collapsed?me.username:undefined}><span className={`side-avatar ${avatar?"photo":""}`}>{avatar?<img src={avatar} alt=""/>:initials}</span><span><strong>{me.username}</strong><small>{me.role}</small></span></Link>
+        <button className="side-logout" type="button" onClick={()=>void logout()} disabled={loggingOut} title={bi(lang,"Abmelden","Sign out")} aria-label={bi(lang,"Abmelden","Sign out")}><Icon name="logout"/><span>{loggingOut?bi(lang,"Abmelden…","Signing out…"):bi(lang,"Abmelden","Sign out")}</span></button>
+        <UpdateNotice version={me.app_version}/>
+      </div>
+    </aside>
+
+    <section className="app-main"><UpdateBanner/><header className="topbar"><div className="top-heading"><div className="top-context"><span className="top-kicker">PenguCoach</span><strong>{title??current?.label??bi(lang,"Übersicht","Overview")}</strong></div></div><div className="top-actions"><details ref={mobileMenu} className="mobile-more"><summary aria-label={bi(lang,"Navigationsmenü öffnen","Open navigation menu")} title={settingsLabel}><Icon name="settings"/></summary><nav aria-label={settingsLabel}>{group("settings",true)}{me.role==="admin"&&group("admin",true)}<div className="mobile-nav-group">{link(help,true)}</div><UpdateNotice version={me.app_version} mobile/></nav></details><StatusMenu/><button className="language-switch" onClick={()=>setLang(lang==="de"?"en":"de")} aria-label={bi(lang,"Sprache wechseln","Change language")}>{lang==="de"?"DE":"EN"}<span>⌄</span></button><Link prefetch={false} className={`top-avatar ${avatar?"photo":""}`} href="/settings/appearance" title={me.username}>{avatar?<img src={avatar} alt=""/>:initials}</Link><button className="top-logout" type="button" onClick={()=>void logout()} disabled={loggingOut} title={bi(lang,"Abmelden","Sign out")} aria-label={bi(lang,"Abmelden","Sign out")}><Icon name="logout"/></button></div></header><main className="stack page">{title&&<div className="page-title"><h1>{title}</h1></div>}{children}</main></section>
+
+    <nav className="mobile-dock" aria-label={bi(lang,"Mobile Navigation","Mobile navigation")}>{nav.map(x=><Link prefetch={false} className={active(x.href)?"active":""} href={x.href} key={x.href} aria-current={active(x.href)?"page":undefined}><Icon name={x.icon}/><span>{x.label}</span></Link>)}</nav>
+  </div>;
+}

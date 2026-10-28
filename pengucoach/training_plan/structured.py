@@ -1,0 +1,274 @@
+from __future__ import annotations
+
+import json
+import re
+from typing import Literal
+
+from pydantic import BaseModel, Field, model_validator
+
+PLAN_OPEN = "<PENGUCOACH_PLAN_JSON>"
+PLAN_CLOSE = "</PENGUCOACH_PLAN_JSON>"
+
+Sport = Literal[
+    "running", "cycling", "swimming", "walking", "hiking", "strength",
+    "cardio", "mobility", "yoga", "pilates", "hiit", "other",
+]
+StepKind = Literal["warmup", "work", "interval", "recovery", "cooldown", "rest", "repeat"]
+TargetKind = Literal["none", "heart_rate_zone", "power_zone"]
+
+
+class PlanTarget(BaseModel):
+    type: TargetKind = "none"
+    zone: int | None = Field(default=None, ge=1, le=10)
+
+    @model_validator(mode="after")
+    def validate_zone(self) -> "PlanTarget":
+        if self.type == "none":
+            self.zone = None
+        elif self.zone is None:
+            raise ValueError("zone is required for zone targets")
+        return self
+
+
+class PowerWattTarget(BaseModel):
+    type: Literal["power_watts"]
+    watts: float = Field(gt=0, le=3000, allow_inf_nan=False)
+    tolerance_pct: float = Field(default=5, ge=0, le=25, allow_inf_nan=False)
+
+
+class PlanStep(BaseModel):
+    type: StepKind = Field(description="Use repeat for a block with a repetition count and child steps. interval/work are single executable steps without children.")
+    duration_seconds: int | None = Field(default=None, ge=1, le=86400)
+    distance_meters: float | None = Field(default=None, gt=0, le=500000)
+    target: PlanTarget | PowerWattTarget = Field(default_factory=PlanTarget)
+    repeat: int | None = Field(default=None, ge=2, le=100, description="Number of repetitions of the complete child-step sequence; use only on type=repeat.")
+    steps: list["PlanStep"] = Field(default_factory=list, description="Child steps belong only to type=repeat; use an empty list or omit on all executable steps.")
+    description: str = Field(default="", max_length=500)
+
+    @model_validator(mode="after")
+    def validate_shape(self) -> "PlanStep":
+        # Some models label the whole repeated interval block as "interval"
+        # (or "work"). A typed, valid count plus nonempty validated children
+        # unambiguously identifies a repeat group. Never infer missing counts,
+        # relax child validation or discard a target that Garmin cannot export.
+        if self.type in {"interval", "work"} and self.repeat is not None and self.steps and self.target.type == "none":
+            self.type = "repeat"
+        if self.type == "repeat":
+            if not self.repeat or not self.steps:
+                raise ValueError("repeat steps require repeat and nested steps")
+            self.duration_seconds = None
+            self.distance_meters = None
+        else:
+            if self.steps or self.repeat:
+                raise ValueError("only repeat steps may contain nested steps")
+            if self.duration_seconds is None and self.distance_meters is None:
+                raise ValueError("timed/distance steps require duration_seconds or distance_meters")
+        return self
+
+
+class StrengthExercise(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    sets: int = Field(default=3, ge=1, le=20)
+    reps: int | None = Field(default=10, ge=1, le=100)
+    reps_max: int | None = Field(default=None, ge=1, le=100)
+    duration_seconds: int | None = Field(default=None, ge=1, le=3600)
+    reps_in_reserve: int | None = Field(default=None, ge=0, le=10)
+    rest_seconds: int = Field(default=90, ge=0, le=1800)
+    weight_kg: float | None = Field(default=None, ge=0, le=1000)
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_prescription(cls, value):
+        if not isinstance(value, dict):
+            return value
+        value = dict(value)
+        reps = value.get("reps")
+        if isinstance(reps, bool):
+            raise ValueError("reps must be a number, range, duration or max-N")
+        if isinstance(reps, str):
+            text = reps.strip().lower()
+            interval = re.fullmatch(r"(\d+)\s*[-–—−]\s*(\d+)", text)
+            timed = re.fullmatch(r"(\d+)\s*(s|sec|seconds?|sek(?:unden)?|min|minutes?|minuten?)", text)
+            reserve = re.fullmatch(r"max\s*[-–—−]\s*(\d+)", text)
+            if interval:
+                value.update(reps=int(interval[1]), reps_max=int(interval[2]))
+            elif timed:
+                value.update(reps=None, duration_seconds=int(timed[1]) * (60 if timed[2].startswith("min") else 1))
+            elif reserve:
+                value.update(reps=None, reps_in_reserve=int(reserve[1]))
+        if value.get("duration_seconds") is not None or value.get("reps_in_reserve") is not None:
+            # Explicit non-repetition prescriptions must not acquire the legacy
+            # default of ten reps. Zero is a common placeholder for a timed set.
+            if value.get("reps") in (None, 0):
+                value["reps"] = None
+        return value
+
+    @model_validator(mode="after")
+    def validate_prescription(self):
+        if sum(x is not None for x in (self.reps, self.duration_seconds, self.reps_in_reserve)) != 1:
+            raise ValueError("choose exactly one of reps, duration_seconds or reps_in_reserve")
+        if self.reps_max is not None and (self.reps is None or self.reps_max < self.reps):
+            raise ValueError("reps_max requires reps and must be >= reps")
+        return self
+
+
+def strength_prescription(exercise: StrengthExercise, locale: str = "de") -> str:
+    if exercise.duration_seconds is not None:
+        return f"{exercise.duration_seconds} s"
+    if exercise.reps_in_reserve is not None:
+        return f"max − {exercise.reps_in_reserve} {'Wdh.' if locale.startswith('de') else 'reps'}"
+    return f"{exercise.reps}–{exercise.reps_max}" if exercise.reps_max is not None else str(exercise.reps)
+
+
+class TrainingSession(BaseModel):
+    id: str = Field(min_length=1, max_length=80, pattern=r"^[A-Za-z0-9._-]+$")
+    week: int = Field(ge=1, le=24)
+    day: int = Field(ge=1, le=7, description="ISO weekday: Monday=1, Sunday=7")
+    name: str = Field(min_length=1, max_length=120)
+    sport: Sport
+    duration_min: int = Field(ge=5, le=480)
+    start_time: str | None = Field(default=None, pattern=r"^([01][0-9]|2[0-3]):[0-5][0-9]$")
+    optional: bool = False
+    notes: str = Field(default="", max_length=1500)
+    steps: list[PlanStep] = Field(default_factory=list)
+    strength_exercises: list[StrengthExercise] = Field(default_factory=list)
+
+
+class TrainingPlanDocument(BaseModel):
+    format_version: Literal[1] = 1
+    title: str = Field(min_length=1, max_length=160)
+    summary: str = Field(default="", max_length=2500)
+    weeks: int = Field(ge=1, le=24)
+    sessions: list[TrainingSession] = Field(min_length=1, max_length=168)
+
+    @model_validator(mode="after")
+    def validate_sessions(self) -> "TrainingPlanDocument":
+        ids = [session.id for session in self.sessions]
+        if len(ids) != len(set(ids)):
+            raise ValueError("session ids must be unique")
+        if any(session.week > self.weeks for session in self.sessions):
+            raise ValueError("session week exceeds plan length")
+        return self
+
+
+STRUCTURED_PLAN_INSTRUCTION = f"""
+IMPORTANT OUTPUT CONTRACT FOR PENGUCOACH:
+Return one compact, complete JSON object. No Markdown fences or prose outside JSON.
+The legacy {PLAN_OPEN} / {PLAN_CLOSE} wrapper is optional.
+Use the supplied schema. All requested weeks and training days must be present; shorten wording before removing sessions.
+Close the JSON object before the hard output-token budget. Keep summary to two short sentences and notes brief.
+
+Plan fields: title, weeks, summary, sessions; format_version defaults to 1.
+Every session needs a unique id, local week, ISO weekday day (Monday=1), name, sport, duration_min;
+start_time is a local HH:MM or null. Only actual workouts, no rest-day placeholders. Honor fixed dates and constraints.
+Use sports: running, cycling, swimming, walking, hiking, strength, cardio, mobility, yoga, pilates, hiit, other.
+Endurance steps use warmup, work, interval, recovery, cooldown or rest, each with duration_seconds OR distance_meters.
+Targets are none, heart_rate_zone with zone, power_zone with zone, or power_watts with watts and tolerance_pct.
+Use only supplied Garmin zones and measured power/FTP context; do not invent thresholds or measured values.
+A repeated block MUST use type=repeat, an explicit repeat count >=2, and nested executable child steps:
+{{"type":"repeat","repeat":4,"steps":[{{"type":"interval","duration_seconds":60}},{{"type":"recovery","duration_seconds":120}}]}}.
+Executable interval/work/recovery steps NEVER have children or a repeat count. Targets belong on children, not repeat containers.
+Warmup and cooldown belong outside repeated blocks. Timed steps, including repeats, should sum to duration_min * 60 within 60 seconds.
+Strength sessions use strength_exercises, not exercises hidden in notes: name, sets, rest_seconds and one prescription.
+Use canonical plain English Garmin exercise names such as Squat, Push-up, Lunge, Plank, Deadlift, Row, Leg Press or Bench Press.
+Each strength_exercises item is one concrete movement, never a circuit/block title, muscle group or superset heading.
+Prescriptions: integer reps; a range uses reps plus reps_max; timed holds use duration_seconds with reps=null;
+max minus N uses reps_in_reserve=N with reps=null. Choose exactly one of reps, duration_seconds or reps_in_reserve.
+Never use reps=0 or text in numeric fields. Missing weight_kg stays null. Steps may be empty for strength.
+Omit optional/default fields when the provider schema permits; otherwise use schema defaults/nulls.
+Use previous_plan_segment for progression without repeating previous weeks. Keep intensity conservative with incomplete data.
+The structured plan is the source of truth and must support the human-readable calendar and Garmin export.
+""".strip()
+
+
+def extract_structured_plan(content: str) -> tuple[TrainingPlanDocument | None, str | None]:
+    """Extract and validate the machine-readable plan block from an LLM response.
+
+    Returns ``(plan, error)``. The caller can retain the original AI content if
+    parsing fails, so generation remains useful even when a local model ignores
+    the output contract.
+    """
+    if not content:
+        return None, "EMPTY_RESPONSE"
+    pattern = re.compile(re.escape(PLAN_OPEN) + r"\s*(.*?)\s*" + re.escape(PLAN_CLOSE), re.DOTALL)
+    match = pattern.search(content)
+    if not match:
+        # Tolerate a model returning the bare object despite the explicit markers.
+        raw = content.strip()
+        if raw.startswith("```"):
+            raw = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw, flags=re.IGNORECASE | re.DOTALL).strip()
+        if not (raw.startswith("{") and raw.endswith("}")):
+            return None, "STRUCTURED_PLAN_MARKER_MISSING"
+    else:
+        raw = match.group(1).strip()
+    try:
+        value = json.loads(raw)
+        return TrainingPlanDocument.model_validate(value), None
+    except Exception as exc:  # pydantic/json errors become safe metadata, not a failed AI job.
+        return None, f"STRUCTURED_PLAN_INVALID: {type(exc).__name__}: {str(exc)[:500]}"
+
+
+def _target_label(target: PlanTarget | PowerWattTarget, de: bool) -> str:
+    if target.type == "power_watts":
+        return f"{target.watts:g} W (±{target.tolerance_pct:g}%)"
+    if target.type == "heart_rate_zone" and target.zone:
+        return f"HF Z{target.zone}" if de else f"HR Z{target.zone}"
+    if target.type == "power_zone" and target.zone:
+        return f"Power Z{target.zone}"
+    return ""
+
+
+def _step_label(step: PlanStep, de: bool) -> str:
+    names = {
+        "warmup": ("Einrollen/Warm-up", "Warm-up"),
+        "work": ("Hauptteil", "Main"),
+        "interval": ("Intervall", "Interval"),
+        "recovery": ("Erholung", "Recovery"),
+        "cooldown": ("Cool-down", "Cool-down"),
+        "rest": ("Pause", "Rest"),
+        "repeat": ("Wiederholen", "Repeat"),
+    }
+    label = names[step.type][0 if de else 1]
+    if step.type == "repeat":
+        inner = "; ".join(_step_label(child, de) for child in step.steps)
+        return f"{step.repeat}× ({inner})"
+    parts: list[str] = [label]
+    if step.duration_seconds:
+        minutes, seconds = divmod(step.duration_seconds, 60)
+        parts.append(f"{minutes}:{seconds:02d} min" if seconds else f"{minutes} min")
+    elif step.distance_meters:
+        parts.append(f"{step.distance_meters / 1000:.1f} km" if step.distance_meters >= 1000 else f"{step.distance_meters:g} m")
+    target = _target_label(step.target, de)
+    if target:
+        parts.append(target)
+    if step.description:
+        parts.append(step.description)
+    return " · ".join(parts)
+
+
+def render_plan_markdown(plan: TrainingPlanDocument, locale: str = "de") -> str:
+    """Render deterministic readable Markdown from the validated plan JSON."""
+    de = str(locale).startswith("de")
+    day_names = (["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"] if de else ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"])
+    out = [f"# {plan.title}"]
+    if plan.summary:
+        out.extend(["", plan.summary])
+    for week in range(1, plan.weeks + 1):
+        out.extend(["", f"## {'Woche' if de else 'Week'} {week}"])
+        sessions = sorted((x for x in plan.sessions if x.week == week), key=lambda x: x.day)
+        if not sessions:
+            out.append("- " + ("Regenerationswoche / keine geplante Einheit." if de else "Recovery week / no planned session."))
+            continue
+        for session in sessions:
+            opt = " · optional" if session.optional else ""
+            out.append(f"### {day_names[session.day - 1]} · {session.name}")
+            out.append(f"**{session.sport} · {session.duration_min} min{opt}**")
+            if session.notes:
+                out.append(session.notes)
+            if session.steps:
+                out.extend(f"- {_step_label(step, de)}" for step in session.steps)
+            if session.strength_exercises:
+                for exercise in session.strength_exercises:
+                    weight = f" · {exercise.weight_kg:g} kg" if exercise.weight_kg is not None else ""
+                    out.append(f"- {exercise.name}: {exercise.sets}×{strength_prescription(exercise, locale)} · {exercise.rest_seconds}s {'Pause' if de else 'rest'}{weight}")
+    return "\n".join(out).strip()

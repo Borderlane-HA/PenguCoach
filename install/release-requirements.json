@@ -1,0 +1,6 @@
+{
+  "min_upgrade_from": "0.1.0-alpha.73",
+  "docker_compose_min": "2.24.0",
+  "python_min": "3.12.0",
+  "node_min": "20.0.0"
+}

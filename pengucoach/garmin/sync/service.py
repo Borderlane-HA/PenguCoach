@@ -1,0 +1,584 @@
+import asyncio
+import hashlib
+import json
+import random
+from datetime import date, datetime, timedelta, timezone
+from typing import Any, Callable
+
+from garminconnect import GarminConnectAuthenticationError, GarminConnectTooManyRequestsError
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from pengucoach.common.config import settings
+from pengucoach.db.models import (
+    Activity, BodyMeasurement, DailyHealth, GarminConnection, GarminSyncRun, GarminSyncSetting,
+    HrvDaily, SleepSession, SourceRecord, User,
+)
+from pengucoach.garmin.gateway.factory import gateway_from_connection, serialize_refreshed_token
+from pengucoach.garmin.personal_api import PersonalApiUnsupported
+
+
+from pengucoach.health.provenance import merge_metric
+
+
+class GarminRequestTimeout(RuntimeError):
+    def __init__(self, domain: str, seconds: int) -> None:
+        self.domain = domain
+        self.seconds = seconds
+        super().__init__(f"GARMIN_REQUEST_TIMEOUT:{domain}:{seconds}s")
+
+
+def _hash_payload(payload: object) -> str:
+    raw = json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str).encode()
+    return hashlib.sha256(raw).hexdigest()
+
+
+def _first_number(payload: Any, *keys: str) -> float | None:
+    if isinstance(payload, dict):
+        for key in keys:
+            value = payload.get(key)
+            if isinstance(value, (int, float)) and not isinstance(value, bool):
+                return float(value)
+        for value in payload.values():
+            found = _first_number(value, *keys)
+            if found is not None:
+                return found
+    elif isinstance(payload, list):
+        for item in payload:
+            found = _first_number(item, *keys)
+            if found is not None:
+                return found
+    return None
+
+
+
+
+def _metric_sources(raw: dict[str, Any] | None) -> dict[str, str]:
+    data = raw or {}
+    values = data.get("_metric_sources") if isinstance(data, dict) else None
+    return dict(values) if isinstance(values, dict) else {}
+
+
+def _merge_raw_payload(existing: dict[str, Any] | None, payload: dict[str, Any], sources: dict[str, str]) -> dict[str, Any]:
+    merged = dict(payload)
+    old = existing or {}
+    # Preserve namespaced secondary/direct-source payloads when Garmin refreshes
+    # the flattened daily snapshot. Metric provenance decides which source is
+    # currently effective for a field.
+    for key in ("sparkyfitness", "withings", "withings_activity", "withings_measurements"):
+        if key in old:
+            merged[key] = old[key]
+    merged["_metric_times"] = old.get("_metric_times", {})
+    merged["_metric_sources"] = sources
+    return merged
+def _first_text(payload: Any, *keys: str) -> str | None:
+    if isinstance(payload, dict):
+        for key in keys:
+            value = payload.get(key)
+            if isinstance(value, str) and value:
+                return value
+        for value in payload.values():
+            found = _first_text(value, *keys)
+            if found:
+                return found
+    return None
+
+
+async def _store_raw(db: AsyncSession, user: User, domain: str, day: date, payload: Any, external_id: str | None = None) -> bool:
+    if payload in (None, {}, []):
+        return False
+    digest = _hash_payload(payload)
+    exists = await db.scalar(select(SourceRecord.id).where(
+        SourceRecord.user_id == user.id, SourceRecord.domain == domain,
+        SourceRecord.record_date == day, SourceRecord.content_hash == digest,
+    ))
+    if not exists:
+        db.add(SourceRecord(user_id=user.id, source="garmin", domain=domain, external_id=external_id, record_date=day, content_hash=digest, payload=payload))
+        return True
+    return False
+
+
+async def _call(domain: str, func: Callable[[], Any], domains: dict[str, Any], timeout_seconds: int = 90) -> Any:
+    try:
+        value = await asyncio.wait_for(asyncio.to_thread(func), timeout=timeout_seconds)
+        domains[domain] = {"ok": True, "available": value not in (None, {}, [])}
+        return value
+    except asyncio.TimeoutError as exc:
+        domains[domain] = {"ok": False, "error": "GarminRequestTimeout", "timeout_seconds": timeout_seconds}
+        raise GarminRequestTimeout(domain, timeout_seconds) from exc
+    except GarminConnectTooManyRequestsError:
+        raise
+    except GarminConnectAuthenticationError:
+        raise
+    except PersonalApiUnsupported:
+        # The official Personal API has no endpoint for this domain: not an error.
+        domains[domain] = {"ok": True, "available": False, "unsupported": True}
+        return None
+    except Exception as exc:
+        # One missing/unsupported Garmin endpoint must not fail the whole daily sync.
+        domains[domain] = {"ok": False, "error": type(exc).__name__}
+        return None
+
+
+def _parse_dt(value: Any) -> datetime | None:
+    if not value:
+        return None
+    if isinstance(value, datetime):
+        return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+    if isinstance(value, (int, float)):
+        try:
+            seconds = float(value) / 1000 if float(value) > 10_000_000_000 else float(value)
+            return datetime.fromtimestamp(seconds, timezone.utc)
+        except Exception:
+            return None
+    if isinstance(value, str):
+        try:
+            parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+            return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+        except ValueError:
+            return None
+    return None
+
+
+def _floors(summary: Any, floors: Any) -> tuple[float | None, float | None]:
+    """Floors climbed: the daily summary first, else the sum of the floors timeline."""
+    up = _first_number(summary, "floorsAscended", "floorsClimbed") if isinstance(summary, dict) else None
+    down = _first_number(summary, "floorsDescended") if isinstance(summary, dict) else None
+    if (up is None or down is None) and isinstance(floors, dict):
+        descriptors = [str(d.get("key") or "").lower() for d in floors.get("floorsValueDescriptorDTOList") or [] if isinstance(d, dict)]
+        values = [v for v in floors.get("floorValuesArray") or [] if isinstance(v, (list, tuple))]
+        def column(name: str, fallback: int) -> float | None:
+            index = descriptors.index(name) if name in descriptors else fallback
+            total = [v[index] for v in values if len(v) > index and isinstance(v[index], (int, float))]
+            return float(sum(total)) if total else None
+        up = up if up is not None else column("ascended", 2)
+        down = down if down is not None else column("descended", 3)
+    return up, down
+
+
+async def _upsert_health(db: AsyncSession, user: User, day: date, data: dict[str, Any], preserve_missing: bool = False) -> None:
+    row = await db.scalar(select(DailyHealth).where(DailyHealth.user_id == user.id, DailyHealth.date == day))
+    if not row:
+        row = DailyHealth(user_id=user.id, date=day)
+        db.add(row)
+    existing_raw = dict(row.raw or {})
+    sources = _metric_sources(existing_raw)
+    summary = data.get("daily") or {}
+    heart = data.get("heart") or {}
+    hydration = data.get("hydration") or {}
+    stress = data.get("stress") or {}
+    body_battery = data.get("body_battery") or {}
+    respiration = data.get("respiration") or {}
+    spo2 = data.get("spo2") or {}
+    readiness = data.get("training_readiness") or {}
+    max_metrics = data.get("max_metrics") or {}
+    intensity = data.get("intensity") or {}
+
+    def apply(field: str, value: Any, *, clear_missing: bool = True) -> None:
+        # Missing endpoints never erase another source's observed values.
+        if merge_metric(row, field, value, "garmin"):
+            sources[field] = "garmin"
+
+    steps_value = _first_number(summary, "totalSteps", "steps", "stepCount")
+    steps = int(steps_value) if steps_value is not None else None
+    apply("steps", steps)
+    apply("distance_m", _first_number(summary, "totalDistanceMeters", "totalDistanceInMeters", "distanceInMeters", "distance", "totalDistance"))
+    apply("active_calories", _first_number(summary, "activeKilocalories", "activeKiloCalories", "activeCalories"))
+    apply("resting_calories", _first_number(summary, "bmrKilocalories", "bmrKiloCalories", "restingCalories"))
+    up, down = _floors(summary, data.get("floors"))
+    apply("floors_ascended", up)
+    apply("floors_descended", down)
+    resting_hr = int(_first_number(heart, "restingHeartRate") or _first_number(summary, "restingHeartRate") or 0) or None
+    apply("resting_hr", resting_hr)
+    if heart or not preserve_missing:
+        apply("min_hr", int(_first_number(heart, "minHeartRate", "minHeartRateInBeatsPerMinute") or 0) or None)
+        apply("max_hr", int(_first_number(heart, "maxHeartRate", "maxHeartRateInBeatsPerMinute") or 0) or None)
+    apply("stress_avg", _first_number(stress, "avgStressLevel", "averageStressLevel", "overallStressLevel"), clear_missing=False)
+    # Garmin charged/drained are daily deltas, not battery levels.
+    values = []
+    for item in body_battery if isinstance(body_battery, list) else [body_battery]:
+        if not isinstance(item, dict):
+            continue
+        for point in item.get("bodyBatteryValuesArray") or []:
+            if isinstance(point, (list, tuple)) and len(point) > 1:
+                value = point[-1]
+                if isinstance(value, (int, float)) and 0 <= value <= 100:
+                    values.append(float(value))
+        for key in ("bodyBatteryLevel", "bodyBattery"):
+            value = item.get(key)
+            if isinstance(value, (int, float)) and 0 <= value <= 100:
+                values.append(float(value))
+    high = _first_number(summary, "bodyBatteryHighestValue")
+    low = _first_number(summary, "bodyBatteryLowestValue")
+    apply("body_battery_high", int(max(values)) if values else high, clear_missing=False)
+    apply("body_battery_low", int(min(values)) if values else low, clear_missing=False)
+    if hydration or not preserve_missing:
+        apply("hydration_ml", _first_number(hydration, "valueInML", "waterConsumedInML", "hydrationAmount", "totalHydration"))
+        apply("hydration_goal_ml", int(_first_number(hydration, "goalInML", "hydrationGoal", "goal") or 0) or None)
+    if intensity or not preserve_missing:
+        apply("intensity_moderate", int(_first_number(intensity, "moderateIntensityMinutes", "moderateMinutes") or 0) or None)
+        apply("intensity_vigorous", int(_first_number(intensity, "vigorousIntensityMinutes", "vigorousMinutes") or 0) or None)
+    elif summary:
+        # Personal API: intensity minutes only arrive inside the daily summary.
+        apply("intensity_moderate", int(_first_number(summary, "moderateIntensityMinutes", "moderateMinutes") or 0) or None)
+        apply("intensity_vigorous", int(_first_number(summary, "vigorousIntensityMinutes", "vigorousMinutes") or 0) or None)
+    if respiration or not preserve_missing:
+        apply("respiration_avg", _first_number(respiration, "avgWakingRespirationValue", "avgRespiration", "averageRespiration")
+              or _first_number(summary, "avgWakingRespirationValue", "averageWakingRespirationValue"))
+    if spo2 or not preserve_missing:
+        apply("spo2_avg", _first_number(spo2, "averageSpO2", "avgSpO2", "averageSpo2"))
+    if readiness or not preserve_missing:
+        apply("training_readiness", _first_number(readiness, "score", "trainingReadinessScore"))
+    apply("vo2max_running", _first_number(max_metrics, "vo2MaxPreciseValue", "vo2MaxValue", "vo2Max"), clear_missing=False)
+    row.raw = _merge_raw_payload(row.raw or existing_raw, data, sources)
+
+
+async def _upsert_sleep(db: AsyncSession, user: User, day: date, payload: Any) -> None:
+    if not isinstance(payload, dict) or not payload:
+        return
+    row = await db.scalar(select(SleepSession).where(SleepSession.user_id == user.id, SleepSession.date == day))
+    if not row:
+        row = SleepSession(user_id=user.id, date=day)
+        db.add(row)
+    existing_raw = dict(row.raw or {})
+    sources = _metric_sources(existing_raw)
+    dto = payload.get("dailySleepDTO") if isinstance(payload.get("dailySleepDTO"), dict) else payload
+    values = {
+        "start_at": _parse_dt(dto.get("sleepStartTimestampGMT") or dto.get("sleepStartTimestampLocal") or dto.get("sleepStartTimestamp")),
+        "end_at": _parse_dt(dto.get("sleepEndTimestampGMT") or dto.get("sleepEndTimestampLocal") or dto.get("sleepEndTimestamp")),
+        "duration_seconds": int(_first_number(dto, "sleepTimeSeconds", "durationInSeconds") or 0) or None,
+        "deep_seconds": _first_number(dto, "deepSleepSeconds"),
+        "light_seconds": _first_number(dto, "lightSleepSeconds"),
+        "rem_seconds": _first_number(dto, "remSleepSeconds"),
+        "awake_seconds": _first_number(dto, "awakeSleepSeconds", "awakeSeconds"),
+        "sleep_score": _first_number(payload, "overallScore", "sleepScore", "value"),
+        "avg_respiration": _first_number(payload, "averageRespirationValue", "avgRespiration"),
+        "avg_spo2": _first_number(payload, "averageSpO2Value", "averageSpO2"),
+        "min_spo2": _first_number(payload, "lowestSpO2Value", "minSpO2"),
+    }
+    for field, value in values.items():
+        if merge_metric(row, field, value, "garmin"):
+            sources[field] = "garmin"
+    row.raw = _merge_raw_payload(row.raw or existing_raw, payload, sources)
+
+
+async def _upsert_hrv(db: AsyncSession, user: User, day: date, payload: Any) -> None:
+    if not isinstance(payload, dict) or not payload:
+        return
+    row = await db.scalar(select(HrvDaily).where(HrvDaily.user_id == user.id, HrvDaily.date == day))
+    if not row:
+        row = HrvDaily(user_id=user.id, date=day)
+        db.add(row)
+    existing_raw = dict(row.raw or {})
+    sources = _metric_sources(existing_raw)
+    values = {
+        "overnight_average": _first_number(payload, "lastNightAvg", "overnightAvg"),
+        "highest_5min": _first_number(payload, "lastNight5MinHigh", "highest5Min"),
+        "garmin_baseline_low": _first_number(payload, "balancedLow", "baselineLowUpper"),
+        "garmin_baseline_high": _first_number(payload, "balancedUpper", "baselineBalancedUpper"),
+        "garmin_status": _first_text(payload, "status", "hrvStatus"),
+    }
+    for field, value in values.items():
+        if merge_metric(row, field, value, "garmin"):
+            sources[field] = "garmin"
+    row.raw = _merge_raw_payload(row.raw or existing_raw, payload, sources)
+
+
+async def _upsert_body(db: AsyncSession, user: User, day: date, payload: Any) -> None:
+    if not isinstance(payload, (dict, list)) or not payload:
+        return
+    records = payload.get("dateWeightList") if isinstance(payload, dict) else payload
+    if isinstance(records, list):
+        for record in records:
+            if isinstance(record, dict):
+                await _upsert_body(db, user, day, record)
+        return
+    weight = _first_number(payload, "weight", "weightKg", "weightInGrams")
+    if weight is not None and weight > 500:
+        weight = weight / 1000.0
+    measured_at = _parse_dt(payload.get("timestampGMT") or payload.get("timestamp") or payload.get("measurementTimestamp"))
+    measured_at = measured_at or datetime.combine(day, datetime.min.time(), tzinfo=timezone.utc)
+    row = await db.scalar(select(BodyMeasurement).where(BodyMeasurement.user_id == user.id, BodyMeasurement.measured_at == measured_at))
+    if not row:
+        row = BodyMeasurement(user_id=user.id, measured_at=measured_at, raw={})
+        db.add(row)
+    existing_raw = dict(row.raw or {})
+    sources = _metric_sources(existing_raw)
+
+    def kg(*keys: str) -> float | None:
+        value = _first_number(payload, *keys)
+        if value is not None and value > 500:
+            value /= 1000.0
+        return value
+
+    values = {
+        "weight_kg": weight,
+        "bmi": _first_number(payload, "bmi"),
+        "body_fat_percent": _first_number(payload, "bodyFat", "bodyFatPercentage", "percentFat"),
+        "body_water_percent": _first_number(payload, "bodyWater", "bodyWaterPercentage", "percentHydration"),
+        "muscle_mass_kg": kg("muscleMass", "muscleMassKg", "muscleMassInGrams"),
+        "bone_mass_kg": kg("boneMass", "boneMassKg", "boneMassInGrams"),
+    }
+    for field, value in values.items():
+        if merge_metric(row, field, value, "garmin"):
+            sources[field] = "garmin"
+    raw_payload = payload if isinstance(payload, dict) else {"records": payload}
+    row.raw = _merge_raw_payload(row.raw or existing_raw, raw_payload, sources)
+
+
+async def upsert_garmin_profile(db: AsyncSession, user: User, payload: Any, *, day: date | None = None) -> None:
+    """Persist stable profile values such as height without turning them into a daily metric."""
+    if not isinstance(payload, dict) or not payload:
+        return
+    snapshot_day = day or date.today()
+    height = _first_number(payload, "heightInCentimeters", "heightCm", "height", "heightInMeters")
+    if height is not None:
+        if 0.5 < height < 3.0:
+            height *= 100.0
+        elif height > 1000:
+            height /= 10.0
+        if not (50 <= height <= 260):
+            height = None
+    await _store_raw(db, user, "user_profile", snapshot_day, payload, external_id="profile")
+    if height is None:
+        return
+    measured_at = _parse_dt(payload.get("updatedAt") or payload.get("updated_at"))
+    if measured_at is None:
+        previous = (await db.scalars(select(BodyMeasurement).where(BodyMeasurement.user_id == user.id, BodyMeasurement.height_cm.is_not(None)).order_by(BodyMeasurement.measured_at.desc()))).all()
+        if any((r.raw or {}).get("_profile_source") == "garmin" and r.height_cm == height for r in previous):
+            return
+        measured_at = datetime(1970, 1, 1, tzinfo=timezone.utc)
+    row = await db.scalar(select(BodyMeasurement).where(BodyMeasurement.user_id == user.id, BodyMeasurement.measured_at == measured_at))
+    if not row:
+        row = BodyMeasurement(user_id=user.id, measured_at=measured_at, raw={})
+        db.add(row)
+    sources = _metric_sources(row.raw)
+    if merge_metric(row, "height_cm", height, "garmin"):
+        sources["height_cm"] = "garmin"
+    row.raw = {**_merge_raw_payload(row.raw, payload, sources), "_profile_source": "garmin"}
+
+
+async def _upsert_activities(db: AsyncSession, user: User, activities: list[dict[str, Any]] | None) -> tuple[int, list[Activity]]:
+    """Upsert an activity page with one lookup instead of one query per row.
+
+    Historical Garmin accounts can contain thousands of activities. Batch-loading
+    existing IDs keeps a full-history import bounded by pages rather than by an
+    N+1 database query pattern.
+    """
+    payloads: list[tuple[int, dict[str, Any]]] = []
+    seen: set[int] = set()
+    for item in activities or []:
+        raw_id = item.get("activityId")
+        if raw_id in (None, ""):
+            continue
+        try:
+            activity_id = int(raw_id)
+        except (TypeError, ValueError):
+            continue
+        if activity_id in seen:
+            continue
+        seen.add(activity_id)
+        payloads.append((activity_id, item))
+
+    if not payloads:
+        return 0, []
+
+    ids = [activity_id for activity_id, _ in payloads]
+    existing = (await db.scalars(select(Activity).where(
+        Activity.user_id == user.id, Activity.garmin_activity_id.in_(ids)
+    ))).all()
+    by_id = {int(row.garmin_activity_id): row for row in existing}
+
+    timestamps = [_parse_dt(item.get("startTimeGMT") or item.get("startTimeLocal") or item.get("beginTimestamp")) for _, item in payloads]
+    timestamps = [t for t in timestamps if t]
+    secondary = []
+    if timestamps:
+        secondary = list((await db.scalars(select(Activity).where(
+            Activity.user_id == user.id, Activity.garmin_activity_id < 0,
+            Activity.started_at >= min(timestamps) - timedelta(minutes=3),
+            Activity.started_at <= max(timestamps) + timedelta(minutes=3),
+        ))).all())
+
+    inserted = 0
+    rows: list[Activity] = []
+    for activity_id, item in payloads:
+        row = by_id.get(activity_id)
+        if row is None:
+            from pengucoach.sparkyfitness.sync import _sport_family, _close_number
+            start = _parse_dt(item.get("startTimeGMT") or item.get("startTimeLocal") or item.get("beginTimestamp"))
+            kind = item.get("activityType") or {}
+            kind = kind.get("typeKey") if isinstance(kind, dict) else str(kind)
+            matches = [candidate for candidate in secondary
+                       if start and candidate.started_at and (candidate.raw or {}).get("source") == "sparkyfitness"
+                       and candidate.duration_seconds is not None and item.get("duration") is not None
+                       and abs(((candidate.started_at if candidate.started_at.tzinfo else candidate.started_at.replace(tzinfo=timezone.utc)) - start).total_seconds()) <= 180
+                       and _sport_family(candidate.sport_type) == _sport_family(kind)
+                       and _close_number(candidate.duration_seconds, item.get("duration"), absolute=60, relative=.05)
+                       and _close_number(candidate.distance_m, item.get("distance"), absolute=100, relative=.03)]
+            if len(matches) == 1:
+                row = matches[0]
+                row.garmin_activity_id = activity_id
+                secondary.remove(row)
+                by_id[activity_id] = row
+        if row is None:
+            row = Activity(user_id=user.id, garmin_activity_id=activity_id)
+            db.add(row)
+            by_id[activity_id] = row
+            inserted += 1
+        metric_fields = ("duration_seconds", "moving_seconds", "distance_m", "calories", "avg_hr", "max_hr", "avg_speed", "avg_power", "avg_cadence", "vo2max", "elevation_gain", "training_load", "aerobic_training_effect", "anaerobic_training_effect")
+        old_values = {field: getattr(row, field) for field in metric_fields}
+        old_raw = dict(row.raw or {})
+        row.name = item.get("activityName")
+        atype = item.get("activityType") or {}
+        row.sport_type = atype.get("typeKey") if isinstance(atype, dict) else str(atype)
+        row.subsport_type = str(atype.get("parentTypeId")) if isinstance(atype, dict) and atype.get("parentTypeId") is not None else None
+        row.started_at = _parse_dt(item.get("startTimeGMT") or item.get("startTimeLocal") or item.get("beginTimestamp"))
+        row.duration_seconds = int(item.get("duration") or 0) or None
+        row.moving_seconds = int(item.get("movingDuration") or 0) or None
+        row.distance_m = float(item.get("distance") or 0) or None
+        row.calories = float(item.get("calories") or 0) or None
+        row.avg_hr = int(item.get("averageHR") or 0) or None
+        row.max_hr = int(item.get("maxHR") or 0) or None
+        row.avg_speed = float(item.get("averageSpeed") or 0) or None
+        row.avg_power = float(item.get("avgPower") or item.get("averagePower") or 0) or None
+        row.avg_cadence = float(item.get("averageRunningCadenceInStepsPerMinute") or item.get("averageBikingCadenceInRevPerMinute") or 0) or None
+        row.vo2max = float(item.get("vO2MaxValue") or item.get("vo2MaxValue") or 0) or None
+        row.elevation_gain = float(item.get("elevationGain") or 0) or None
+        row.training_load = float(item.get("activityTrainingLoad") or 0) or None
+        row.aerobic_training_effect = float(item.get("aerobicTrainingEffect") or 0) or None
+        row.anaerobic_training_effect = float(item.get("anaerobicTrainingEffect") or 0) or None
+        metric_sources = dict(old_raw.get("_metric_sources") or {})
+        for field in metric_fields:
+            if getattr(row, field) is None and old_values[field] is not None:
+                setattr(row, field, old_values[field])
+                metric_sources.setdefault(field, old_raw.get("source", "garmin"))
+            elif getattr(row, field) is not None:
+                metric_sources[field] = "garmin"
+        previous = row.raw or {}
+        row.raw = {**item, **{k: v for k, v in previous.items() if k.startswith("sparkyfitness")}, "_metric_sources": metric_sources}
+        rows.append(row)
+    await db.flush()
+    return inserted, rows
+
+
+async def sync_day(
+    db: AsyncSession,
+    user: User,
+    connection: GarminConnection,
+    day: date,
+    include_activities: bool = True,
+    gateway=None,
+    raw_client=None,
+    detail_level: str = "full",
+) -> dict[str, Any]:
+    if gateway is None or raw_client is None:
+        gateway, raw_client = await gateway_from_connection(connection)
+    setting = await db.get(GarminSyncSetting, user.id)
+    domains: dict[str, Any] = {}
+    data: dict[str, Any] = {}
+    calls: list[tuple[str, Callable[[], Any]]] = []
+    core_history = detail_level == "core"
+    if not setting or setting.sync_health:
+        calls.extend([
+            ("daily", lambda: gateway.get_user_summary(day)),
+            ("sleep", lambda: gateway.get_sleep_data(day)),
+            ("hrv", lambda: gateway.get_hrv_data(day)),
+            ("stress", lambda: gateway.get_stress_data(day)),
+            ("body_battery", lambda: gateway.get_body_battery(day)),
+        ])
+        if not core_history:
+            calls.extend([
+                ("heart", lambda: gateway.get_heart_rates(day)),
+                ("hydration", lambda: gateway.get_hydration_data(day)),
+                ("respiration", lambda: gateway.get_respiration_data(day)),
+                ("spo2", lambda: gateway.get_spo2_data(day)),
+                ("intensity", lambda: gateway.get_intensity_minutes_data(day)),
+                ("floors", lambda: gateway.get_floors(day)),
+            ])
+    if not setting or setting.sync_training:
+        if core_history:
+            calls.append(("max_metrics", lambda: gateway.get_max_metrics(day)))
+        else:
+            calls.extend([
+                ("training_readiness", lambda: gateway.get_training_readiness(day)),
+                ("training_status", lambda: gateway.get_training_status(day)),
+                ("max_metrics", lambda: gateway.get_max_metrics(day)),
+            ])
+    if not setting or setting.sync_body:
+        # The full endpoint bundles stats + body. Historical core mode already
+        # requested daily stats, so use the body-only date-range call to avoid
+        # fetching the same daily summary twice.
+        if core_history:
+            calls.append(("body", lambda: gateway.get_body_composition(day, day)))
+        else:
+            calls.append(("body", lambda: gateway.get_stats_and_body(day)))
+    for domain, func in calls:
+        value = await _call(domain, func, domains)
+        data[domain] = value
+        await _store_raw(db, user, domain, day, value)
+    activities = None
+    activity_rows: list[Activity] = []
+    inserted = 0
+    if include_activities and (not setting or setting.sync_activities):
+        activities = await _call("activities", lambda: gateway.get_activities_by_date(day, day), domains)
+        if isinstance(activities, list):
+            inserted, activity_rows = await _upsert_activities(db, user, activities)
+            await _store_raw(db, user, "activities", day, activities)
+    if not setting or setting.sync_health:
+        await _upsert_health(db, user, day, data, preserve_missing=core_history)
+        await _upsert_sleep(db, user, day, data.get("sleep"))
+        await _upsert_hrv(db, user, day, data.get("hrv"))
+    if (not setting or setting.sync_body) and data.get("body"):
+        await _upsert_body(db, user, day, data.get("body"))
+    connection.token_ciphertext = serialize_refreshed_token(raw_client)
+    connection.last_validated_at = datetime.now(timezone.utc)
+    await db.flush()
+    # This result crosses Celery's JSON boundary after the transaction commits.
+    # Returning ORM instances here caused successful imports to become failed jobs.
+    return {"date": day.isoformat(), "domains": domains, "activities": len(activities or []),
+            "activity_ids": [str(row.id) for row in activity_rows], "inserted": inserted}
+
+
+async def run_incremental_sync(db: AsyncSession, user: User, connection: GarminConnection) -> dict[str, Any]:
+    now = datetime.now(timezone.utc)
+    if connection.cooldown_until and connection.cooldown_until > now:
+        return {"status": "cooldown", "until": connection.cooldown_until.isoformat()}
+    run = GarminSyncRun(user_id=user.id, sync_type="incremental")
+    db.add(run); await db.flush()
+    try:
+        # Look back one day because Garmin can finalize sleep/recovery values later.
+        results = []
+        for day in (date.today() - timedelta(days=1), date.today()):
+            results.append(await sync_day(db, user, connection, day, include_activities=True))
+        setting = await db.get(GarminSyncSetting, user.id)
+        interval = setting.interval_minutes if setting else settings.garmin_default_interval_minutes
+        jitter = random.randint(0, max(1, min(5, interval // 6)))
+        connection.last_successful_sync_at = now
+        connection.next_sync_at = now + timedelta(minutes=interval + jitter)
+        connection.cooldown_until = None
+        connection.consecutive_errors = 0
+        connection.last_error_code = None
+        run.status = "success"; run.finished_at = datetime.now(timezone.utc)
+        run.domains = {r["date"]: r["domains"] for r in results}
+        run.records_read = sum(r["activities"] for r in results)
+        run.records_inserted = sum(r["inserted"] for r in results)
+        await db.commit()
+        return {"status": "success", "days": results, "read_only": True}
+    except GarminConnectTooManyRequestsError:
+        connection.consecutive_errors += 1
+        minutes = min(360, settings.garmin_rate_limit_cooldown_minutes * max(1, 2 ** (connection.consecutive_errors - 1)))
+        connection.cooldown_until = now + timedelta(minutes=minutes)
+        connection.last_error_code = "GARMIN_RATE_LIMITED"; connection.last_error_at = now
+        run.status = "rate_limited"; run.error_code = "GARMIN_RATE_LIMITED"; run.finished_at = now
+        await db.commit()
+        return {"status": "rate_limited", "cooldown_until": connection.cooldown_until.isoformat()}
+    except GarminConnectAuthenticationError:
+        connection.status = "reauth_required"; connection.last_error_code = "GARMIN_REAUTH_REQUIRED"; connection.last_error_at = now
+        run.status = "failed"; run.error_code = "GARMIN_REAUTH_REQUIRED"; run.finished_at = now
+        await db.commit()
+        return {"status": "reauth_required"}
+    except Exception as exc:
+        connection.consecutive_errors += 1; connection.last_error_code = "GARMIN_SYNC_FAILED"; connection.last_error_at = now
+        run.status = "failed"; run.error_code = "GARMIN_SYNC_FAILED"; run.error_message_safe = type(exc).__name__; run.finished_at = now
+        await db.commit()
+        raise
