@@ -7,6 +7,7 @@ export type TodayPrefs = {order:string[];hidden:string[];pinned_metrics:string[]
 export const TODAY_CARDS:{key:string;span:number;de:string;en:string;descDe:string;descEn:string;placed:boolean}[] = [
   {key:"readiness",span:7,de:"Tagesampel",en:"Daily readiness",descDe:"Deine Bereitschaft für heute mit Begründung",descEn:"Your readiness for today, with reasons",placed:true},
   {key:"checkin",span:5,de:"Check-in",en:"Check-in",descDe:"Energie, Muskelkater und verfügbare Zeit",descEn:"Energy, soreness and available time",placed:true},
+  {key:"race",span:12,de:"Wettkampf-Countdown",en:"Race countdown",descDe:"Tage bis zum Wettkampf, Phase und Prognose",descEn:"Days to your race, phase and prognosis",placed:true},
   {key:"metrics",span:12,de:"Messwerte",en:"Readings",descDe:"Deine ausgewählten Tageswerte",descEn:"Your selected daily readings",placed:true},
   {key:"dayphases",span:12,de:"Tagesverlauf",en:"Day timeline",descDe:"Morgen, Vorbereitung, Rückblick",descEn:"Morning, preparation, reflection",placed:true},
   {key:"preparation",span:6,de:"Trainingsvorbereitung",en:"Workout preparation",descDe:"Deine heutige Einheit vorbereiten",descEn:"Get ready for today's session",placed:true},

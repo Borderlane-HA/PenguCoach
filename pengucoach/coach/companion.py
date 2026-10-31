@@ -28,9 +28,16 @@ def sport_family(value):
     return value
 
 
-def scheduled_sessions(run, schedule):
+def scheduled_sessions(run, schedule, *, include_skipped=False):
+    """Plan sessions with their calendar date. Cancelled sessions (alpha.85) are left out unless asked for."""
     plan = TrainingPlanDocument.model_validate((run.metadata_json or {}).get("structured_plan"))
-    return [{**copy.deepcopy((schedule.overrides or {}).get(s.id) or s.model_dump()), "date": (schedule.start_date + timedelta(weeks=((schedule.overrides or {}).get(s.id) or s.model_dump())["week"] - 1, days=((schedule.overrides or {}).get(s.id) or s.model_dump())["day"] - 1)).isoformat()} for s in plan.sessions]
+    result = []
+    for s in plan.sessions:
+        item = copy.deepcopy((schedule.overrides or {}).get(s.id) or s.model_dump())
+        if item.get("skipped") and not include_skipped:
+            continue
+        result.append({**item, "date": (schedule.start_date + timedelta(weeks=item["week"] - 1, days=item["day"] - 1)).isoformat()})
+    return result
 
 
 def compare_sessions(sessions, activities, user):

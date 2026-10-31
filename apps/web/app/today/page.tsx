@@ -1,5 +1,6 @@
 "use client";
 // alpha.82 Today: compact header, freely arranged cards, settings behind one gear.
+import {RaceCountdown} from "../../components/Races";
 import {useEffect,useMemo,useRef,useState} from "react";
 import Link from "next/link";
 import AppShell from "../../components/AppShell";
@@ -57,6 +58,7 @@ export default function Today(){
   const hQuery=useCachedQuery<H>(shown("metrics")?"/health/today?include_vo2=false":null);
   const actsQuery=useCachedQuery<A[]>(shown("activities")?"/activities?limit=4&include_stats=false":null);
   const trendQuery=useCachedQuery<O>(shown("trend")?"/health/resting-hr?days=14":null);
+  const raceQuery=useCachedQuery<O>(shown("race")?"/races/next":null,60000);
   const loadQuery=useCachedQuery<O>(shown("load")?"/coach/training-load":null);
   const vo2Query=useCachedQuery<O>(shown("metrics")&&prefs.pinned_metrics.includes("vo2max")?"/health/vo2-history?days=180":null,120000);
   const h=hQuery.data?{...hQuery.data,vo2max_running:hQuery.data.vo2max_running??vo2Query.data?.latest?.running,vo2max_cycling:hQuery.data.vo2max_cycling??vo2Query.data?.latest?.cycling}:null;
@@ -97,6 +99,7 @@ export default function Today(){
   const weekMax=Math.max(1,week?.minutes??0,prev?.minutes??0);
 
   const blocks:Record<string,React.ReactNode>={
+    race:raceQuery.data?.race?<RaceCountdown lang={lang}/>:null,
     readiness:<TodayReadiness data={data} loading={today.loading} failed={today.failed} lang={lang} onRetry={()=>void today.refresh()}/>,
     checkin:<section className="card today-checkin"><div className="today-card-head"><span className="eyebrow">{bi(lang,"Ein Moment für dich","A moment for you")}</span><h2>{phase==="reflection"?bi(lang,"Dein Tag","Your day"):bi(lang,"Wie geht es dir?","How are you?")}</h2></div><div className="today-assistant-tiles"><CheckinAssistant key={`check-${data?.date}`} value={data?.checkin||{}} ready={!!data} lang={lang} onSave={saveCheckin} onReset={resetCheckin}/>{shown("reflection")&&<ReflectionAssistant key={`reflection-${data?.date}`} data={data} lang={lang}/>}</div>{status&&<p role="status" className="today-status-note">{status}</p>}</section>,
     metrics:<section className="today-metrics" aria-label={bi(lang,"Deine Messwerte","Your readings")}><div className="health-metric-grid" style={{"--cols":tileColumns(prefs.pinned_metrics.length)} as React.CSSProperties}>{prefs.pinned_metrics.filter(k=>k!=="vo2max").map(k=>metrics.find(m=>m.key===k)).filter((m):m is O=>!!m).map((m:O)=>m.key==="steps"?<StepGoalCard key={m.key} summary={h?.step_goal} value={String(m.value)} note={hError?errorNote:m.note} loading={hLoading} error={hError}/>:<MetricCard key={m.key} label={m.label} value={String(m.value)} note={hError?errorNote:m.note} tone={m.tone} unavailable={Boolean(m.unavailable)} loading={hLoading} error={hError}/>)}{prefs.pinned_metrics.includes("vo2max")&&<div className="health-metric-card metric-card-modern tone-vo2 vo2-dual-card" data-metric="vo2max"><div className="health-metric-top"><span className="health-metric-dot"/><span className="metric-label">VO₂max</span></div><div className="vo2-dual-values"><div><small>{bi(lang,"Laufen","Running")}</small><strong>{h?.vo2max_running??"—"}</strong></div><div><small>{bi(lang,"Rad","Cycling")}</small><strong>{h?.vo2max_cycling??"—"}</strong></div></div><div className="kpi-note">ml/kg/min</div></div>}</div></section>,
@@ -123,7 +126,7 @@ export default function Today(){
       </header>
       {!loaded&&!prefsQuery.error&&<div className="today-grid"><div className="card today-skeleton span-7"/><div className="card today-skeleton span-5"/><div className="card today-skeleton span-12"/></div>}
       {prefsQuery.error&&!loaded&&<p className="status-warn">{bi(lang,"Deine Heute-Einstellungen konnten nicht geladen werden.","Could not load your Today settings.")} <button type="button" className="ghost compact" onClick={()=>void prefsQuery.refresh()}>{bi(lang,"Erneut laden","Retry")}</button></p>}
-      {loaded&&<div className="today-grid">{layout.map(({key,span})=><div key={key} className={`today-slot span-${span} ${span<12?"half":""}`} data-today-card={key}>{blocks[key]}</div>)}</div>}
+      {loaded&&<div className="today-grid">{layout.filter(({key})=>blocks[key]!=null).map(({key,span})=><div key={key} className={`today-slot span-${span} ${span<12?"half":""}`} data-today-card={key}>{blocks[key]}</div>)}</div>}
       {loaded&&layout.length===0&&<div className="card today-empty"><strong>{bi(lang,"Alle Bereiche ausgeblendet","All sections hidden")}</strong><button type="button" onClick={()=>setSettingsOpen(true)}>{bi(lang,"Heute anpassen","Customize Today")}</button></div>}
     </div>
     <TodaySettings value={prefs} onSaved={setSaved} lang={lang} open={settingsOpen} onClose={()=>setSettingsOpen(false)}/>

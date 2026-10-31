@@ -158,7 +158,7 @@ def test_met_requirements_and_preview_report_checks(host,monkeypatch,tmp_path):
 
 def test_shipped_requirements_file_is_valid_and_reachable_for_preview():
     value=json.loads(Path('install/release-requirements.json').read_text())
-    assert set(value)<={'min_upgrade_from','docker_compose_min','python_min','node_min'}
+    assert set(value)<={'min_upgrade_from','docker_compose_min','python_min','node_min','node_recommended'}
     engine=Engine.__new__(Engine);engine.config={'repository':'https://github.com/Borderlane-HA/PenguCoach.git'}
     import urllib.request
     seen=[]

@@ -132,6 +132,7 @@ class TrainingSession(BaseModel):
     notes: str = Field(default="", max_length=1500)
     steps: list[PlanStep] = Field(default_factory=list)
     strength_exercises: list[StrengthExercise] = Field(default_factory=list)
+    skipped: bool = Field(default=False, description="Set only by the user in the calendar (session cancelled). Always false in a generated plan.")
 
 
 class TrainingPlanDocument(BaseModel):

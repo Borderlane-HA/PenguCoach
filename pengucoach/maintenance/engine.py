@@ -355,6 +355,10 @@ class Engine:
             need = requirements.get(key+'_min')
             if need and key in tools:
                 checks.append({'key':key,'ok':_numbers(tools[key]) >= _numbers(need),'required':str(need),'actual':tools[key]})
+        # Advisory only: shown in the preview, never blocks (e.g. Node.js 20 end-of-life).
+        recommended = requirements.get('node_recommended')
+        if recommended and 'node' in tools:
+            checks.append({'key':'node_recommended','ok':_numbers(tools['node']) >= _numbers(recommended),'required':str(recommended),'actual':tools['node'],'advisory':True})
         return checks
 
     def check_requirements(self, driver, source, installed):
@@ -365,7 +369,7 @@ class Engine:
         if not isinstance(requirements,dict):raise ValueError('UPDATE_REQUIREMENTS_INVALID')
         checks = self.requirement_checks(driver,requirements,installed)
         for check in checks:
-            if not check['ok']:raise ValueError(REQUIREMENT_ERRORS[check['key']]+':'+re.sub(r'[^A-Za-z0-9_.-]','',check['required']))
+            if not check['ok'] and not check.get('advisory'):raise ValueError(REQUIREMENT_ERRORS[check['key']]+':'+re.sub(r'[^A-Za-z0-9_.-]','',check['required']))
         return checks
 
     def remote_requirements(self, tag):

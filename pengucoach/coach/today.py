@@ -11,9 +11,11 @@ LEGACY_TODAY_ORDER = ['preparation', 'weather', 'reflection', 'progress', 'load'
 PREVIOUS_TODAY_CARDS = ['progress', 'preparation', 'weather', 'reflection', 'load', 'metrics', 'trend', 'activities']
 # alpha.82: every block of Today is a card the user can show, hide and move.
 # "reflection" is the evening tile inside the check-in card, toggled but not placed.
-TODAY_CARDS = ['readiness', 'checkin', 'metrics', 'dayphases', 'preparation', 'weather', 'progress',
+TODAY_CARDS = ['readiness', 'checkin', 'race', 'metrics', 'dayphases', 'preparation', 'weather', 'progress',
                'load', 'trend', 'activities', 'week', 'reflection']
 NEW_TODAY_CARDS = ['readiness', 'checkin', 'dayphases', 'week']
+# alpha.85: the race countdown; shown only while a race is planned.
+RACE_CARD = 'race'
 TODAY_METRICS = ['steps', 'sleep', 'resting_hr', 'hrv', 'stress', 'hydration', 'body_battery_high', 'floors', 'weight', 'body_fat', 'training_readiness', 'vo2max']
 TODAY_DENSITIES = ['comfortable', 'compact']
 DEFAULT_METRICS = ['steps', 'sleep', 'resting_hr', 'hrv', 'weight', 'stress']

@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.1.0-alpha.85
+
+- **New page "Calendar"** (sidebar and mobile dock):
+  - **Year overview** in GitHub style: one square per day, colour by training minutes – switchable to steps and floors. Click a day to jump to its month. On phones the year scrolls sideways and starts at the current week.
+  - **Streaks** without pressure: *active weeks* (weeks in a row with at least two training days – rest days never break it, the running week only counts once reached), *step goal days in a row*, training days, sessions, hours and the strongest month of the year.
+  - **Month view** with recorded activities, planned sessions of all scheduled plans and races. **Drag & drop** a planned session to another day; on phone and tablet tap it → "Move" → tap the new day. If a session of the same plan is already there, both swap places. Tapping a session edits name, duration, time and notes, or **cancels** it ("Restore" undoes). Past sessions and sessions already on the Garmin watch stay locked with a clear message.
+  - Cancelled sessions are new in the plan model (`skipped`): they disappear from Today, plan comparisons and the Garmin export and are shown struck-through in the training plan.
+- **Calendar export:** a secret **subscription link** (`webcal://…`) for iPhone/iPad, Outlook and apps like ICSx⁵, plus a one-time **.ics download**. Contains planned sessions (with intervals and notes, as timed events when a start time is set), races and optionally completed activities of the last 60 days. The link can be renewed (the old one stops working immediately) or switched off. Works in a home-lab setup: away from home the calendar keeps its last state and updates again on the home Wi-Fi. Google Calendar needs PenguCoach reachable from the internet – the help explains alternatives.
+- **Race mode:**
+  - Add races with date, sport, distance (presets 5 km to marathon, cycling distances), optional target time, notes and priority **A/B/C** (A = main goal).
+  - **Today** shows a new card (hideable like all others, only visible while a race is planned): countdown, current **phase** (base, build, peak, taper, race day), a progress bar through the phases and a **time prognosis** as a range – estimated from your fastest matching sessions of the last eight weeks (Riegel's formula), with an "i" explaining it.
+  - **Taper as a proposal:** in the peak and taper phase "View taper proposal" lists every affected session with old → new duration (less volume, same intensity: fewer interval repeats, shorter warm-up/long parts; the day before the race at most 30 min; the session on race day is cancelled). You tick what to apply – nothing changes without confirmation. Sessions already on the Garmin watch are reported and left unchanged.
+  - After the race PenguCoach finds the recording and shows your time against the target.
+  - **Plan towards a race:** the plan form offers "Plan towards a race"; goal, number of weeks and description are prefilled and the coach gets the race date, phases by week and taper rules to plan backwards.
+- **Node.js 22:** Node.js 20 gets no security fixes anymore (e.g. the bundled Brotli decoder, CVE-2026-111497). The update switches LXC installations to Node.js 22 from NodeSource (host step `085-nodejs-22`); new installations get Node.js 22 directly. If that fails (e.g. no internet), the update still completes and the update area shows the command to do it yourself. The preview marks an outdated Node.js with "!" instead of blocking the update.
+- Help updated (calendar, races, subscriptions in the home network, Node.js).
+- **Database migration** `0019_race_events` (new table); runs automatically during the update.
+
 ## 0.1.0-alpha.84
 
 - **Activity detail – map, values and chart in one view:**

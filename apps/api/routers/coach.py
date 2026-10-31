@@ -86,6 +86,7 @@ class TrainingPlanRequest(BaseModel):
     quality_profile: Literal["very_low", "low", "standard", "high"] = "standard"
     start_date: date | None = None
     include_weather: bool | None = None
+    race_id: uuid.UUID | None = None
 
     @field_validator("start_date")
     @classmethod

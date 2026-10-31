@@ -496,6 +496,23 @@ class PlanSchedule(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
 
+class RaceEvent(Base):
+    """A competition the user trains for (alpha.85): countdown, prognosis, taper proposal."""
+    __tablename__ = "race_events"
+    id: Mapped[uuid.UUID] = uuid_pk()
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    name: Mapped[str] = mapped_column(String(120))
+    date: Mapped[date] = mapped_column(Date, index=True)
+    sport: Mapped[str] = mapped_column(String(32), default="running")
+    distance_km: Mapped[float | None] = mapped_column(Float, nullable=True)
+    target_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    priority: Mapped[str] = mapped_column(String(1), default="A")
+    notes: Mapped[str] = mapped_column(Text, default="")
+    data: Mapped[dict] = mapped_column(JSONB, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
 class TrainingReview(Base):
     __tablename__ = "training_reviews"
     __table_args__ = (UniqueConstraint("plan_run_id", "session_id"),)

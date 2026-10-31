@@ -95,7 +95,7 @@ Ab Alpha.78 setzt der Wartungsdienst die Rechte selbst.
 
 ### Voraussetzungen einer Version
 
-Jedes Release kann in `install/release-requirements.json` festlegen, ab welcher Version ein direktes Update möglich ist (`min_upgrade_from`) und welche Docker-Compose-, Python- bzw. Node.js-Version nötig ist. Der Updatebereich zeigt die Prüfung vor dem Start; nicht erfüllte Voraussetzungen sperren das Update mit einem klaren Hinweis. Beim Update selbst wird dieselbe Datei aus dem geprüften Release-Checkout gelesen, bevor irgendetwas verändert wird.
+Jedes Release kann in `install/release-requirements.json` festlegen, ab welcher Version ein direktes Update möglich ist (`min_upgrade_from`) und welche Docker-Compose-, Python- bzw. Node.js-Version nötig ist. Seit alpha.85 gibt es zusätzlich `node_recommended`: eine Empfehlung, die in der Vorschau als „!“ erscheint, das Update aber nie sperrt. Der Host-Schritt `085-nodejs-22.native.sh` stellt LXC-Installationen dabei auf Node.js 22 (NodeSource) um; scheitert das (z. B. ohne Internet), läuft das Update trotzdem weiter und die Vorschau zeigt den Befehl zum manuellen Umstellen. Der Updatebereich zeigt die Prüfung vor dem Start; nicht erfüllte Voraussetzungen sperren das Update mit einem klaren Hinweis. Beim Update selbst wird dieselbe Datei aus dem geprüften Release-Checkout gelesen, bevor irgendetwas verändert wird.
 
 ### Systemschritte aus dem Repository
 

@@ -15,6 +15,8 @@ import TrainingWorkspace from "../../components/TrainingWorkspace";
 import TrainingGenerationDetails from "../../components/TrainingGenerationDetails";
 import AiQualityControl from "../../components/AiQualityControl";
 import {api} from "../../lib/api";
+import {useCachedQuery} from "../../lib/data-cache";
+import {formatDuration} from "../../lib/races";
 import {bi,useI18n,type Lang} from "../../lib/i18n";
 import {euro,type QualityId} from "../../lib/aiUsage";
 
@@ -59,6 +61,7 @@ export default function Training(){
   const ignoredJobs=useRef<Set<string>>(new Set());
   const[deleteCandidate,setDeleteCandidate]=useState<AnyObj|null>(null),[deleteInfo,setDeleteInfo]=useState<AnyObj|null>(null),[deleteBusy,setDeleteBusy]=useState(false),[deleteStatus,setDeleteStatus]=useState("");
   const[usePersonal,setUsePersonal]=useState(true),[profileStatus,setProfileStatus]=useState("");
+  const[raceId,setRaceId]=useState("");const racesQuery=useCachedQuery<AnyObj>("/races",60000);
   const[goalType,setGoalType]=useState("hybrid"),[goalText,setGoalText]=useState(""),[experience,setExperience]=useState("intermediate"),[weeks,setWeeks]=useState(8),[days,setDays]=useState(4),[minutes,setMinutes]=useState(60),[equipment,setEquipment]=useState(""),[constraints,setConstraints]=useState("");
   const[planStart,setPlanStart]=useState(defaultMonday()),[weather,setWeather]=useState<AnyObj|null>(null),[includeWeather,setIncludeWeather]=useState(false);
   const[contextDays,setContextDays]=useState(7),[contextData,setContextData]=useState<ContextData>(defaultContext);
@@ -124,12 +127,20 @@ export default function Training(){
     setBusy(false);setJobId(null);setActiveJobSummary(null);
   }
 
+  function pickRace(id:string){
+    setRaceId(id);const r=(racesQuery.data?.items??[]).find((x:AnyObj)=>x.id===id);if(!r)return;
+    const km=Number(r.distance_km)||0;
+    if(r.sport==="running")setGoalType(km<=6?"running_5k":km<=12?"running_10k":km<=25?"half_marathon":"marathon");
+    else if(r.sport==="cycling")setGoalType("cycling_endurance");
+    if(planStart){const days=Math.round((new Date(`${r.date}T12:00:00`).getTime()-new Date(`${planStart}T12:00:00`).getTime())/86400000);if(days>=0)setWeeks(Math.max(1,Math.min(24,Math.floor(days/7)+1)))}
+    if(!goalText.trim())setGoalText(`${r.name} (${new Date(`${r.date}T12:00:00`).toLocaleDateString(de?"de-DE":"en-GB")}${km?`, ${km.toLocaleString(de?"de-DE":"en-GB",{maximumFractionDigits:1})} km`:""}${r.target_seconds?`, ${bi(lang,"Ziel","target")} ${formatDuration(r.target_seconds)}`:""})`);
+  }
   async function generate(e:FormEvent){
     e.preventDefault();if(busy||jobLookup||!model)return;
     if(!isMonday(planStart)){setError(bi(lang,"Der Planstart muss ein Montag sein, damit Wochen, Wetter und Garmin-Kalender eindeutig zusammenpassen.","The plan start must be a Monday so weeks, weather and the Garmin calendar stay aligned."));return}
     setBusy(true);setError("");setJobProgress(null);setStatus(de?"Plan wird vorbereitet…":"Preparing plan…");
     try{
-      const r=await api<AnyObj>("/coach/training-plan/jobs",{method:"POST",body:JSON.stringify({use_personal_context:usePersonal,goal_type:goalType,goal_text:goalText,experience,weeks,days_per_week:days,session_minutes:minutes,equipment,constraints,context_days:contextDays,context_data:contextData,start_date:planStart,include_weather:includeWeather,prompt:prompt||null,model_id:model,max_tokens:tokens,context_window_tokens:ctx,quality_profile:quality,locale:lang})});
+      const r=await api<AnyObj>("/coach/training-plan/jobs",{method:"POST",body:JSON.stringify({use_personal_context:usePersonal,goal_type:goalType,goal_text:goalText,experience,weeks,days_per_week:days,session_minutes:minutes,equipment,constraints,context_days:contextDays,context_data:contextData,start_date:planStart,include_weather:includeWeather,race_id:raceId||null,prompt:prompt||null,model_id:model,max_tokens:tokens,context_window_tokens:ctx,quality_profile:quality,locale:lang})});
       setJobId(r.task_id);setActiveJobSummary(r.summary??{goal_type:goalType,goal_text:goalText,weeks,days_per_week:days,session_minutes:minutes,start_date:planStart,model_id:model});localStorage.setItem(jobKey,r.task_id);setPlannerOpen(false);setWizardStep(4);void poll(r.task_id);
     }catch(e){setBusy(false);setStatus(de?"Planerstellung konnte nicht gestartet werden.":"Plan generation could not be started.");setError(e instanceof Error?e.message:String(e))}
   }
@@ -194,6 +205,7 @@ export default function Training(){
         <div className="training-step"><span>01</span><div><h2>{bi(lang,"Was möchtest du erreichen?","What do you want to achieve?")}</h2><p className="muted">{bi(lang,"Zuerst nur das Ziel. Details zu Zeit, Daten und KI folgen danach.","Start with the goal. Time, data and AI details come later.")}</p></div></div>
         <div className="planner-profile-row"><button type="button" className="ghost" onClick={loadProfile}>{bi(lang,"Mein Coach-Profil übernehmen","Use my Coach profile")}</button><label className="checkline"><input type="checkbox" checked={usePersonal} onChange={e=>setUsePersonal(e.target.checked)}/>{bi(lang,"Profil, Merksätze & Feedback einbeziehen","Include profile, memories & feedback")}</label></div>
         {profileStatus&&<p role="status" className="muted">{profileStatus}</p>}
+        {(racesQuery.data?.items??[]).some((r:AnyObj)=>r.date>=(racesQuery.data?.today??"")&&r.priority!=="C")&&<label>{bi(lang,"Auf einen Wettkampf hin planen","Plan towards a race")}<select value={raceId} onChange={e=>pickRace(e.target.value)}><option value="">{bi(lang,"Kein Wettkampf","No race")}</option>{(racesQuery.data?.items??[]).filter((r:AnyObj)=>r.date>=(racesQuery.data?.today??"")&&r.priority!=="C").map((r:AnyObj)=><option key={r.id} value={r.id}>🏁 {r.name} · {new Date(`${r.date}T12:00:00`).toLocaleDateString(de?"de-DE":"en-GB")}</option>)}</select>{raceId&&<small className="muted">{bi(lang,"Der Coach plant rückwärts vom Wettkampftag: Grundlage, Aufbau, Spitze und Tapering.","The coach plans backwards from race day: base, build, peak and taper.")}</small>}</label>}
         <label>{bi(lang,"Ziel","Goal")}<select value={goalType} onChange={e=>setGoalType(e.target.value)}>{GOALS.map(x=><option key={x[0]} value={x[0]}>{de?x[1]:x[2]}</option>)}</select></label>
         <label>{bi(lang,"Dein konkretes Ziel","Your specific goal")}<textarea value={goalText} onChange={e=>setGoalText(e.target.value)} placeholder={bi(lang,"z. B. 10 km unter 50 Minuten, mehr Muskelmasse und trotzdem zweimal Rad pro Woche …","e.g. run 10K under 50 minutes, gain muscle while cycling twice a week …")}/></label>
       </section>}

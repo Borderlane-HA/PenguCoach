@@ -1377,3 +1377,167 @@ html[data-color-mode="dark"] :is(.ghost.danger,.status-bad){color:#ff8f80}
 @media(max-width:640px){.chart-readout.on-map{gap:8px 12px;padding:10px 12px}.activity-explorer .route-map-controls{display:flex;flex-wrap:wrap;align-items:center}.activity-explorer .route-map-controls label{display:flex!important;flex-direction:row;align-items:center;gap:8px;width:auto;margin:0}.activity-explorer .route-map-controls select{width:auto}}
 .activity-explorer .route-map-area{grid-template-columns:minmax(0,1fr)}.activity-explorer .route-map-controls select{max-width:60vw}
 @media(max-width:640px){.activity-explorer .route-map-controls label{flex:1 1 100%;min-width:0}.activity-explorer .route-map-controls select{flex:1;min-width:0;max-width:none}}
+.maintenance-checks li.warn span{color:var(--warn,#b57824)}
+.mobile-dock{grid-template-columns:repeat(6,minmax(0,1fr))!important}.mobile-dock a span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+/* ===== alpha.85 dialogs (race, session, taper, calendar feed) ===== */
+dialog.race-dialog{width:min(520px,calc(100vw - 24px));max-height:calc(100dvh - 32px);padding:0;border:1px solid var(--border);border-radius:20px;background:var(--panel);color:var(--text);box-shadow:0 30px 80px rgba(0,0,0,.3)}
+dialog.race-dialog::backdrop{background:rgba(5,10,9,.45)}
+.race-dialog-inner{display:grid;gap:14px;padding:20px 22px 18px}
+.race-dialog-inner>header{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+.race-dialog-inner>header h2{margin:4px 0 0;font-size:1.2rem}
+.race-dialog-inner fieldset{border:0;margin:0;padding:0;display:grid;gap:12px;min-width:0}
+.race-dialog-inner label{display:grid;gap:6px;font-size:.78rem;font-weight:650;color:var(--muted);margin:0;min-width:0}
+.race-dialog-inner input,.race-dialog-inner select,.race-dialog-inner textarea{width:100%;color:var(--text)}
+.race-dialog-inner>footer{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding-top:6px;border-top:1px solid var(--border)}
+.race-dialog-inner .spacer{flex:1}
+.race-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.race-distance{display:grid;gap:8px}
+.race-presets,.race-priority{display:flex;flex-wrap:wrap;gap:6px}
+.race-presets button,.race-priority button{min-height:34px;padding:0 12px;border-radius:999px;border:1px solid var(--border);background:var(--panel)!important;color:var(--text)!important;box-shadow:none!important;font-size:.76rem;font-weight:650}
+.race-presets button.on,.race-priority button.on{background:var(--accent-soft)!important;border-color:var(--accent)!important;color:var(--accent-strong,var(--accent))!important}
+.race-priority button{min-width:44px}
+.label-with-tip{display:inline-flex;align-items:center;gap:6px}
+.race-delete-confirm{display:inline-flex;align-items:center;gap:6px;font-size:.8rem}
+.taper-lead{margin:0;line-height:1.55}
+.taper-plan h3{margin:4px 0 8px;font-size:.9rem}
+.taper-plan ul{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.taper-plan label.checkline{display:grid!important;grid-template-columns:auto 86px minmax(0,1fr) auto;align-items:center;gap:10px;padding:9px 10px;border:1px solid var(--border);border-radius:12px;background:var(--panel2);color:var(--text)!important;font-weight:500!important}
+.taper-plan input{width:18px!important;height:18px}
+.taper-day{font-size:.75rem;color:var(--muted)}.taper-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.taper-change{font-size:.78rem;white-space:nowrap}.taper-change s{color:var(--muted)}
+.taper-done{display:grid;gap:6px}
+.small{font-size:.75rem}
+.feed-block{display:grid;gap:10px;padding:14px;border:1px solid var(--border);border-radius:14px;background:var(--panel2)}
+.feed-block h3{margin:0;font-size:.92rem}.feed-block p{margin:0}
+.feed-link{display:flex;gap:8px}.feed-link input{flex:1;min-width:0;font-family:var(--font-mono,monospace);font-size:.72rem}
+.feed-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.feed-actions .primary-link{min-height:40px;padding:0 14px;text-decoration:none;font-weight:700;color:var(--primary-ink)!important;background:var(--accent)!important}
+.feed-actions label.checkline{display:flex!important;align-items:center;gap:8px;color:var(--text);font-weight:500}
+.feed-help summary{cursor:pointer;font-size:.8rem;font-weight:650}
+.feed-help ul{margin:8px 0 0;padding-left:18px;display:grid;gap:8px;font-size:.78rem;line-height:1.5;color:var(--muted)}
+.feed-help li strong{color:var(--text)}
+.ghost-link{display:inline-flex;align-items:center;min-height:40px;padding:0 14px;border:1px solid var(--border);border-radius:12px;color:var(--text);text-decoration:none;font-weight:650;width:max-content}
+.ghost-link:hover{background:var(--panel)}
+@media(max-width:560px){.race-grid{grid-template-columns:1fr}.taper-plan label.checkline{grid-template-columns:auto minmax(0,1fr) auto}.taper-day{grid-column:2}.taper-name{grid-column:2}.taper-change{grid-column:3;grid-row:1/3}}
+/* ===== alpha.85 race countdown on Today ===== */
+.race-countdown{display:grid;gap:14px;padding:18px 20px!important;background:linear-gradient(120deg,color-mix(in srgb,var(--accent) 12%,var(--panel)),var(--panel) 60%)!important}
+.race-countdown-main{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:16px;align-items:center}
+.race-flag{display:grid;place-items:center;width:52px;height:52px;border-radius:16px;background:var(--accent-soft);font-size:1.6rem}
+.race-countdown-copy h2{margin:3px 0 2px;font-size:clamp(1.3rem,2.2vw,1.7rem);letter-spacing:-.02em}
+.race-countdown-copy .eyebrow{white-space:normal}
+.race-phase-line{margin:0;color:var(--muted);font-size:.85rem}.race-phase-line strong{color:var(--text)}
+.race-figure{display:grid;justify-items:end;gap:2px;text-align:right}
+.race-figure small{display:inline-flex;align-items:center;gap:6px;font-size:.72rem;color:var(--muted);font-weight:650}
+.race-figure strong{font:700 1.45rem/1.1 var(--font-display,inherit);font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.race-figure span{font-size:.72rem;font-weight:700}
+.race-figure .good{color:color-mix(in srgb,#2f9e6e 75%,var(--text))}.race-figure .bad{color:color-mix(in srgb,#d0603f 75%,var(--text))}.race-figure .neutral{color:var(--muted)}
+.race-journey{display:grid;gap:6px}
+.race-journey-track{height:6px;border-radius:999px;background:var(--panel2);border:1px solid var(--border);overflow:hidden}
+.race-journey-track i{display:block;height:100%;background:linear-gradient(90deg,var(--accent),var(--accent-strong,var(--accent)));border-radius:inherit}
+.race-journey-steps{display:grid;grid-template-columns:repeat(4,1fr);font-size:.7rem;color:var(--muted)}
+.race-journey-steps span:not(:first-child){text-align:center}.race-journey-steps span:last-child{text-align:right}
+.race-journey-steps .now{color:var(--accent-strong,var(--accent));font-weight:800}.race-journey-steps .past{color:var(--text)}
+.race-actions{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.race-actions button{min-height:38px}
+.race-note{font-size:.78rem;color:var(--muted)}
+@media(max-width:640px){.race-countdown-main{grid-template-columns:auto minmax(0,1fr)}.race-countdown-side{grid-column:1/-1}.race-figure{justify-items:start;text-align:left}.race-flag{width:44px;height:44px;font-size:1.3rem}}
+/* ===== alpha.85 calendar page ===== */
+.calendar-page{display:grid;gap:18px;min-width:0}
+.calendar-header{display:flex;justify-content:space-between;align-items:flex-end;gap:14px;flex-wrap:wrap}
+.calendar-header h1{margin:4px 0 0;font-size:clamp(1.6rem,2.3vw,2.1rem);letter-spacing:-.03em}
+.calendar-header-tools{display:flex;gap:8px;flex-wrap:wrap}
+.calendar-header-tools button{min-height:44px}
+.cal-year{display:grid;gap:12px;min-width:0}
+.cal-year-head,.cal-month-head{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.cal-year-nav{display:flex;align-items:center;gap:6px}
+.cal-year-nav h2{margin:0;min-width:64px;text-align:center;font-size:1.1rem;font-variant-numeric:tabular-nums}
+.cal-month-head .cal-year-nav h2{min-width:170px}
+.cal-heatmap-scroll{overflow-x:auto;padding-bottom:4px;min-width:0}
+.cal-heatmap{display:grid;grid-template-columns:28px auto;grid-template-rows:auto auto;gap:4px 6px;width:max-content;--cell:13px}
+.cal-heatmap-months{grid-column:2;display:grid;grid-template-columns:repeat(var(--weeks),var(--cell));gap:3px;font-size:.62rem;color:var(--muted);height:14px;white-space:nowrap}
+.cal-heatmap-months span{overflow:visible}
+.cal-heatmap-days{grid-row:2;display:grid;grid-template-rows:repeat(7,var(--cell));gap:3px;font-size:.6rem;color:var(--muted);align-items:center}
+.cal-heatmap-grid{grid-row:2;grid-column:2;display:grid;grid-auto-flow:column;grid-template-columns:repeat(var(--weeks),var(--cell));gap:3px}
+.cal-week{display:grid;grid-template-rows:repeat(7,var(--cell));gap:3px}
+.cal-cell{display:block;width:var(--cell);height:var(--cell);min-height:0;padding:0;border:0;border-radius:3px;background:var(--panel2);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--border) 70%,transparent)!important;cursor:pointer}
+.cal-cell:disabled{visibility:hidden}
+.cal-cell.l1{background:color-mix(in srgb,var(--accent) 25%,var(--panel2))!important}
+.cal-cell.l2{background:color-mix(in srgb,var(--accent) 48%,var(--panel2))!important}
+.cal-cell.l3{background:color-mix(in srgb,var(--accent) 72%,var(--panel2))!important}
+.cal-cell.l4{background:var(--accent)!important}
+.cal-cell.l0,.cal-cell.future{background:var(--panel2)!important}
+.cal-cell.race{box-shadow:inset 0 0 0 2px #e0573f!important}
+.cal-cell.today{outline:2px solid var(--text);outline-offset:1px}
+.cal-cell:hover:not(:disabled){transform:scale(1.25)}
+.cal-legend{display:flex;align-items:center;gap:4px;font-size:.68rem;color:var(--muted);justify-content:flex-end}
+.cal-legend .cal-cell{cursor:default;--cell:11px;width:11px;height:11px}
+.cal-legend .cal-cell:hover{transform:none}
+.cal-legend span:nth-of-type(2){margin-right:10px}
+.cal-streaks{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.cal-streak{display:flex;gap:10px;align-items:center;padding:12px 14px;border:1px solid var(--border);border-radius:14px;background:var(--panel2);min-width:0}
+.cal-streak>span{font-size:1.4rem}
+.cal-streak strong{display:block;font-size:1rem}
+.cal-streak small{display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:.72rem;color:var(--muted)}
+.cal-race-list{display:grid;gap:8px}
+.cal-race{display:grid;grid-template-columns:52px minmax(0,1fr) auto;gap:12px;align-items:center;padding:10px 12px;border:1px solid var(--border);border-radius:14px;background:var(--panel2)}
+.cal-race.past{opacity:.75}
+.cal-race-date{display:grid;justify-items:center;padding:6px 0;border-radius:10px;background:var(--panel);border:1px solid var(--border)}
+.cal-race-date strong{font-size:1.15rem;line-height:1}.cal-race-date small{font-size:.65rem;color:var(--muted);text-transform:uppercase}
+.cal-race-body{display:grid;gap:2px;min-width:0}
+.cal-race-body small{color:var(--muted);font-size:.74rem}
+.cal-prio{display:inline-grid;place-items:center;min-width:20px;height:20px;padding:0 5px;margin-left:4px;border-radius:6px;background:var(--accent-soft);color:var(--accent-strong,var(--accent));font-size:.66rem;font-weight:800;vertical-align:middle}
+.cal-race-actions{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.cal-month{display:grid;gap:10px;min-width:0;scroll-margin-top:80px}
+.cal-moving{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 12px;border-radius:12px;background:var(--accent-soft);border:1px solid var(--accent);font-size:.82rem;font-weight:650}
+.cal-notice{margin:0;padding:8px 12px;border-radius:10px;background:var(--panel2);font-size:.82rem}
+.cal-weekdays{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px;font-size:.7rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;padding:0 4px}
+.cal-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px}
+.cal-grid.loading{opacity:.5}
+.cal-day{position:relative;display:flex;flex-direction:column;gap:4px;min-height:108px;min-width:0;padding:6px;border:1px solid var(--border);border-radius:12px;background:var(--panel);cursor:pointer;transition:border-color .15s,background .15s}
+.cal-day:hover{border-color:color-mix(in srgb,var(--accent) 40%,var(--border))}
+.cal-day.outside{background:transparent;opacity:.55}
+.cal-day.past{background:color-mix(in srgb,var(--panel2) 60%,var(--panel))}
+.cal-day.today{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+.cal-day.selected{background:var(--accent-soft)}
+.cal-day.drop{border-color:var(--accent);border-style:dashed;background:var(--accent-soft)}
+.cal-grid.moving .cal-day:not(.past){border-style:dashed}
+.cal-day-num{font-size:.75rem;font-weight:700;color:var(--muted)}
+.cal-day.today .cal-day-num{color:var(--accent-strong,var(--accent))}
+.cal-day-items{display:grid;gap:3px;min-width:0}
+.cal-session,.cal-activity,.cal-race-flag{display:flex;align-items:center;gap:4px;min-width:0;min-height:22px;padding:2px 6px;border-radius:7px;font-size:.68rem;font-weight:650;line-height:1.2;text-decoration:none;text-align:left;box-shadow:none!important}
+.cal-session{border:1px solid color-mix(in srgb,var(--accent) 40%,var(--border));background:var(--panel)!important;color:var(--text)!important;cursor:grab}
+.cal-session[draggable="false"]{cursor:pointer}
+.cal-session.optional{border-style:dashed}
+.cal-session.status-unmatched{border-color:color-mix(in srgb,#d0603f 55%,var(--border));color:var(--muted)!important}
+.cal-session.status-skipped{opacity:.55}.cal-session.status-skipped .cal-chip-text{text-decoration:line-through}
+.cal-activity{background:color-mix(in srgb,var(--accent) 18%,var(--panel));color:var(--text)}
+.cal-activity:hover{background:color-mix(in srgb,var(--accent) 28%,var(--panel))}
+.cal-race-flag{background:color-mix(in srgb,#e0573f 18%,var(--panel));color:var(--text)}
+.cal-chip-text{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cal-session small,.cal-activity small{color:var(--muted);font-weight:600}
+.cal-dots{display:none;gap:3px}
+.cal-dots i{width:6px;height:6px;border-radius:50%}
+.dot-done{background:var(--accent)}.dot-plan{background:transparent;box-shadow:inset 0 0 0 1.5px var(--accent)}.dot-race{background:#e0573f}
+.cal-day-detail{display:grid;gap:6px;padding-top:6px;border-top:1px solid var(--border)}
+.cal-day-detail h3{margin:6px 0 2px;font-size:.92rem}
+.cal-detail-row{display:flex;align-items:center;gap:8px;min-height:44px;padding:8px 12px;border:1px solid var(--border);border-radius:12px;background:var(--panel2)!important;color:var(--text)!important;box-shadow:none!important;text-decoration:none;text-align:left;font-size:.85rem}
+.cal-detail-row strong{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cal-detail-row small{margin-left:auto;color:var(--muted);font-size:.74rem;white-space:nowrap}
+.cal-detail-row.status-skipped strong{text-decoration:line-through;color:var(--muted)}
+@media(min-width:900px){.cal-day-detail{display:none}}
+@media(max-width:899px){.cal-heatmap{--cell:11px}.cal-streaks{grid-template-columns:1fr}}
+@media(max-width:700px){
+  .cal-day{min-height:56px;padding:5px;align-items:center}
+  .cal-day-items,.cal-day .cal-race-flag{display:none}
+  .cal-dots{display:flex}
+  .cal-grid{gap:4px}.cal-weekdays{gap:4px;font-size:.62rem}
+  .cal-race{grid-template-columns:44px minmax(0,1fr)}.cal-race-actions{grid-column:1/-1;justify-content:flex-start}
+  .cal-month-head .cal-year-nav h2{min-width:0;font-size:1rem}
+}
+.training-day.skipped{opacity:.5}.training-day.skipped strong,.training-day.skipped h4{text-decoration:line-through}
+.maintenance-checks li{flex-wrap:wrap}.maintenance-check-help{flex-basis:100%;margin-left:22px;font-size:.75rem}.maintenance-check-help summary{cursor:pointer;color:var(--muted)}.maintenance-check-help code{display:block;margin-top:6px;padding:8px 10px;border-radius:8px;background:var(--panel2);border:1px solid var(--border);white-space:pre-wrap;word-break:break-all;font-size:.7rem}
+.cal-month-tools{display:flex;align-items:center;gap:8px}
+.cal-heatmap-scroll{container-type:inline-size}
+.cal-heatmap{--cell:clamp(10px,calc((100cqw - 40px) / var(--weeks) - 3px),17px)}
+.cal-heatmap-scroll{position:relative}
+.race-dialog-inner input[type=checkbox]{width:18px;height:18px;flex:none}

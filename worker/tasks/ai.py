@@ -400,6 +400,13 @@ async def _training_plan(user_id: str, payload: dict[str, Any], *, progress_call
                 "days_per_week": int(payload.get("days_per_week", 4)), "session_minutes": int(payload.get("session_minutes", 60)),
                 "equipment": payload.get("equipment", ""), "constraints": payload.get("constraints", ""),
                 "start_date": start_date.isoformat() if start_date else None, "source": "user"}
+            if payload.get("race_id"):
+                # alpha.85: plan backwards from a race the user picked in the plan form.
+                from pengucoach.coach.races import plan_context
+                from pengucoach.db.models import RaceEvent
+                race = await db.get(RaceEvent, _u(payload.get("race_id")))
+                if race and race.user_id == user.id:
+                    context["goal"]["race"] = plan_context(race, start_date, int(payload.get("weeks", 8)))
             weather_context = await build_training_weather_context(db, user, include=payload.get("include_weather"), plan_start_date=start_date)
             if weather_context is not None:
                 context["weather_forecast"] = weather_context

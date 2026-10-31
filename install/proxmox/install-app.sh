@@ -28,9 +28,11 @@ apt-get install -y -qq \
   postgresql postgresql-contrib redis-server nginx \
   nodejs npm git unzip jq openssl
 
-NODE_MAJOR="$(node -p 'process.versions.node.split(".")[0]' 2>/dev/null || echo 0)"
-if (( NODE_MAJOR < 20 )); then
-  info "Installing Node.js 22 from NodeSource"
+# Node.js 20 (the Debian 13 package) is end-of-life and gets no security fixes.
+# Use the maintained Node.js 22 line unless a current one is already present.
+NODE_VERSION="$(node -p 'process.versions.node' 2>/dev/null || echo 0.0.0)"
+if [ "$(printf '%s\n%s\n' "$NODE_VERSION" "22.23.4" | sort -V | head -n1)" != "22.23.4" ]; then
+  info "Installing Node.js 22 from NodeSource (found $NODE_VERSION)"
   curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
   apt-get install -y -qq nodejs
 fi

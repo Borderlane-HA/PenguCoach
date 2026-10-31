@@ -22,11 +22,15 @@ def selected_sessions(plan: TrainingPlanDocument, session_ids: list[str] | None)
 
 
 def select_session_rows(sessions: list[TrainingSession], session_ids: list[str] | None) -> list[TrainingSession]:
-    """Select sessions after calendar/export overrides have been applied."""
+    """Select sessions after calendar/export overrides have been applied.
+
+    Sessions the user cancelled in the calendar are never exported.
+    """
+    active = [session for session in sessions if not session.skipped]
     if session_ids is None:
-        return list(sessions)
+        return active
     wanted = set(session_ids)
-    return [session for session in sessions if session.id in wanted]
+    return [session for session in active if session.id in wanted]
 
 
 def apply_session_overrides(
