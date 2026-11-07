@@ -10,7 +10,8 @@
 
 PenguCoach runs on your own server (Proxmox LXC or Docker). It reads Garmin Connect and/or SparkyFitness, imports FIT/GPX/TCX files, calculates its numbers deterministically and only then lets a local or cloud AI interpret them – with cloud access to health data switched off until you allow it.
 
-**▶ [Try the live demo](https://borderlane-ha.github.io/PenguCoach/)** – the real app with made-up data, nothing to install. · What changed in each version: **[CHANGELOG](CHANGELOG.md)**
+**▶ [Try the live demo](https://borderlane-ha.github.io/PenguCoach/)** – the real app with made-up data, nothing to install.
+What changed in each version: **[CHANGELOG](CHANGELOG.md)**
 
 ## Highlights
 
