@@ -10,5 +10,5 @@ import {bi,useI18n} from "../../../lib/i18n";
 export default function About(){
   const{lang}=useI18n(),{me}=useSession();
   useEffect(()=>{if(me)location.replace(withBase(me.role==="admin"?"/admin/system#about":"/settings/updates#about"))},[me]);
-  return <AppShell title={bi(lang,"Über PenguCoach","About PenguCoach")}><AboutPenguCoach lang={lang} version={me?.app_version??"0.1.0-alpha.88"}/></AppShell>
+  return <AppShell title={bi(lang,"Über PenguCoach","About PenguCoach")}><AboutPenguCoach lang={lang} version={me?.app_version??"0.1.0-alpha.89"}/></AppShell>
 }

@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections import OrderedDict
+from dataclasses import dataclass, field
 from typing import Awaitable, Callable
 from urllib.parse import urlsplit
 
@@ -88,16 +90,39 @@ def http_router(base_url: str, client: httpx.AsyncClient | None = None) -> Route
     return route
 
 
+@dataclass
+class Familiar:
+    """The user's own recorded tracks of this sport (alpha.89)."""
+    mode: str = "any"  # any | known | new
+    points: list[tuple[float, float]] = field(default_factory=list)
+    cells: set = field(default_factory=set)
+
+
+async def _clean(route: Router, waypoints: list[tuple[float, float]], result: dict, profile: str, params: dict[str, str]) -> tuple[dict, list[tuple[float, float]], int]:
+    """Cut dead ends: move every waypoint that sits at the end of a there-and-back spur to its junction and route again."""
+    found = planner.spurs(result["coordinates"], waypoints)
+    if not found:
+        return result, waypoints, 0
+    better = planner.without_spurs(waypoints, found)
+    try:
+        again = await route(better, profile, params, 0)
+    except RoutingError:
+        return result, waypoints, 0
+    return again, better, len(found)
+
+
 async def round_trip(route: Router, sport: str, start: tuple[float, float], target_m: float, preferences: list[str],
-                     direction: float | None, count: int, seed: int, speed_kmh: float | None) -> list[dict]:
+                     direction: float | None, count: int, seed: int, speed_kmh: float | None, familiar: Familiar | None = None) -> list[dict]:
     profile, params = planner.profile_for(sport, preferences)
+    familiar = familiar or Familiar()
     errors: list[RoutingError] = []
 
     async def search(bearing: float) -> dict | None:
         radius, best = planner.first_radius(sport, target_m), None
         for _ in range(4):
+            waypoints = planner.steer(planner.loop_waypoints(start[0], start[1], bearing, radius), familiar.mode, familiar.points, familiar.cells, radius)
             try:
-                result = await route(planner.loop_waypoints(start[0], start[1], bearing, radius), profile, params, 0)
+                result = await route(waypoints, profile, params, 0)
             except RoutingError as exc:
                 errors.append(exc)
                 # A waypoint in a lake or on a motorway: try a slightly smaller loop.
@@ -107,8 +132,10 @@ async def round_trip(route: Router, sport: str, start: tuple[float, float], targ
                 if exc.code in FATAL:
                     raise
                 break
+            result, waypoints, cut = await _clean(route, waypoints, result, profile, params)
             candidate = planner.summarize(result, sport, target_m, speed_kmh)
-            candidate.update(bearing=round(bearing), profile=profile)
+            candidate.update(bearing=round(bearing), profile=profile, waypoints=[[round(a, 6), round(b, 6)] for a, b in waypoints], spurs_removed=cut,
+                             known_share=planner.known_share(result["coordinates"], familiar.cells))
             if best is None or abs(candidate["deviation"]) < abs(best["deviation"]):
                 best = candidate
             if planner.fits(target_m, result["distance_m"]):
@@ -124,12 +151,13 @@ async def round_trip(route: Router, sport: str, start: tuple[float, float], targ
         if fatal:
             raise fatal[0]
         raise errors[-1] if errors else RoutingError("ROUTING_FAILED")
-    return planner.distinct(planner.rank(found), count)
+    return planner.distinct(planner.rank_by(found, familiar.mode), count)
 
 
 async def a_to_b(route: Router, sport: str, points: list[tuple[float, float]], preferences: list[str], count: int,
-                 speed_kmh: float | None) -> list[dict]:
+                 speed_kmh: float | None, familiar: Familiar | None = None) -> list[dict]:
     profile, params = planner.profile_for(sport, preferences)
+    familiar = familiar or Familiar()
     found: list[dict] = []
     last: RoutingError | None = None
     # BRouter offers up to four alternatives for the same points.
@@ -142,8 +170,35 @@ async def a_to_b(route: Router, sport: str, points: list[tuple[float, float]], p
             last = exc
             break
         candidate = planner.summarize(result, sport, None, speed_kmh)
-        candidate.update(alternative=alternative, profile=profile)
+        candidate.update(alternative=alternative, profile=profile, waypoints=[[round(a, 6), round(b, 6)] for a, b in points], spurs_removed=0,
+                         known_share=planner.known_share(result["coordinates"], familiar.cells))
         found.append(candidate)
     if not found:
         raise last or RoutingError("ROUTING_FAILED")
-    return planner.distinct(found, count)
+    return planner.distinct(planner.rank_by(found, familiar.mode) if familiar.mode != "any" else found, count)
+
+
+# ---------------------------------------------------------------- alpha.89: editor
+_PIECES: OrderedDict[tuple, dict] = OrderedDict()
+PIECE_CACHE = 600
+
+
+async def through(route: Router, points: list[tuple[float, float]], profile: str, params: dict[str, str], cache_key: str = "") -> dict:
+    """Route through all points piece by piece. Unchanged pieces come from a cache, so dragging one
+    point in the editor only asks BRouter for the two pieces next to it."""
+    frozen = tuple(sorted(params.items()))
+
+    async def piece(a: tuple[float, float], b: tuple[float, float]) -> dict:
+        key = (cache_key, profile, frozen, round(a[0], 6), round(a[1], 6), round(b[0], 6), round(b[1], 6))
+        if key in _PIECES:
+            _PIECES.move_to_end(key)
+            return _PIECES[key]
+        result = await route([a, b], profile, params, 0)
+        _PIECES[key] = result
+        while len(_PIECES) > PIECE_CACHE:
+            _PIECES.popitem(last=False)
+        return result
+
+    pairs = list(zip(points, points[1:]))
+    parts = await asyncio.gather(*(piece(a, b) for a, b in pairs))
+    return planner.merge(list(parts))

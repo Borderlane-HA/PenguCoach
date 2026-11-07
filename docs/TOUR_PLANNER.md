@@ -20,6 +20,33 @@ and exports them as GPX. No account, no API key.
 - Variants that are nearly the same route are dropped. The best fit comes first: close
   to the wished length, little riding twice.
 
+## Dead ends (alpha.89)
+
+A waypoint next to the road is snapped by BRouter to the nearest usable way – often a
+track or a footpath – and the route goes there and back on the same way. For every via
+point PenguCoach follows the route backwards and forwards from the point closest to it
+while both sides lie on top of each other (≤ 15 m); where they part is the junction.
+Spurs of 60 m or more are cut by moving the waypoint to the junction and routing again
+(one extra call per loop attempt). The editor marks remaining spurs and cuts them on
+request (`POST /tours/route` with `clean_spurs`).
+
+## Edit mode (alpha.89)
+
+Every variant carries its waypoints. The editor sends them to `POST /tours/route`,
+which routes each pair of neighbouring waypoints separately and caches the pieces
+(600 per installation), so moving one point only routes the two pieces next to it. The
+answer contains the merged line, where each piece starts (`segments`), the stats and the
+dead ends. Saved tours have no waypoints; the editor samples eight along the line.
+
+## Known ways (alpha.89)
+
+The user's GPS tracks of the same kind of sport from the last 365 days (FIT time series
+and SparkyFitness tracks, cached for ten minutes) are turned into ~90 m grid cells.
+*Known ways* moves each loop waypoint to the nearest own track point within 45 % of the
+loop radius; *Discover new* moves waypoints out of known cells. Every variant gets
+`known_share` – the share of its length in known cells – and ranking prefers more
+(known) or less (new) of it.
+
 ## Sports and profiles
 
 Only profiles that ship with every BRouter installation are used, so a self-hosted

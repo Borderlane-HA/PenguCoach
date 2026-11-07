@@ -4,15 +4,21 @@
 import {useEffect,useMemo,useRef,useState} from "react";
 import dynamic from "next/dynamic";
 import AppShell from "../../components/AppShell";
-import TourMap,{type LatLon} from "../../components/TourMap";
+import TourMap,{type Editor,type LatLon} from "../../components/TourMap";
+import InfoTip from "../../components/InfoTip";
+import {DEMO} from "../../lib/basePath";
 import {api} from "../../lib/api";
 import {useCachedQuery} from "../../lib/data-cache";
 import {useI18n} from "../../lib/i18n";
 import {METRICS} from "../../lib/activityExplorer";
-import {DIRECTIONS,errorText,fileName,formatDuration,formatKm,gpx,profile,profilePath,SPORTS,suggestName,surfaceBar,toSamples,VARIANT_COLORS,WARNINGS,WISHES,type Coord,type SportKey,type Variant} from "../../lib/tours";
+import {DIRECTIONS,errorText,fileName,formatDuration,formatKm,gpx,insertWaypoint,moveStart,moveWaypoint,profile,profilePath,removeWaypoint,sampleWaypoints,SPORTS,suggestName,surfaceBar,toSamples,VARIANT_COLORS,WARNINGS,WISHES,type Coord,type EditRoute,type SportKey,type Variant,type Waypoint} from "../../lib/tours";
 
 const ActivityRouteMap3D=dynamic(()=>import("../../components/ActivityRouteMap3D"),{ssr:false,loading:()=><div className="tour-map-shell"><div className="tour-map map3d-loading-box">…</div></div>});
 type O=Record<string,any>;
+type Familiarity="any"|"known"|"new";
+type Snapshot={waypoints:Waypoint[];route:EditRoute};
+type EditState={route:EditRoute|null;waypoints:Waypoint[];past:Snapshot[];future:Snapshot[];busy:boolean;error:string;loop:boolean;sport:SportKey;mode:"round"|"a_to_b";from:"variant"|"saved";name?:string};
+const FAMILIARITY:{value:Familiarity;de:string;en:string}[]=[{value:"any",de:"Egal",en:"Any"},{value:"known",de:"Bekannte Wege",en:"Known ways"},{value:"new",de:"Neues entdecken",en:"Discover new"}];
 type Place={name:string;latitude:number;longitude:number;admin1?:string;country?:string};
 const STORE="pengucoach_tour_form";
 const read=()=>{try{return JSON.parse(localStorage.getItem(STORE)||"{}")}catch{return {}}};
@@ -82,11 +88,13 @@ export default function ToursPage(){
   const [view,setView]=useState<"2d"|"3d">("2d"),[view3dError,setView3dError]=useState(""),[naming,setNaming]=useState<string|null>(null),[notice,setNotice]=useState("");
   const [shownSaved,setShownSaved]=useState<(Variant&{name:string;sport:SportKey})|null>(null),[confirmDelete,setConfirmDelete]=useState<string|null>(null),[exportHelp,setExportHelp]=useState(false);
   const [server,setServer]=useState(""),[serverResult,setServerResult]=useState<O|null>(null);
+  const [familiarity,setFamiliarity]=useState<Familiarity>("any"),[edit,setEdit]=useState<EditState|null>(null);
+  const editSeq=useRef(0);
   const loaded=useRef(false);
 
   // Remember the form per browser; start at the training location the first time.
-  useEffect(()=>{const f=read();if(f.sport&&SPORTS.some(s=>s.key===f.sport))setSport(f.sport);if(f.mode)setMode(f.mode);if(f.km)setKm(f.km);if(Array.isArray(f.wishes))setWishes(f.wishes);if(f.direction!==undefined)setDirection(f.direction);if(f.start){setStart(f.start);setStartName(f.startName||"")}if(f.end){setEnd(f.end);setEndName(f.endName||"")}loaded.current=true},[]);
-  useEffect(()=>{if(!loaded.current)return;try{localStorage.setItem(STORE,JSON.stringify({sport,mode,km,wishes,direction,start,startName,end,endName}))}catch{}},[sport,mode,km,wishes,direction,start,startName,end,endName]);
+  useEffect(()=>{const f=read();if(f.sport&&SPORTS.some(s=>s.key===f.sport))setSport(f.sport);if(f.mode)setMode(f.mode);if(f.km)setKm(f.km);if(Array.isArray(f.wishes))setWishes(f.wishes);if(f.direction!==undefined)setDirection(f.direction);if(f.start){setStart(f.start);setStartName(f.startName||"")}if(f.end){setEnd(f.end);setEndName(f.endName||"")}if(["any","known","new"].includes(f.familiarity))setFamiliarity(f.familiarity);loaded.current=true},[]);
+  useEffect(()=>{if(!loaded.current)return;try{localStorage.setItem(STORE,JSON.stringify({sport,mode,km,wishes,direction,start,startName,end,endName,familiarity}))}catch{}},[sport,mode,km,wishes,direction,start,startName,end,endName,familiarity]);
   const home=options.data?.home as {lat:number;lon:number;name:string}|null|undefined;
   useEffect(()=>{if(home&&!start&&loaded.current&&!read().start){setStart({lat:home.lat,lon:home.lon});setStartName(home.name)}},[home]);// eslint-disable-line react-hooks/exhaustive-deps
   useEffect(()=>{if(options.data?.server)setServer(options.data.server.is_default?"":options.data.server.url)},[options.data?.server?.url]);// eslint-disable-line react-hooks/exhaustive-deps
@@ -94,19 +102,20 @@ export default function ToursPage(){
   const sportInfo=(options.data?.sports as O[]|undefined)?.find(s=>s.key===sport);
   const range={min:sportInfo?.min_km??2,max:sportInfo?.max_km??250};
   function chooseSport(key:SportKey){setSport(key);const info=(options.data?.sports as O[]|undefined)?.find(s=>s.key===key);if(info&&(km<info.min_km||km>info.max_km||variants.length===0))setKm(info.default_km);setVariants([]);setSelected(null)}
-  const current=shownSaved??variants.find(v=>v.id===selected)??null;
+  const current=edit?.route??shownSaved??variants.find(v=>v.id===selected)??null;
   const canPlan=!!start&&(mode==="round"||!!end)&&!busy;
 
   async function plan(nextSeed=seed){
     if(!start)return;setBusy(true);setError("");setNotice("");setShownSaved(null);setHover(null);
     try{
-      const r=await api<{variants:Variant[]}>("/tours/plan",{method:"POST",body:JSON.stringify({sport,mode,start,end:mode==="a_to_b"?end:null,distance_km:mode==="round"?km:null,direction:mode==="round"?direction:null,preferences:wishes,variants:3,seed:nextSeed})});
-      setVariants(r.variants);setSelected(r.variants[0]?.id??null);setSeed(nextSeed);
+      const r=await api<{variants:Variant[];familiar_tracks?:boolean}>("/tours/plan",{method:"POST",body:JSON.stringify({sport,mode,start,end:mode==="a_to_b"?end:null,distance_km:mode==="round"?km:null,direction:mode==="round"?direction:null,preferences:wishes,variants:3,seed:nextSeed,familiarity})});
+      setVariants(r.variants);setSelected(r.variants[0]?.id??null);setSeed(nextSeed);setEdit(null);
+      if(familiarity!=="any"&&r.familiar_tracks===false)setNotice(de?"In der Nähe gibt es noch keine eigenen Aufzeichnungen dieser Sportart – die Vorschläge richten sich daher nicht nach bekannten Wegen.":"There are no own recordings of this sport nearby yet – so the suggestions do not follow known ways.");
     }catch(e){setVariants([]);setSelected(null);setError(errorText(e instanceof Error?e.message:String(e),de))}finally{setBusy(false)}
   }
   function onPick(which:"start"|"end",p:LatLon){
     if(which==="start"){setStart(p);setStartName(de?"Punkt auf der Karte":"Point on the map")}else{setEnd(p);setEndName(de?"Punkt auf der Karte":"Point on the map")}
-    setPick(null);setVariants([]);setSelected(null);setShownSaved(null);
+    setPick(null);setVariants([]);setSelected(null);setShownSaved(null);setEdit(null);
   }
   function locate(){navigator.geolocation.getCurrentPosition(pos=>{onPick("start",{lat:pos.coords.latitude,lon:pos.coords.longitude});setStartName(de?"Mein Standort":"My location")},()=>setError(de?"Standort nicht verfügbar – bitte auf der Karte wählen.":"Location unavailable – please pick on the map."),{enableHighAccuracy:true,timeout:10000})}
   const gpxType=(s:SportKey)=>(options.data?.sports as O[]|undefined)?.find(x=>x.key===s)?.gpx_type??"cycling";
@@ -116,11 +125,48 @@ export default function ToursPage(){
     try{await api("/tours",{method:"POST",body:JSON.stringify({name,sport,mode,coordinates:v.coordinates,summary:{...v,coordinates:undefined,start_name:startName,end_name:mode==="a_to_b"?endName:"",preferences:wishes}})});setNaming(null);setNotice(de?`„${name}“ gespeichert.`:`“${name}” saved.`);await saved.refresh()}
     catch(e){setError(errorText(e instanceof Error?e.message:String(e),de))}
   }
-  async function showSaved(t:O){try{const full=await api<O>(`/tours/${t.id}`);setVariants([]);setSelected(null);setHover(null);setShownSaved({...(full.summary||{}),id:full.id,name:full.name,sport:full.sport,coordinates:full.coordinates,distance_m:full.distance_m,ascent_m:full.ascent_m,duration_s:full.duration_s,descent_m:full.summary?.descent_m??0,surface:full.summary?.surface??{},ways:full.summary?.ways??{},warnings:[],deviation:null} as any);window.scrollTo({top:0,behavior:"smooth"})}catch(e){setError(errorText(e instanceof Error?e.message:String(e),de))}}
+  async function showSaved(t:O){try{const full=await api<O>(`/tours/${t.id}`);setVariants([]);setSelected(null);setHover(null);setEdit(null);setShownSaved({...(full.summary||{}),id:full.id,name:full.name,sport:full.sport,mode:full.mode,coordinates:full.coordinates,distance_m:full.distance_m,ascent_m:full.ascent_m,duration_s:full.duration_s,descent_m:full.summary?.descent_m??0,surface:full.summary?.surface??{},ways:full.summary?.ways??{},warnings:[],deviation:null} as any);window.scrollTo({top:0,behavior:"smooth"})}catch(e){setError(errorText(e instanceof Error?e.message:String(e),de))}}
   async function savedGpx(t:O){const full=await api<O>(`/tours/${t.id}`);download(fileName(full.name),gpx(full.name,full.coordinates,gpxType(full.sport)))}
   async function remove(id:string){await api(`/tours/${id}`,{method:"DELETE"});setConfirmDelete(null);if(shownSaved?.id===id)setShownSaved(null);await saved.refresh()}
   async function saveServer(){setServerResult(null);try{await api("/tours/server/settings",{method:"PUT",body:JSON.stringify({url:server})});await options.refresh();setServerResult({ok:true,saved:true})}catch(e){setServerResult({ok:false,code:e instanceof Error?e.message:String(e)})}}
   async function testServer(){setServerResult({testing:true});try{setServerResult(await api<O>("/tours/server/test",{method:"POST",body:JSON.stringify({url:server,near:start})}))}catch(e){setServerResult({ok:false,code:e instanceof Error?e.message:String(e)})}}
+
+  // ---- alpha.89 editor
+  async function reroute(points:Waypoint[],base:EditState,clean=false){
+    if(points.length>40){setEdit({...base,error:de?"Höchstens 40 Punkte – entferne einen anderen zuerst.":"At most 40 points – remove another one first."});return}
+    const seq=++editSeq.current;
+    setEdit({...base,waypoints:points,busy:true,error:""});
+    try{
+      const r=await api<EditRoute>("/tours/route",{method:"POST",body:JSON.stringify({sport:base.sport,preferences:wishes,points:points.map(([lat,lon])=>({lat,lon})),clean_spurs:clean})});
+      if(seq!==editSeq.current)return;
+      setEdit(e=>e&&{...e,route:r,waypoints:r.waypoints,busy:false,error:"",past:base.route?[...base.past,{waypoints:base.waypoints,route:base.route}].slice(-50):base.past,future:[]});
+      setHover(null);
+    }catch(err){if(seq!==editSeq.current)return;setEdit(e=>e&&{...e,waypoints:base.waypoints,busy:false,error:errorText(err instanceof Error?err.message:String(err),de)})}
+  }
+  function startEdit(v:Variant,from:"variant"|"saved",sportKey:SportKey,tourMode:"round"|"a_to_b",name?:string){
+    const given=(v as Partial<EditRoute>).waypoints;
+    let points:Waypoint[]=given&&given.length>=2?given.map(w=>[w[0],w[1]] as Waypoint):sampleWaypoints(v.coordinates as Coord[],tourMode==="round"?8:6);
+    const loop=tourMode==="round";
+    if(loop&&points.length>=2)points[points.length-1]=points[0];
+    const base:EditState={route:null,waypoints:points,past:[],future:[],busy:true,error:"",loop,sport:sportKey,mode:tourMode,from,name};
+    setView("2d");setNaming(null);setHover(null);void reroute(points,base);
+    // The map is where editing happens – bring it into view (on phones it sits above the form).
+    setTimeout(()=>{const el=document.querySelector(".tour-main");if(el){const top=el.getBoundingClientRect().top+window.scrollY-80;window.scrollTo({top:Math.max(0,top),behavior:"smooth"})}},60);
+  }
+  const editor:Editor|null=edit?{route:edit.route,waypoints:edit.waypoints,busy:edit.busy,loop:edit.loop,fresh:!edit.past.length,
+    onMove:(i,p)=>{if(!edit.busy)void reroute(i===0?moveStart(edit.waypoints,p,edit.loop):moveWaypoint(edit.waypoints,i,p),edit)},
+    onInsert:(segment,p)=>{if(!edit.busy)void reroute(insertWaypoint(edit.waypoints,segment,p),edit)},
+    onRemove:i=>{if(!edit.busy){const next=removeWaypoint(edit.waypoints,i);if(next!==edit.waypoints)void reroute(next,edit)}}}:null;
+  function undo(){if(!edit?.route||!edit.past.length||edit.busy)return;const prev=edit.past.at(-1)!;editSeq.current++;setEdit({...edit,route:prev.route,waypoints:prev.waypoints,past:edit.past.slice(0,-1),future:[{waypoints:edit.waypoints,route:edit.route},...edit.future]});setHover(null)}
+  function redo(){if(!edit?.route||!edit.future.length||edit.busy)return;const next=edit.future[0];editSeq.current++;setEdit({...edit,route:next.route,waypoints:next.waypoints,past:[...edit.past,{waypoints:edit.waypoints,route:edit.route}],future:edit.future.slice(1)});setHover(null)}
+  function finishEdit(){
+    if(!edit?.route)return;
+    const done={...edit.route,id:edit.from==="saved"?"e1":(selected??"e1"),edited:true} as Variant;
+    if(edit.from==="saved"){setShownSaved(null);setSport(edit.sport);setMode(edit.mode);setVariants([done]);setSelected(done.id)}
+    else setVariants(vs=>vs.map(v=>v.id===selected?done:v));
+    setEdit(null);setNotice(de?"Änderungen übernommen – jetzt speichern oder als GPX herunterladen.":"Changes applied – now save or download as GPX.");
+  }
+  useEffect(()=>{if(!edit)return;const key=(e:KeyboardEvent)=>{if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="z"){e.preventDefault();if(e.shiftKey)redo();else undo()}};window.addEventListener("keydown",key);return()=>window.removeEventListener("keydown",key)});
 
   const samples=useMemo(()=>current?toSamples(current.coordinates as Coord[]):[],[current]);
   const altitude=METRICS.find(m=>m.key==="altitude_m")??null;
@@ -131,17 +177,26 @@ export default function ToursPage(){
     <div className="tour-page">
       <section className="tour-layout">
         <div className="tour-main">
-          {view==="3d"&&current&&!view3dError
+          {view==="3d"&&current&&!view3dError&&!edit
             ?<ActivityRouteMap3D data={samples} index={hover} colorMetric={altitude} onSelect={i=>setHover(i)} onHover={setHover} de={de} overlay={readout} onUnavailable={r=>setView3dError(r)}/>
-            :<TourMap start={shownSaved?null:start} end={shownSaved?null:end} mode={mode} variants={variants} selected={selected} hover={hover} pick={pick} onPick={onPick} onSelect={id=>{setSelected(id);setHover(null)}} de={de} saved={shownSaved}/>}
+            :<TourMap start={shownSaved?null:start} end={shownSaved?null:end} mode={mode} variants={variants} selected={selected} hover={hover} pick={pick} onPick={onPick} onSelect={id=>{setSelected(id);setHover(null)}} de={de} saved={edit?null:shownSaved} editor={editor}/>}
           <div className="tour-map-bar">
             <div className="chart-segmented map-view-switch" role="radiogroup" aria-label={de?"Kartenansicht":"Map view"}>
               <button type="button" role="radio" aria-checked={view==="2d"||!current} className={view==="2d"||!current?"active":""} onClick={()=>setView("2d")}>{de?"Planen":"Plan"}</button>
-              <button type="button" role="radio" aria-checked={view==="3d"&&!!current} className={view==="3d"&&current?"active":""} disabled={!current||view3dError==="NO_WEBGL"} onClick={()=>{setView3dError("");setView("3d")}}>3D</button>
+              <button type="button" role="radio" aria-checked={view==="3d"&&!!current} className={view==="3d"&&current?"active":""} disabled={!current||!!edit||view3dError==="NO_WEBGL"} onClick={()=>{setView3dError("");setView("3d")}}>3D</button>
             </div>
             {view3dError&&<small className="muted">{de?"3D ist in diesem Browser nicht verfügbar.":"3D is not available in this browser."}</small>}
+            {current&&!edit&&variants.length>1&&<small className="muted">{de?"Tipp auf eine Linie wählt die Variante.":"Tap a line to pick that variant."}</small>}
             {!current&&<small className="muted">{mode==="round"?(de?"Tippe auf die Karte, um den Start zu setzen.":"Tap the map to set the start."):(de?"Erster Tipp setzt den Start, der zweite das Ziel. Punkte lassen sich ziehen.":"First tap sets the start, the second the destination. Pins can be dragged.")}</small>}
           </div>
+          {edit&&<div className="tour-edit-float" role="toolbar" aria-label={de?"Bearbeiten":"Editing"}>
+            <span className="tour-edit-float-stats">{edit.route?<><b>{formatKm(edit.route.distance_m)}</b> · ↑ {Math.round(edit.route.ascent_m)} m</>:"…"}{edit.busy&&" · …"}</span>
+            {edit.route?.spurs&&edit.route.spurs.length>0&&<button type="button" className="ghost compact warn" disabled={edit.busy} onClick={()=>void reroute(edit.waypoints,edit,true)}>{de?`${edit.route.spurs.length} Stichweg${edit.route.spurs.length>1?"e":""} weg`:`Remove ${edit.route.spurs.length} dead end${edit.route.spurs.length>1?"s":""}`}</button>}
+            <button type="button" className="ghost compact" disabled={!edit.past.length||edit.busy} onClick={undo} aria-label={de?"Rückgängig":"Undo"}>↶</button>
+            <button type="button" className="ghost compact" disabled={!edit.future.length||edit.busy} onClick={redo} aria-label={de?"Wiederholen":"Redo"}>↷</button>
+            <button type="button" className="compact" disabled={!edit.route||edit.busy} onClick={finishEdit}>{de?"Fertig":"Done"}</button>
+            <button type="button" className="ghost compact" onClick={()=>{editSeq.current++;setEdit(null);setHover(null)}} aria-label={de?"Verwerfen":"Discard"}>✕</button>
+          </div>}
           {current&&<Profile v={current} de={de} hover={hover} onHover={setHover}/>}
         </div>
 
@@ -174,13 +229,39 @@ export default function ToursPage(){
               <div className="tour-directions" role="radiogroup" aria-label={de?"Richtung":"Direction"}><span>{de?"Richtung":"Direction"}</span>{DIRECTIONS.map(d=><button type="button" role="radio" aria-checked={direction===d.value} key={String(d.value)} className={direction===d.value?"active":""} onClick={()=>setDirection(d.value)}>{de?d.de:d.en}</button>)}</div>
             </>}
             <div className="tour-wishes">{WISHES.map(w=><label key={w.key} className="tour-check"><input type="checkbox" checked={wishes.includes(w.key)} onChange={e=>setWishes(x=>e.target.checked?[...x,w.key]:x.filter(k=>k!==w.key))}/>{de?w.de:w.en}</label>)}</div>
-            <button type="button" className="tour-go" disabled={!canPlan} onClick={()=>plan(variants.length?seed:0)}>{busy?(de?"Touren werden berechnet …":"Planning tours …"):(de?"Touren vorschlagen":"Suggest tours")}</button>
+            <div className="tour-familiar" role="radiogroup" aria-label={de?"Wege":"Ways"}><span>{de?"Wege":"Ways"}</span>{FAMILIARITY.map(f=><button type="button" role="radio" aria-checked={familiarity===f.value} key={f.value} className={familiarity===f.value?"active":""} onClick={()=>setFamiliarity(f.value)}>{de?f.de:f.en}</button>)}<InfoTip label={de?"Bekannte Wege":"Known ways"} text={de?"„Bekannte Wege“ legt die Tour über Strecken aus deinen eigenen Aufzeichnungen dieser Sportart (letztes Jahr), „Neues entdecken“ meidet sie. Jede Variante zeigt, wie viel davon du schon kennst.":"“Known ways” lays the tour over routes from your own recordings of this sport (last year), “Discover new” avoids them. Every variant shows how much of it you already know."}/></div>
+            <button type="button" className="tour-go" disabled={!canPlan||!!edit} onClick={()=>plan(variants.length?seed:0)}>{busy?(de?"Touren werden berechnet …":"Planning tours …"):(de?"Touren vorschlagen":"Suggest tours")}</button>
             {!start&&<small className="muted">{de?"Zuerst einen Start wählen.":"Choose a start first."}</small>}
             {error&&<p className="tour-error" role="alert">{error}</p>}
             {notice&&<p className="tour-notice" role="status">{notice}</p>}
           </div>
 
-          {variants.length>0&&<div className="tour-block">
+          {edit&&<div className="tour-block tour-editor">
+            <div className="between"><h2>{de?"Route bearbeiten":"Edit route"}</h2><span className="tour-editor-state">{edit.busy?(de?"rechnet …":"routing …"):""}</span></div>
+            {edit.route?<>
+              <p className="tour-variant-stats"><b>{formatKm(edit.route.distance_m)}</b><span>↑ {Math.round(edit.route.ascent_m)} m</span><span>⏱ {formatDuration(edit.route.duration_s)}</span></p>
+              <div className="tour-surface">{surfaceBar(edit.route.surface).map(x=><i key={x.key} style={{width:`${x.share*100}%`,background:x.color}} title={`${de?x.label.de:x.label.en} ${Math.round(x.share*100)} %`}/>)}</div>
+              <small className="tour-surface-legend">{Math.round(edit.route.paved_share*100)} % {de?"befestigt":"paved"} · {Math.round(edit.route.unpaved_share*100)} % {de?"unbefestigt":"unpaved"}{edit.route.known_share!=null&&<> · {Math.round(edit.route.known_share*100)} % {de?"bekannte Wege":"known ways"}</>} · {edit.waypoints.length-(edit.loop?1:0)} {de?"Punkte":"points"}</small>
+              {edit.route.spurs?.length>0&&<div className="tour-spurs"><span>{edit.route.spurs.length===1?(de?"1 Stichweg (hin und auf demselben Weg zurück)":"1 dead end (there and back on the same way)"):(de?`${edit.route.spurs.length} Stichwege (hin und auf demselben Weg zurück)`:`${edit.route.spurs.length} dead ends (there and back on the same way)`)}</span><button type="button" className="ghost compact" disabled={edit.busy} onClick={()=>void reroute(edit.waypoints,edit,true)}>{de?"Entfernen":"Remove"}</button></div>}
+              {edit.route.spurs_removed>0&&<small className="tour-notice">{de?`${edit.route.spurs_removed} Stichweg(e) entfernt.`:`${edit.route.spurs_removed} dead end(s) removed.`}</small>}
+            </>:<p className="muted">{de?"Route wird geladen …":"Loading route …"}</p>}
+            <ul className="tour-editor-help">
+              <li>{de?"Linie ziehen (am Handy: antippen): neuer Punkt, die Route folgt dem Wegenetz":"Drag the line (on phones: tap it): new point, the route follows the path network"}</li>
+              <li>{de?"Punkt ziehen: verschieben · Punkt antippen: entfernen":"Drag a point: move · tap a point: remove"}</li>
+              <li>{de?"Karte antippen: Route über diese Stelle führen":"Tap the map: route over that spot"}</li>
+            </ul>
+            {edit.error&&<p className="tour-error" role="alert">{edit.error}</p>}
+            <div className="tour-variant-actions">
+              <button type="button" className="ghost" disabled={!edit.past.length||edit.busy} onClick={undo} title={de?"Rückgängig (Strg+Z)":"Undo (Ctrl+Z)"}>↶ {de?"Rückgängig":"Undo"}</button>
+              <button type="button" className="ghost" disabled={!edit.future.length||edit.busy} onClick={redo} title={de?"Wiederholen (Strg+Umschalt+Z)":"Redo (Ctrl+Shift+Z)"}>↷ {de?"Wiederholen":"Redo"}</button>
+            </div>
+            <div className="tour-variant-actions">
+              <button type="button" disabled={!edit.route||edit.busy} onClick={finishEdit}>{de?"Fertig":"Done"}</button>
+              <button type="button" className="ghost" onClick={()=>{editSeq.current++;setEdit(null);setHover(null)}}>{de?"Verwerfen":"Discard"}</button>
+            </div>
+          </div>}
+
+          {variants.length>0&&!edit&&<div className="tour-block">
             <div className="between"><h2>{de?"Vorschläge":"Suggestions"}</h2>{mode==="round"&&<button type="button" className="ghost compact" disabled={busy} onClick={()=>plan(seed+1)}>{de?"Andere Vorschläge":"Other suggestions"}</button>}</div>
             <div className="tour-variants">{variants.map((v,i)=>{const active=v.id===selected;return <div key={v.id} className={`tour-variant ${active?"active":""}`}>
               <button type="button" className="tour-variant-pick" aria-pressed={active} onClick={()=>{setSelected(v.id);setHover(null)}}>
@@ -189,22 +270,25 @@ export default function ToursPage(){
                 <span className="tour-variant-stats"><b>{formatKm(v.distance_m)}</b><span>↑ {Math.round(v.ascent_m)} m</span><span>⏱ {formatDuration(v.duration_s)}</span></span>
               </button>
               <div className="tour-surface" aria-label={de?"Untergrund":"Surface"}>{surfaceBar(v.surface).map(s=><i key={s.key} style={{width:`${s.share*100}%`,background:s.color}} title={`${de?s.label.de:s.label.en} ${Math.round(s.share*100)} %`}/>)}</div>
-              <small className="tour-surface-legend">{Math.round(v.paved_share*100)} % {de?"befestigt":"paved"} · {Math.round(v.unpaved_share*100)} % {de?"unbefestigt":"unpaved"}{v.doubled>0.05&&<> · {Math.round(v.doubled*100)} % {de?"doppelt":"twice"}</>}</small>
+              <small className="tour-surface-legend">{Math.round(v.paved_share*100)} % {de?"befestigt":"paved"} · {Math.round(v.unpaved_share*100)} % {de?"unbefestigt":"unpaved"}{v.doubled>0.05&&<> · {Math.round(v.doubled*100)} % {de?"doppelt":"twice"}</>}{(v as Partial<EditRoute>).known_share!=null&&<> · {Math.round(((v as Partial<EditRoute>).known_share??0)*100)} % {de?"bekannte Wege":"known ways"}</>}</small>
+              {((v as Partial<EditRoute>).spurs_removed??0)>0&&<small className="tour-fixed">{de?"Stichwege automatisch entfernt":"Dead ends removed automatically"}</small>}
+              {(v as {edited?:boolean}).edited&&<small className="tour-fixed">{de?"Von dir bearbeitet":"Edited by you"}</small>}
               {v.warnings.length>0&&<ul className="tour-warnings">{v.warnings.map(w=><li key={w}>{WARNINGS[w]?(de?WARNINGS[w].de:WARNINGS[w].en):w}</li>)}</ul>}
               {active&&<div className="tour-variant-actions">
                 <button type="button" onClick={()=>exportGpx(v,suggestName(sport,v.distance_m/1000,mode==="round",startName,de),sport)}>{de?"GPX herunterladen":"Download GPX"}</button>
                 <button type="button" className="ghost" onClick={()=>setNaming(suggestName(sport,v.distance_m/1000,mode==="round",startName,de))}>{de?"Speichern":"Save"}</button>
-                <button type="button" className="ghost" onClick={()=>setExportHelp(true)}>{de?"Zu Garmin/Komoot":"To Garmin/Komoot"}</button>
+                {!DEMO&&<button type="button" className="ghost" onClick={()=>startEdit(v,"variant",sport,mode)}>✎ {de?"Bearbeiten":"Edit"}</button>}
+                <button type="button" className="ghost" onClick={()=>setExportHelp(true)}>{de?"GPX zu Garmin/Komoot?":"GPX to Garmin/Komoot?"}</button>
               </div>}
               {active&&naming!=null&&<form className="tour-name" onSubmit={e=>{e.preventDefault();if(naming.trim())void save(naming.trim())}}><input value={naming} maxLength={120} onChange={e=>setNaming(e.target.value)} aria-label={de?"Name der Tour":"Tour name"} autoFocus/><button type="submit" disabled={!naming.trim()}>{de?"Speichern":"Save"}</button><button type="button" className="ghost" onClick={()=>setNaming(null)}>{de?"Abbrechen":"Cancel"}</button></form>}
             </div>})}</div>
             <small className="muted">{options.data?.sports?.find((s:O)=>s.key===sport)?.personal_speed?(de?"Dauer geschätzt aus deinen letzten Aktivitäten dieser Art.":"Duration estimated from your recent activities of this kind."):(de?"Dauer geschätzt mit einem Standardtempo – mit eigenen Aktivitäten wird sie persönlicher.":"Duration estimated with a standard pace – your own activities make it personal.")}</small>
           </div>}
 
-          {shownSaved&&<div className="tour-block">
+          {shownSaved&&!edit&&<div className="tour-block">
             <div className="between"><h2>{shownSaved.name}</h2><button type="button" className="ghost compact" onClick={()=>setShownSaved(null)}>{de?"Schließen":"Close"}</button></div>
             <p className="tour-variant-stats"><b>{formatKm(shownSaved.distance_m)}</b><span>↑ {Math.round(shownSaved.ascent_m)} m</span><span>⏱ {formatDuration(shownSaved.duration_s)}</span></p>
-            <div className="tour-variant-actions"><button type="button" onClick={()=>exportGpx(shownSaved,shownSaved.name,shownSaved.sport)}>{de?"GPX herunterladen":"Download GPX"}</button><button type="button" className="ghost" onClick={()=>setExportHelp(true)}>{de?"Zu Garmin/Komoot":"To Garmin/Komoot"}</button></div>
+            <div className="tour-variant-actions"><button type="button" onClick={()=>exportGpx(shownSaved,shownSaved.name,shownSaved.sport)}>{de?"GPX herunterladen":"Download GPX"}</button>{!DEMO&&<button type="button" className="ghost" onClick={()=>startEdit(shownSaved,"saved",shownSaved.sport,(shownSaved as {mode?:"round"|"a_to_b"}).mode??"round",shownSaved.name)}>✎ {de?"Bearbeiten":"Edit"}</button>}<button type="button" className="ghost" onClick={()=>setExportHelp(true)}>{de?"GPX zu Garmin/Komoot?":"GPX to Garmin/Komoot?"}</button></div>
           </div>}
         </aside>
       </section>

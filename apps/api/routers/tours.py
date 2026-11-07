@@ -1,7 +1,9 @@
 """Tour planner (alpha.87): round trips and A→B tours per sport, routed by BRouter without a key."""
 from __future__ import annotations
 
+import asyncio
 import logging
+import time
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Literal
@@ -13,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from pengucoach.auth.dependencies import admin_user, safety_confirmed_user
 from pengucoach.coach.training_intelligence import sport_family
-from pengucoach.db.models import Activity, AppSetting, PlannedTour, User, UserPreference
+from pengucoach.db.models import Activity, AppSetting, FitFile, PlannedTour, User, UserPreference
 from pengucoach.db.session import get_db
 from pengucoach.tours import brouter, planner
 from pengucoach.weather.service import search_locations, weather_config
@@ -42,6 +44,7 @@ class PlanIn(BaseModel):
     preferences: list[Wish] = Field(default_factory=list, max_length=3)
     variants: int = Field(default=3, ge=1, le=3)
     seed: int = Field(default=0, ge=0, le=1000)
+    familiarity: Literal["any", "known", "new"] = "any"
 
 
 class TourIn(BaseModel):
@@ -122,6 +125,59 @@ def _speed_for(sport: str, speeds: dict[str, float]) -> float | None:
     return None
 
 
+_TRACKS: dict[tuple[str, str], tuple[float, list[list[tuple[float, float]]]]] = {}
+FAMILIES = {"road_bike": "cycling", "gravel": "cycling", "mtb": "cycling", "trekking": "cycling", "running": "running", "trail_running": "running", "hiking": "hiking"}
+
+
+def _load_tracks(paths: list[str]) -> list[list[tuple[float, float]]]:
+    import pandas as pd
+    from pengucoach.coach.recap import downsample
+    tracks = []
+    for path in paths:
+        try:
+            frame = pd.read_parquet(path, columns=["position_lat", "position_long"]).dropna()
+        except (OSError, ValueError, KeyError, ImportError):
+            continue
+        points = downsample(list(zip(frame["position_lat"].astype(float), frame["position_long"].astype(float))), 1500)
+        if points:
+            tracks.append([(p[0], p[1]) for p in points])
+    return tracks
+
+
+async def _tracks(db: AsyncSession, user: User, sport: str) -> list[list[tuple[float, float]]]:
+    """GPS tracks of the last year for this kind of sport (cached for ten minutes)."""
+    family = FAMILIES[sport]
+    key = (str(user.id), family)
+    cached = _TRACKS.get(key)
+    if cached and time.monotonic() - cached[0] < 600:
+        return cached[1]
+    since = datetime.now(timezone.utc) - timedelta(days=365)
+    rows = (await db.execute(select(Activity.id, Activity.sport_type, Activity.subsport_type, Activity.raw).where(
+        Activity.user_id == user.id, Activity.started_at >= since).order_by(Activity.started_at.desc()).limit(400))).all()
+    wanted = {r.id: r for r in rows if sport_family(f"{r.sport_type or ''} {r.subsport_type or ''}") == family
+              or (family == "hiking" and sport_family(r.sport_type) == "walking")}
+    paths = [p for _, p in (await db.execute(select(FitFile.activity_id, FitFile.parquet_path).where(
+        FitFile.user_id == user.id, FitFile.activity_id.in_(list(wanted)[:150]), FitFile.parquet_path.is_not(None)))).all()] if wanted else []
+    tracks = await asyncio.to_thread(_load_tracks, paths)
+    # SparkyFitness keeps its GPS track in the activity row.
+    from pengucoach.sparkyfitness.telemetry import telemetry
+    for row in wanted.values():
+        if isinstance(row.raw, dict) and "sparkyfitness" in row.raw:
+            gps = [(p.get("lat"), p.get("lon")) for p in telemetry(row.raw).get("gps", []) if isinstance(p, dict)]
+            gps = [(float(a), float(b)) for a, b in gps if isinstance(a, (int, float)) and isinstance(b, (int, float)) and not isinstance(a, bool)]
+            if len(gps) > 1:
+                tracks.append(gps)
+    _TRACKS[key] = (time.monotonic(), tracks)
+    return tracks
+
+
+async def _familiar(db: AsyncSession, user: User, sport: str, mode: str, near: tuple[float, float], reach_m: float) -> brouter.Familiar:
+    """Own tracks near the start; `known_share` is shown for every mode, steering only for known/new."""
+    tracks = await _tracks(db, user, sport)
+    points = [p for t in tracks for p in t if planner.metres(near, p) <= reach_m]
+    return brouter.Familiar(mode=mode if points else "any", points=points, cells=planner.known_cells(tracks))
+
+
 @router.get("/options")
 async def options(user: User = Depends(safety_confirmed_user), db: AsyncSession = Depends(get_db)):
     weather = weather_config(await db.get(UserPreference, user.id))
@@ -153,21 +209,57 @@ async def plan(payload: PlanIn, user: User = Depends(safety_confirmed_user), db:
             km = payload.distance_km or sport.default_km
             if not sport.min_km <= km <= sport.max_km:
                 raise HTTPException(422, "DISTANCE_OUT_OF_RANGE")
+            familiar = await _familiar(db, user, payload.sport, payload.familiarity, start, km * 1000 / 2)
             variants = await brouter.round_trip(route, payload.sport, start, km * 1000, list(payload.preferences), payload.direction,
-                                                payload.variants, payload.seed, speed)
+                                                payload.variants, payload.seed, speed, familiar)
         else:
             if payload.end is None:
                 raise HTTPException(422, "END_REQUIRED")
             points = [start, *[(p.lat, p.lon) for p in payload.via], (payload.end.lat, payload.end.lon)]
             if planner.metres(points[0], points[-1]) < 100 and not payload.via:
                 raise HTTPException(422, "START_EQUALS_END")
-            variants = await brouter.a_to_b(route, payload.sport, points, list(payload.preferences), payload.variants, speed)
+            familiar = await _familiar(db, user, payload.sport, payload.familiarity, start, planner.metres(points[0], points[-1]) + 5000)
+            variants = await brouter.a_to_b(route, payload.sport, points, list(payload.preferences), payload.variants, speed, familiar)
     except brouter.RoutingError as exc:
         log.info("tour planning failed: %s %s", exc.code, exc.detail)
         raise HTTPException(502 if exc.code in {"ROUTER_UNREACHABLE", "ROUTING_TIMEOUT", "SERVER_BUSY"} else 422, exc.code) from None
     for i, variant in enumerate(variants):
         variant["id"] = f"v{i + 1}"
-    return {"variants": variants, "speed_kmh": speed or sport.speed_kmh, "personal_speed": speed is not None, "seed": payload.seed}
+    return {"variants": variants, "speed_kmh": speed or sport.speed_kmh, "personal_speed": speed is not None, "seed": payload.seed,
+            "familiar_tracks": bool(familiar.cells)}
+
+
+class RouteIn(BaseModel):
+    """The editor (alpha.89): route through the given waypoints, optionally cutting dead ends."""
+    sport: SportKey
+    points: list[Point] = Field(min_length=2, max_length=40)
+    preferences: list[Wish] = Field(default_factory=list, max_length=3)
+    clean_spurs: bool = False
+
+
+@router.post("/route")
+async def route_through(payload: RouteIn, user: User = Depends(safety_confirmed_user), db: AsyncSession = Depends(get_db)):
+    profile, params = planner.profile_for(payload.sport, payload.preferences)
+    server = await _server(db)
+    route = brouter.http_router(server)
+    points = [(p.lat, p.lon) for p in payload.points]
+    try:
+        result = await brouter.through(route, points, profile, params, server)
+        found = planner.spurs(result["coordinates"], points)
+        removed = 0
+        if payload.clean_spurs and found:
+            points = planner.without_spurs(points, found)
+            result = await brouter.through(route, points, profile, params, server)
+            removed, found = len(found), planner.spurs(result["coordinates"], points)
+    except brouter.RoutingError as exc:
+        log.info("tour editing failed: %s %s", exc.code, exc.detail)
+        raise HTTPException(502 if exc.code in {"ROUTER_UNREACHABLE", "ROUTING_TIMEOUT", "SERVER_BUSY"} else 422, exc.code) from None
+    speed = _speed_for(payload.sport, await _speeds(db, user))
+    variant = planner.summarize(result, payload.sport, None, speed)
+    cells = planner.known_cells(await _tracks(db, user, payload.sport))
+    variant.update(id="edit", profile=profile, waypoints=[[round(a, 6), round(b, 6)] for a, b in points], segments=result["segments"],
+                   spurs=found, spurs_removed=removed, known_share=planner.known_share(result["coordinates"], cells))
+    return variant
 
 
 def _tour(row: PlannedTour, with_geometry: bool) -> dict:

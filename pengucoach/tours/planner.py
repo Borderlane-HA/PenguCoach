@@ -356,3 +356,165 @@ def distinct(variants: list[dict], limit: int) -> list[dict]:
         if len(chosen) >= limit:
             break
     return [{k: v for k, v in c.items() if k != "_cells"} for c in chosen]
+
+
+# ---------------------------------------------------------------- alpha.89: dead ends
+def _nearest_index(coordinates: list[list[float]], point: tuple[float, float], start: int = 0) -> int:
+    best, best_d = start, float("inf")
+    for i in range(start, len(coordinates)):
+        c = coordinates[i]
+        d = (c[1] - point[0]) ** 2 + ((c[0] - point[1]) * math.cos(math.radians(point[0]))) ** 2
+        if d < best_d:
+            best, best_d = i, d
+    return best
+
+
+def spurs(coordinates: list[list[float]], waypoints: list[tuple[float, float]], min_m: float = 60, match_m: float = 15) -> list[dict]:
+    """Dead ends at via points: the route runs to a waypoint and back on the same way.
+
+    A waypoint next to the road is snapped to the nearest way – often a track or a
+    footpath – and the route goes there and back. For every via point the route is
+    followed backwards and forwards from the point closest to it while both sides
+    stay on top of each other; the place where they part is the junction.
+    """
+    # Consecutive duplicates (a via point listed twice) would hide the turn-around.
+    compact: list[list[float]] = []
+    for c in coordinates:
+        if not compact or metres((compact[-1][1], compact[-1][0]), (c[1], c[0])) > 1:
+            compact.append(c)
+    coordinates = compact
+    found = []
+    cursor = 0
+    for n, wp in enumerate(waypoints):
+        if n == 0 or n == len(waypoints) - 1:
+            continue
+        k = _nearest_index(coordinates, wp, cursor)
+        cursor = k
+        i, j = k - 1, k + 1
+        while i >= 0 and j < len(coordinates) and metres((coordinates[i][1], coordinates[i][0]), (coordinates[j][1], coordinates[j][0])) <= match_m:
+            i, j = i - 1, j + 1
+        i, j = i + 1, j - 1
+        if i >= k or j <= k:
+            continue
+        length = sum(metres((a[1], a[0]), (b[1], b[0])) for a, b in zip(coordinates[i:k], coordinates[i + 1:k + 1]))
+        if length >= min_m:
+            found.append({"index": n, "lat": coordinates[i][1], "lon": coordinates[i][0], "length_m": round(length)})
+    return found
+
+
+def without_spurs(waypoints: list[tuple[float, float]], found: list[dict]) -> list[tuple[float, float]]:
+    """Move each dead-end waypoint back to its junction, so the route passes there instead."""
+    out = list(waypoints)
+    for spur in found:
+        out[spur["index"]] = (spur["lat"], spur["lon"])
+    # Two waypoints on the same junction add nothing.
+    cleaned = [out[0]]
+    for p in out[1:]:
+        if metres(p, cleaned[-1]) > 5:
+            cleaned.append(p)
+    if len(cleaned) == 1:
+        cleaned.append(out[-1])
+    return cleaned
+
+
+# ---------------------------------------------------------------- alpha.89: familiar ways
+CELL_LAT = 0.0008  # ≈ 90 m
+
+
+def cell(lat: float, lon: float) -> tuple[int, int]:
+    return int(math.floor(lat / CELL_LAT)), int(math.floor(lon / (CELL_LAT / max(0.2, math.cos(math.radians(lat))))))
+
+
+def known_cells(tracks: Iterable[Iterable[tuple[float, float]]]) -> set[tuple[int, int]]:
+    """Grid cells the user has been on, from recorded tracks as (lat, lon)."""
+    cells = set()
+    for track in tracks:
+        previous = None
+        for lat, lon in track:
+            cells.add(cell(lat, lon))
+            # Fill the gap between thinned points so straight roads count completely.
+            if previous and metres(previous, (lat, lon)) > 80:
+                steps = int(metres(previous, (lat, lon)) // 60)
+                for s in range(1, steps):
+                    t = s / steps
+                    cells.add(cell(previous[0] + (lat - previous[0]) * t, previous[1] + (lon - previous[1]) * t))
+            previous = (lat, lon)
+    return cells
+
+
+def known_share(coordinates: list[list[float]], cells: set[tuple[int, int]]) -> float | None:
+    if not cells or len(coordinates) < 2:
+        return None
+    total = known = 0.0
+    for a, b in zip(coordinates, coordinates[1:]):
+        d = metres((a[1], a[0]), (b[1], b[0]))
+        total += d
+        if cell(b[1], b[0]) in cells:
+            known += d
+    return round(known / total, 3) if total else None
+
+
+def nearest_known(point: tuple[float, float], track_points: list[tuple[float, float]], max_m: float) -> tuple[float, float] | None:
+    best, best_d = None, max_m
+    for p in track_points:
+        if abs(p[0] - point[0]) > 0.05 or abs(p[1] - point[1]) > 0.08:
+            continue
+        d = metres(point, p)
+        if d < best_d:
+            best, best_d = p, d
+    return best
+
+
+def steer(waypoints: list[tuple[float, float]], familiarity: str, track_points: list[tuple[float, float]], cells: set, radius_m: float) -> list[tuple[float, float]]:
+    """Move loop waypoints onto (known) or away from (new) the user's own tracks."""
+    if familiarity == "any" or not track_points:
+        return waypoints
+    out = [waypoints[0]]
+    for p in waypoints[1:-1]:
+        if familiarity == "known":
+            out.append(nearest_known(p, track_points, radius_m * 0.45) or p)
+        else:
+            choice = p
+            if cell(*p) in cells:
+                for bearing in (0, 90, 180, 270, 45, 135, 225, 315):
+                    q = destination(p[0], p[1], bearing, min(1500, radius_m * 0.25))
+                    if cell(*q) not in cells:
+                        choice = q
+                        break
+            out.append(choice)
+    out.append(waypoints[-1])
+    return out
+
+
+def rank_by(variants: list[dict], familiarity: str) -> list[dict]:
+    if familiarity == "any" or not any(v.get("known_share") is not None for v in variants):
+        return rank(variants)
+    sign = -1 if familiarity == "known" else 1
+    return sorted(variants, key=lambda v: abs(v.get("deviation") or 0) * 1.5 + v.get("doubled", 0) + sign * (v.get("known_share") or 0))
+
+
+# ---------------------------------------------------------------- alpha.89: editor segments
+def merge(parts: list[dict]) -> dict:
+    """Join routed pieces (one per pair of waypoints) into one route; remembers where each piece starts."""
+    coordinates: list[list[float]] = []
+    starts: list[int] = []
+    distance = ascent = descent = 0.0
+    surface: dict[str, float] = {}
+    ways: dict[str, float] = {}
+    for part in parts:
+        starts.append(max(0, len(coordinates) - 1) if coordinates else 0)
+        coords = part["coordinates"]
+        coordinates.extend(coords[1:] if coordinates else coords)
+        d = float(part.get("distance_m") or 0)
+        distance += d
+        ascent += float(part.get("ascent_m") or 0)
+        descent += float(part.get("descent_m") or 0)
+        for target, source in ((surface, part.get("surface") or {}), (ways, part.get("ways") or {})):
+            for k, v in source.items():
+                target[k] = target.get(k, 0.0) + v * d
+    if distance > 0:
+        surface = {k: round(v / distance, 3) for k, v in surface.items()}
+        ways = {k: round(v / distance, 3) for k, v in ways.items()}
+    return {"coordinates": coordinates, "distance_m": round(distance), "ascent_m": round(ascent), "descent_m": round(descent), "surface": surface,
+            "ways": ways, "has_elevation": any(p.get("has_elevation") for p in parts), "engine": parts[0].get("engine", "BRouter") if parts else "BRouter",
+            "segments": starts}

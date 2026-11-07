@@ -52,3 +52,18 @@ test('surface bar keeps a fixed order',()=>{
   const bar=T.surfaceBar({unpaved:.2,paved:.5,unknown:.3});
   assert.deepEqual(bar.map(b=>b.key),['paved','unpaved','unknown']);
 });
+
+test('editor helpers insert, move and remove waypoints',()=>{
+  const pts=[[48,11],[48.1,11.1],[48.2,11],[48,11]];
+  assert.deepEqual(T.insertWaypoint(pts,1,[48.15,11.2]),[[48,11],[48.1,11.1],[48.15,11.2],[48.2,11],[48,11]]);
+  assert.deepEqual(T.insertWaypoint(pts,9,[1,1]).at(-1),[48,11],'the end point stays last');
+  assert.deepEqual(T.removeWaypoint(pts,1),[[48,11],[48.2,11],[48,11]]);
+  assert.equal(T.removeWaypoint(pts,0),pts,'start cannot be removed');
+  const two=[[1,1],[2,2]];assert.equal(T.removeWaypoint(two,1),two,'two points always remain');
+  assert.deepEqual(T.moveStart(pts,[47,10],true),[[47,10],[48.1,11.1],[48.2,11],[47,10]],'in a loop start and end move together');
+  assert.deepEqual(T.moveStart(pts,[47,10],false).at(-1),[48,11]);
+  const route=[[11,48,1],[11.05,48.05,1],[11.1,48.1,1],[11.05,48.15,1],[11,48.2,1]];
+  assert.equal(T.nearestIndex(route,48.099,11.101),2);
+  assert.equal(T.segmentOf([0,2],1),0);assert.equal(T.segmentOf([0,2],3),1);assert.equal(T.segmentOf([0,2],2),1);
+  const wps=T.sampleWaypoints(route,4);assert.equal(wps.length,5);assert.deepEqual(wps[0],[48,11]);assert.deepEqual(wps.at(-1),[48.2,11]);
+});

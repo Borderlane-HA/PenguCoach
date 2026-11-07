@@ -241,3 +241,109 @@ def test_page_nav_help_and_readme():
     assert (ROOT / "docs/images/pengucoach-readme-hero.png").stat().st_size > 200_000
     changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
     assert changelog.index("## 0.1.0-alpha.87") < changelog.index("## 0.1.0-alpha.86")
+
+
+# ---------------------------------------------------------------- alpha.89
+def _line(lat, lon0, lon1, n):
+    return [[lon0 + (lon1 - lon0) * i / n, lat, 100.0] for i in range(n + 1)]
+
+
+def test_dead_end_at_a_waypoint_is_found_and_moved_to_the_junction():
+    # Along a road to the junction at lon 8.70, 400 m up a track to the waypoint and back, then on.
+    road1 = _line(50.11, 8.68, 8.70, 20)
+    spur = [[8.70, 50.11 + 0.0004 * i, 100.0] for i in range(1, 11)]
+    back = spur[-2::-1] + [[8.70, 50.11, 100.0]]
+    road2 = _line(50.11, 8.70, 8.72, 20)[1:]
+    coords = road1 + spur + back + road2
+    waypoints = [(50.11, 8.68), (50.114, 8.70), (50.11, 8.72)]
+    found = planner.spurs(coords, waypoints)
+    assert len(found) == 1 and found[0]["index"] == 1
+    assert abs(found[0]["lat"] - 50.11) < 1e-6 and abs(found[0]["lon"] - 8.70) < 1e-6
+    assert 400 < found[0]["length_m"] < 470
+    fixed = planner.without_spurs(waypoints, found)
+    assert fixed[1] == (50.11, 8.70)
+    # A plain road through a waypoint is no dead end.
+    assert planner.spurs(_line(50.11, 8.68, 8.72, 40), [(50.11, 8.68), (50.11, 8.70), (50.11, 8.72)]) == []
+
+
+def test_round_trip_cuts_dead_ends_and_keeps_waypoints():
+    junctions = set()
+
+    async def route(points, profile, params, alternative=0):
+        coords = []
+        for n, (a, b) in enumerate(zip(points, points[1:])):
+            start = a
+            if 0 < n and (round(a[0], 6), round(a[1], 6)) not in junctions:
+                # The via point lies 300 m up a track: road to the junction, up and back down.
+                j = (a[0] - 0.0027, a[1])
+                junctions.add((round(j[0], 6), round(j[1], 6)))
+                up = [[a[1], j[0] + (a[0] - j[0]) * t / 9, 100.0] for t in range(10)]
+                coords += up + up[-2::-1]
+                start = j
+            coords += [[start[1] + (b[1] - start[1]) * t / 10, start[0] + (b[0] - start[0]) * t / 10, 100.0] for t in range(1 if coords else 0, 10)]
+        coords.append([points[-1][1], points[-1][0], 100.0])
+        length = sum(planner.metres((x[1], x[0]), (y[1], y[0])) for x, y in zip(coords, coords[1:]))
+        return {"coordinates": coords, "distance_m": round(length), "ascent_m": 0, "descent_m": 0, "surface": {}, "ways": {}, "has_elevation": True}
+
+    variants = asyncio.run(brouter.round_trip(route, "road_bike", START, 30000, [], 0, 1, 0, None))
+    v = variants[0]
+    assert v["spurs_removed"] >= 1
+    assert v["waypoints"][0] == [START[0], START[1]] and len(v["waypoints"]) >= 3
+    assert all((round(w[0], 6), round(w[1], 6)) in junctions for w in v["waypoints"][1:-1]), "via points sit on the junctions"
+
+
+def test_familiar_ways_steer_and_measure():
+    track = [(50.11 + 0.0005 * i, 8.68) for i in range(200)]  # 11 km northwards
+    cells = planner.known_cells([track])
+    on = [[8.68, 50.11 + 0.0005 * i, None] for i in range(100)]
+    off = [[8.75, 50.11 + 0.0005 * i, None] for i in range(100)]
+    assert planner.known_share(on, cells) > 0.95
+    assert planner.known_share(off, cells) == 0
+    assert planner.known_share(on, set()) is None
+    wps = [START, (50.15, 8.69), START]
+    steered = planner.steer(wps, "known", track, cells, 3000)
+    assert abs(steered[1][1] - 8.68) < 1e-9, "the via point moves onto the known track"
+    away = planner.steer([START, (50.15, 8.68), START], "new", track, cells, 3000)
+    assert planner.cell(*away[1]) not in cells
+    assert planner.steer(wps, "any", track, cells, 3000) == wps
+    ranked = planner.rank_by([{"deviation": 0, "doubled": 0, "known_share": .1}, {"deviation": 0, "doubled": 0, "known_share": .9}], "known")
+    assert ranked[0]["known_share"] == .9
+    assert planner.rank_by([{"deviation": 0, "doubled": 0, "known_share": .1}, {"deviation": 0, "doubled": 0, "known_share": .9}], "new")[0]["known_share"] == .1
+
+
+def test_editor_routes_piece_by_piece_with_a_cache():
+    calls = []
+
+    async def route(points, profile, params, alternative=0):
+        calls.append(tuple(points))
+        a, b = points
+        coords = [[a[1], a[0], 100.0], [(a[1] + b[1]) / 2, (a[0] + b[0]) / 2, 110.0], [b[1], b[0], 100.0]]
+        return {"coordinates": coords, "distance_m": 1000, "ascent_m": 10, "descent_m": 10, "surface": {"paved": 1.0} if len(calls) % 2 else {"unpaved": 1.0},
+                "ways": {"small_road": 1.0}, "has_elevation": True}
+
+    brouter._PIECES.clear()
+    pts = [START, (50.12, 8.69), (50.13, 8.70), START]
+    merged = asyncio.run(brouter.through(route, pts, "trekking", {}, "test"))
+    assert len(calls) == 3 and merged["distance_m"] == 3000 and merged["ascent_m"] == 30
+    assert merged["segments"] == [0, 2, 4] and len(merged["coordinates"]) == 7
+    assert abs(sum(merged["surface"].values()) - 1) < 1e-6
+    moved = [START, (50.12, 8.69), (50.135, 8.705), START]
+    asyncio.run(brouter.through(route, moved, "trekking", {}, "test"))
+    assert len(calls) == 5, "only the two pieces next to the moved point are routed again"
+
+
+def test_editor_endpoint_and_familiarity_are_wired():
+    api = (ROOT / "apps/api/routers/tours.py").read_text(encoding="utf-8")
+    assert '@router.post("/route")' in api and "clean_spurs" in api and "planner.spurs(" in api
+    assert 'familiarity: Literal["any", "known", "new"] = "any"' in api and "_familiar(" in api
+
+
+def test_alpha89_ui_help_and_changelog():
+    page = (WEB / "app/tours/page.tsx").read_text(encoding="utf-8")
+    assert '"/tours/route"' in page and "startEdit(" in page and "familiarity" in page and "!DEMO&&" in page
+    tour_map = (WEB / "components/TourMap.tsx").read_text(encoding="utf-8")
+    assert "h.onSelect(best)" in tour_map and "tour-variant-label" in tour_map and "onInsert" in tour_map and "pointerType" in tour_map
+    help_text = (WEB / "lib/help.ts").read_text(encoding="utf-8")
+    assert "Stichwege und Sackgassen" in help_text and "Dead ends" in help_text and "Bekannte Wege oder Neues entdecken" in help_text
+    changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+    assert changelog.index("## 0.1.0-alpha.89") < changelog.index("## 0.1.0-alpha.88")

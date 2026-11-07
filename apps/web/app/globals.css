@@ -1685,3 +1685,38 @@ p.tour-variant-stats{margin:0;justify-content:flex-start}
 .demo-banner span{color:var(--muted)}
 .demo-banner a{margin-left:auto;font-weight:750;color:var(--accent-strong,var(--accent))}
 @media(max-width:640px){.demo-banner{padding:8px 12px;font-size:.76rem}.demo-banner a{margin-left:0}}
+/* alpha.89: tour editor */
+.tour-variant-label{background:none;border:0}
+.tour-variant-label span{display:grid;place-items:center;width:26px;height:26px;border-radius:50%;color:#fff;font-weight:800;font-size:13px;border:2.5px solid #fff;box-shadow:0 3px 10px rgba(0,0,0,.35);opacity:.85}
+.tour-variant-label.active span{opacity:1;transform:scale(1.12)}
+.tour-wp{background:none;border:0}
+.tour-wp span{display:grid;place-items:center;width:22px;height:22px;border-radius:50%;background:#fff;border:3px solid var(--accent);box-shadow:0 3px 9px rgba(0,0,0,.35);font-size:11px;font-weight:800;color:var(--primary-ink,#fff);cursor:grab}
+.tour-wp.via span{width:16px;height:16px;margin:3px;border-width:3px}
+.tour-wp.start span{background:var(--accent);border-color:#fff}
+.tour-wp.end span{background:#d94b4b;border-color:#fff;color:#fff}
+.tour-wp.spur span{background:#f2b233;border-color:#fff;animation:tour-spur 1.4s ease-in-out infinite}
+.tour-wp.ghost span{width:16px;height:16px;margin:3px;background:var(--accent);border-color:#fff;opacity:.85}
+@keyframes tour-spur{50%{box-shadow:0 0 0 8px rgba(242,178,51,.25),0 3px 9px rgba(0,0,0,.35)}}
+@media(prefers-reduced-motion:reduce){.tour-wp.spur span{animation:none}}
+.tour-map-shell.editing .tour-map{cursor:copy}
+.tour-map .tour-edit-hit{cursor:grab}
+.tour-map-hint.edit{background:color-mix(in srgb,var(--panel) 92%,transparent);color:var(--text);border:1px solid var(--border);font-weight:650;max-width:calc(100% - 90px);text-align:center}
+.tour-editor{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent),var(--shadow)}
+.tour-editor-state{font-size:.78rem;color:var(--muted)}
+.tour-editor-help{margin:0;padding-left:18px;font-size:.78rem;color:var(--muted);display:grid;gap:3px}
+.tour-spurs{display:flex;align-items:center;gap:10px;justify-content:space-between;padding:8px 10px;border-radius:11px;background:color-mix(in srgb,#f2b233 16%,var(--panel));border:1px solid color-mix(in srgb,#f2b233 45%,var(--border));font-size:.8rem;font-weight:650}
+.tour-spurs button{width:auto}
+.tour-fixed{font-size:.72rem;color:var(--accent-strong,var(--accent));font-weight:650}
+.tour-familiar{display:flex;align-items:center;gap:5px;flex-wrap:wrap;font-size:.8rem}
+.tour-familiar>span{color:var(--muted);font-weight:700;margin-right:3px}
+.tour-familiar button{width:auto;padding:5px 9px;font-size:.74rem;border-radius:999px;background:var(--panel2)!important;color:var(--text)!important;border:1px solid var(--border)}
+.tour-familiar button.active{border-color:var(--accent);background:var(--accent-soft)!important;color:var(--accent-strong,var(--accent))!important}
+.tour-edit-float{display:none}
+@media(max-width:1000px){
+  .tour-edit-float{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:8px 10px;border:1px solid var(--accent);border-radius:14px;background:var(--panel);box-shadow:var(--shadow);position:sticky;bottom:84px;z-index:20}
+  .tour-edit-float-stats{flex:1 1 120px;font-size:.84rem;font-variant-numeric:tabular-nums}
+  .tour-edit-float button{width:auto;min-width:38px}
+  .tour-edit-float button.warn{border-color:#f2b233;color:var(--text)}
+  .tour-editor .tour-variant-actions{display:none}
+}
+@media(max-width:550px){.tour-map-hint.edit{font-size:.7rem;padding:6px 10px;top:8px;max-width:calc(100% - 70px)}}

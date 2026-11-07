@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.1.0-alpha.89
+
+- **Tour planner – pick on the map:** tapping a line (or the map next to it) picks that variant; the start no longer jumps and the suggestions stay. Each variant carries its number on the map.
+- **Edit mode for tours** ("✎ Bearbeiten" on a suggestion or a saved tour):
+  - drag the line to pull out a new point (on phones: tap the line), drag points to move them, tap a point to remove it, tap the map to route over that spot;
+  - the route always snaps to the path network – only the two pieces next to a changed point are routed again, so it reacts quickly;
+  - length, climbing, duration, surface, known ways and the elevation profile update live; undo/redo (also Ctrl+Z / Ctrl+Shift+Z); "Done" applies the route for saving or GPX.
+  - On phones a compact toolbar sits right below the map.
+- **No more odd dead ends:** when a waypoint lies next to the road, routing used to go up a track or hiking path and back the same way. PenguCoach now detects such spurs, moves the point to the junction and routes again – automatically for suggestions, and with one tap ("Remove") in edit mode, where remaining dead ends are marked orange.
+- **Known ways or discover new:** a new switch "Ways: Any | Known ways | Discover new" steers loops over (or away from) routes from your own recordings of that sport in the last year. Every variant shows the share of known ways.
+- Export stays a simple GPX download (with the how-to for Garmin Connect and Komoot).
+- Help and `docs/TOUR_PLANNER.md` updated. No database migration.
+
 ## 0.1.0-alpha.88
 
 - **Live demo on GitHub Pages:** https://borderlane-ha.github.io/PenguCoach/ – the real PenguCoach interface with made-up data, nothing to install. Visitors can click through Today, Health, Activities (charts, 3D map, flyover), Training, Calendar, the AI Coach (example conversation), Tours (example suggestions, 3D, GPX) and switch themes and language. Dates move along with the calendar, so the demo always looks current. Saving, sync and new AI answers say clearly that they need a real installation.

@@ -131,3 +131,31 @@ export function surfaceBar(surface:Record<string,number>){
     ["unpaved_probably","#c9a46a",{de:"vermutlich unbefestigt",en:"probably unpaved"}],["unpaved","#9a6b2f",{de:"unbefestigt",en:"unpaved"}],["unknown","#c7cdd1",{de:"unbekannt",en:"unknown"}]];
   return order.filter(([k])=>(surface[k]??0)>0).map(([key,color,label])=>({key,color,label,share:surface[key]}));
 }
+
+// ---------------------------------------------------------------- alpha.89 editor helpers
+export type Waypoint=[number,number]; // lat, lon
+export type EditRoute=Variant&{waypoints:Waypoint[];segments:number[];spurs:{index:number;lat:number;lon:number;length_m:number}[];spurs_removed:number;known_share:number|null};
+
+/** Index of the route point closest to (lat, lon). */
+export function nearestIndex(coords:Coord[],lat:number,lon:number){
+  const k=Math.cos(lat*RAD);let best=0,d=Infinity;
+  coords.forEach((c,i)=>{const e=(c[1]-lat)**2+((c[0]-lon)*k)**2;if(e<d){d=e;best=i}});
+  return best;
+}
+/** Which piece (between waypoint n and n+1) a route point belongs to. */
+export function segmentOf(segments:number[],index:number){
+  let s=0;for(let i=0;i<segments.length;i++)if(segments[i]<=index)s=i;return s;
+}
+export function insertWaypoint(points:Waypoint[],segment:number,p:Waypoint){const next=[...points];next.splice(Math.min(points.length-1,segment+1),0,p);return next}
+export function moveWaypoint(points:Waypoint[],i:number,p:Waypoint){return points.map((q,n)=>n===i?p:q)}
+/** Start and end stay; at least two points remain. In a loop the start is also the end and moves together. */
+export function removeWaypoint(points:Waypoint[],i:number){if(i<=0||i>=points.length-1||points.length<=2)return points;return points.filter((_,n)=>n!==i)}
+export function moveStart(points:Waypoint[],p:Waypoint,loop:boolean){const next=moveWaypoint(points,0,p);if(loop)next[next.length-1]=p;return next}
+/** Waypoints for a tour that has none (saved tours): evenly along the line. */
+export function sampleWaypoints(coords:Coord[],count=8):Waypoint[]{
+  if(coords.length<2)return [];
+  const {km}=profile(coords),total=km.at(-1)!;const out:Waypoint[]=[[coords[0][1],coords[0][0]]];
+  for(let n=1;n<count;n++){const target=total*n/count;let i=0;while(i<km.length-1&&km[i]<target)i++;out.push([coords[i][1],coords[i][0]])}
+  out.push([coords.at(-1)![1],coords.at(-1)![0]]);
+  return out;
+}
