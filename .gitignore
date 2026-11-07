@@ -20,3 +20,6 @@ apps/web/next-env.d.ts
 .DS_Store
 
 *.tsbuildinfo
+
+# Generated at build time (alpha.86)
+apps/web/public/vendor/
