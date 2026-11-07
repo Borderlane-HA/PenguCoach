@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.1.0-alpha.87
+
+- **New page "Tours" (tour planner):** plan a tour per sport – road bike, gravel, MTB, bike tour, running, trail running, hiking.
+  - **Loop** of a chosen length (with optional direction) or **A → B**. Set the start via training location, place search, "My location" or a tap on the map; pins can be dragged.
+  - Wishes: **low traffic**, **less climbing**, **forest & water**. Running prefers firm paths, trail running keeps away from roads.
+  - **Three variants** in different directions, each with length, climbing, **estimated duration** (from your own recent activities of that kind, otherwise a standard pace; hiking by DIN 33466), a **surface bar** (paved/unpaved from OpenStreetMap), the share ridden twice and clear warnings (e.g. unpaved parts for a road bike). "Other suggestions" rotates the directions.
+  - **Elevation profile** synced with the map, and a **3D preview** on terrain with the line coloured by elevation and the flyover.
+  - **GPX export** for Garmin Connect (courses), Garmin Edge, Komoot, Strava, Wahoo and most watches, with a short how-to. Tours can be **saved**, shown again, exported and deleted.
+  - **No key, no account:** routing by the open-source BRouter – the public brouter.de by default; administrators can enter and test their own BRouter server on the page. Only the tour's waypoints are sent.
+  - On phones the page is reached via Activities → "Plan a tour".
+- **README** shortened to what matters – features, installation, privacy and links; the per-version notes live here in the changelog. **New hero image** showing the Mint Light and Carbon themes and the phone view.
+- Docker setups: proxied API calls may now take up to 5 minutes (like the nginx setup), so long tour searches and local AI answers are not cut off after 30 seconds.
+- Help, `docs/TOUR_PLANNER.md` and README updated.
+- **Database migration** `0020_tour_planner` (saved tours and installation settings); it runs automatically during the update.
+
 ## 0.1.0-alpha.86
 
 - **3D map for activities:** below the route map a new switch **Standard | 3D**. The choice is remembered.

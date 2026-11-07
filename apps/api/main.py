@@ -57,3 +57,6 @@ app.include_router(admin_system.router, prefix="/api/v1")
 from apps.api.routers import calendar, races
 app.include_router(calendar.router, prefix="/api/v1")
 app.include_router(races.router, prefix="/api/v1")
+
+from apps.api.routers import tours
+app.include_router(tours.router, prefix="/api/v1")

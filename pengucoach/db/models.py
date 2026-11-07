@@ -513,6 +513,30 @@ class RaceEvent(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
 
+class PlannedTour(Base):
+    """A tour from the tour planner (alpha.87), kept for later export."""
+    __tablename__ = "planned_tours"
+    id: Mapped[uuid.UUID] = uuid_pk()
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    name: Mapped[str] = mapped_column(String(120))
+    sport: Mapped[str] = mapped_column(String(32))
+    mode: Mapped[str] = mapped_column(String(16), default="round")
+    distance_m: Mapped[float] = mapped_column(Float, default=0)
+    ascent_m: Mapped[float] = mapped_column(Float, default=0)
+    duration_s: Mapped[int] = mapped_column(Integer, default=0)
+    geometry: Mapped[list] = mapped_column(JSONB, default=list)
+    summary: Mapped[dict] = mapped_column(JSONB, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class AppSetting(Base):
+    """Installation-wide settings an administrator changes in the app (alpha.87: routing server)."""
+    __tablename__ = "app_settings"
+    key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    value: Mapped[dict] = mapped_column(JSONB, default=dict)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
 class TrainingReview(Base):
     __tablename__ = "training_reviews"
     __table_args__ = (UniqueConstraint("plan_run_id", "session_id"),)

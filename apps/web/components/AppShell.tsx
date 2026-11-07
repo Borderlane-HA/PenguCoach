@@ -8,13 +8,14 @@ import {bi,useI18n} from "../lib/i18n";
 import {useSession} from "../lib/session";
 import UpdateNotice,{UpdateBanner} from "./UpdateNotice";
 import StatusMenu from "./StatusMenu";
-type IconName="calendar"|"today"|"health"|"activities"|"training"|"coach"|"garmin"|"sparky"|"weather"|"maps"|"privacy"|"appearance"|"about"|"help"|"ai"|"users"|"logout"|"settings"|"admin"|"panel-open"|"panel-close";
+type IconName="calendar"|"tours"|"today"|"health"|"activities"|"training"|"coach"|"garmin"|"sparky"|"weather"|"maps"|"privacy"|"appearance"|"about"|"help"|"ai"|"users"|"logout"|"settings"|"admin"|"panel-open"|"panel-close";
 
 function Icon({name}:{name:IconName}){
   const common={width:20,height:20,viewBox:"0 0 24 24",fill:"none",stroke:"currentColor",strokeWidth:1.8,strokeLinecap:"round" as const,strokeLinejoin:"round" as const,"aria-hidden":true};
   if(name==="panel-open"||name==="panel-close")return <svg {...common}><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M9 4v16"/><path d={name==="panel-open"?"m13 9 3 3-3 3":"m16 9-3 3 3 3"}/></svg>;
   if(name==="settings")return <svg {...common}><path d="m10 3-.5 2-2 .9-1.8-.6-2 3.4 1.5 1.4v2.3l-1.5 1.4 2 3.4 1.8-.6 2 .9.5 2h4l.5-2 2-.9 1.8.6 2-3.4-1.5-1.4v-2.3l1.5-1.4-2-3.4-1.8.6-2-.9-.5-2Z"/><circle cx="12" cy="11.3" r="3"/></svg>;
   if(name==="admin")return <svg {...common}><path d="M12 3 5 6v5c0 4.7 2.7 8.1 7 10 4.3-1.9 7-5.3 7-10V6l-7-3Z"/><circle cx="12" cy="10" r="2"/><path d="M8.5 16a3.5 3.5 0 0 1 7 0"/></svg>;
+  if(name==="tours")return <svg {...common}><circle cx="6" cy="18" r="2.2"/><circle cx="18" cy="6" r="2.2"/><path d="M8 17.5c4-1 2.5-5 6-5.5 2.6-.4 3.6-2.4 3.9-4.2"/></svg>;
   if(name==="calendar")return <svg {...common}><rect x="3.5" y="5" width="17" height="15" rx="3"/><path d="M3.5 10h17M8 3v4M16 3v4"/><path d="M8 14h2M12 14h2M16 14h.5M8 17h2M12 17h2"/></svg>;
   if(name==="today")return <svg {...common}><rect x="4" y="4" width="16" height="16" rx="4"/><path d="M8 9h8M8 13h3M14 13h2M8 17h5"/></svg>;
   if(name==="health")return <svg {...common}><path d="M20.8 5.8a5 5 0 0 0-7.1 0L12 7.5l-1.7-1.7a5 5 0 1 0-7.1 7.1L12 21l8.8-8.1a5 5 0 0 0 0-7.1Z"/><path d="M7 12h2l1-2 2 5 1.5-3H17"/></svg>;
@@ -81,6 +82,7 @@ export default function AppShell({children,title}:{children:React.ReactNode;titl
     {href:"/activities",icon:"activities" as IconName,label:bi(lang,"Aktivitäten","Activities")},
     {href:"/training",icon:"training" as IconName,label:bi(lang,"Training","Training")},
     {href:"/calendar",icon:"calendar" as IconName,label:bi(lang,"Kalender","Calendar")},
+    {href:"/tours",icon:"tours" as IconName,label:bi(lang,"Touren","Tours"),dock:false},
     {href:"/coach",icon:"coach" as IconName,label:bi(lang,"AI Coach","AI Coach")},
   ],[lang]);
   const settings=useMemo(()=>[
@@ -156,6 +158,6 @@ export default function AppShell({children,title}:{children:React.ReactNode;titl
 
     <section className="app-main"><UpdateBanner/><header className="topbar"><div className="top-heading"><div className="top-context"><span className="top-kicker">PenguCoach</span><strong>{title??current?.label??bi(lang,"Übersicht","Overview")}</strong></div></div><div className="top-actions"><details ref={mobileMenu} className="mobile-more"><summary aria-label={bi(lang,"Navigationsmenü öffnen","Open navigation menu")} title={settingsLabel}><Icon name="settings"/></summary><nav aria-label={settingsLabel}>{group("settings",true)}{me.role==="admin"&&group("admin",true)}<div className="mobile-nav-group">{link(help,true)}</div><UpdateNotice version={me.app_version} mobile/></nav></details><StatusMenu/><button className="language-switch" onClick={()=>setLang(lang==="de"?"en":"de")} aria-label={bi(lang,"Sprache wechseln","Change language")}>{lang==="de"?"DE":"EN"}<span>⌄</span></button><Link prefetch={false} className={`top-avatar ${avatar?"photo":""}`} href="/settings/appearance" title={me.username}>{avatar?<img src={avatar} alt=""/>:initials}</Link><button className="top-logout" type="button" onClick={()=>void logout()} disabled={loggingOut} title={bi(lang,"Abmelden","Sign out")} aria-label={bi(lang,"Abmelden","Sign out")}><Icon name="logout"/></button></div></header><main className="stack page">{title&&<div className="page-title"><h1>{title}</h1></div>}{children}</main></section>
 
-    <nav className="mobile-dock" aria-label={bi(lang,"Mobile Navigation","Mobile navigation")}>{nav.map(x=><Link prefetch={false} className={active(x.href)?"active":""} href={x.href} key={x.href} aria-current={active(x.href)?"page":undefined}><Icon name={x.icon}/><span>{x.label}</span></Link>)}</nav>
+    <nav className="mobile-dock" aria-label={bi(lang,"Mobile Navigation","Mobile navigation")}>{nav.filter(x=>x.dock!==false).map(x=><Link prefetch={false} className={active(x.href)?"active":""} href={x.href} key={x.href} aria-current={active(x.href)?"page":undefined}><Icon name={x.icon}/><span>{x.label}</span></Link>)}</nav>
   </div>;
 }
