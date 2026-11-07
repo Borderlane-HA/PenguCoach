@@ -23,3 +23,7 @@ apps/web/next-env.d.ts
 
 # Generated at build time (alpha.86)
 apps/web/public/vendor/
+
+# alpha.88 demo build output
+apps/web/out/
+apps/web/public/demo-data/
