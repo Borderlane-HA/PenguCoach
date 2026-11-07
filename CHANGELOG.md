@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.1.0-alpha.86
+
+- **3D map for activities:** below the route map a new switch **Standard | 3D**. The choice is remembered.
+  - The route lies on **real terrain** (elevation data with hillshading and a soft sky at the horizon). Drag to pan, right mouse button or Ctrl + drag to rotate and tilt, wheel to zoom; on phones and tablets two fingers rotate and tilt. Compass, fullscreen and **"Whole tour"** bring you back to the tilted overview in one click.
+  - **Relief 1×–3×** exaggerates the mountains so even gentle tours show their profile.
+  - **Terrain** (topo map with contour lines) or **Streets** (OpenStreetMap).
+  - **Flyover:** the camera flies along the tour in 30 s, 1, 2 or 4 minutes, looking ahead in curves. The chart cursor and the values on the map run along. Dragging or zooming stops the flight.
+  - Same as in 2D: hover near the line shows the values live, a click sets the marker, route colours by heart rate/speed/…, start/finish, climbs and fast passages.
+  - **No API key, no account:** tiles come from OpenTopoMap, OpenStreetMap and the AWS Open Data terrain tiles. The 3D engine (MapLibre GL) is only loaded when you switch to 3D. Without internet the route stays visible; without WebGL the standard map stays and the 3D button is disabled.
+- New dependency `maplibre-gl` 6.15.0 (pinned). `npm run build` copies its worker file to `public/vendor/` – nothing to do for updates, the update runs the build as before.
+- Help and `docs/ACTIVITY_ROUTE_EXPLORER.md` updated.
+- No database migration.
+
 ## 0.1.0-alpha.85
 
 - **New page "Calendar"** (sidebar and mobile dock):

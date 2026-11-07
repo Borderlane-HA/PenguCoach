@@ -105,3 +105,34 @@ synchronization, settings, provider consent/cancellation, mobile layouts and
 provider lifecycle using mocked services. Live Google/Apple credentials are not
 included and live panorama delivery must be checked with the user's configured
 account, allowed origin, browser and local imagery coverage.
+
+## 3D map — Alpha.86
+
+Below the route map a **Standard | 3D** switch changes the view. The choice is
+remembered per browser (`localStorage`, key `pengucoach_route_view`).
+
+- **Engine:** MapLibre GL JS 6 (BSD-3), loaded on demand only when 3D is chosen,
+  so the activity page itself does not get heavier. MapLibre starts its tile
+  worker from a separate module file; `npm run build` copies it to
+  `public/vendor/maplibre-gl-worker.mjs` (`scripts/copy-maplibre-worker.mjs`).
+  The copy is generated and ignored by Git.
+- **Tiles without any key**, loaded by the browser like the 2D map:
+  OpenTopoMap (“Terrain”, with contour lines), OpenStreetMap (“Streets”) and
+  elevation from the AWS Open Data *Terrain Tiles* (terrarium encoding, used for
+  terrain and hillshade). Without internet the route stays visible; terrain and
+  background are missing and a notice explains why.
+- **Controls:** drag to pan, right mouse button / Ctrl + drag to rotate and tilt,
+  wheel or pinch to zoom, two fingers to rotate and tilt on touch devices.
+  Compass button resets north, “Whole tour” returns to the tilted overview,
+  the fullscreen button enlarges the map. “Relief” exaggerates terrain from
+  1× to 3× (remembered).
+- **Synchronised with the chart:** hovering near the line (screen-space
+  distance to the drawn segments, once per animation frame) shows the values on
+  the map and moves the chart cursor; a click sets the marker. Route colouring,
+  start/finish, climbs, fast passages and plan markers are the same as in 2D.
+- **Flyover:** the camera follows the route at 62° pitch, looking a few hundred
+  metres ahead and turning at most a few degrees per frame so curves stay calm.
+  Duration 30 s – 4 min. Chart and readouts follow about eight times a second.
+  Dragging, zooming or touching the map ends the flight.
+- **Fallback:** without WebGL the 3D button is disabled and the standard map is
+  shown with a short explanation.

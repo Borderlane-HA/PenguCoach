@@ -4,6 +4,7 @@ import ClientLink from "next/link";
 
 import {useCallback,useEffect,useMemo,useRef,useState} from "react";
 import ActivityRouteMap from "./ActivityRouteMap";
+import dynamic from "next/dynamic";
 import ActivityPanorama from "./ActivityPanorama";
 import RouteBriefing from "./RouteBriefing";
 import RouteComparison from "./RouteComparison";
@@ -11,6 +12,9 @@ import InfoTip from "./InfoTip";
 import {api} from "../lib/api";
 import {AxisMode,extent,finite,linePath,makeAxis,MapSettings,METRICS,Metric,metricLabel,nearestIndex,routeSegments,Sample,timeLabel} from "../lib/activityExplorer";
 
+// alpha.86: the 3D map (MapLibre GL, ~1 MB) is only downloaded when someone switches to 3D.
+const ActivityRouteMap3D=dynamic(()=>import("./ActivityRouteMap3D"),{ssr:false,loading:()=><div className="activity-map-shell"><div className="activity-route-map map3d map3d-loading-box">…</div></div>});
+const readView=()=>{try{return localStorage.getItem("pengucoach_route_view")==="3d"?"3d":"2d"}catch{return "2d"}};
 const MINI_W=1200,P=16,TOP=14,BOTTOM=30;
 const DEFAULTS=["heart_rate","speed_kmh","altitude_m","power"];
 const TICKS=[0,.25,.5,.75,1];
@@ -26,6 +30,9 @@ export default function ActivityExplorer({data,lang,activityId}:{data:Sample[];l
   const [playing,setPlaying]=useState(false),[replaySpeed,setReplaySpeed]=useState(60);
   const replayClock=useRef(0);
   const [colorKey,setColorKey]=useState(""),[googleActive,setGoogleActive]=useState(false);
+  const [view,setView]=useState<"2d"|"3d">("2d"),[view3dError,setView3dError]=useState("");
+  useEffect(()=>{setView(readView())},[]);
+  function chooseView(next:"2d"|"3d"){setView(next);setView3dError("");try{localStorage.setItem("pengucoach_route_view",next)}catch{}}
   // The chart is drawn at its real pixel width, so text stays crisp and the
   // curve keeps a readable height on phones (no squashed 1200-wide viewBox).
   const stage=useRef<HTMLDivElement>(null),[W,setWidth]=useState(1200);
@@ -131,8 +138,10 @@ export default function ActivityExplorer({data,lang,activityId}:{data:Sample[];l
     {routePoints.length>0&&<section className="route-explorer-panel">
       <div className={`route-view-grid ${googleActive?"google-open":""}`}><div className="route-map-area">
       {settingsFailed?<div className="map-state"><p>{de?"Karten-Einstellungen konnten nicht geladen werden.":"Could not load map settings."}</p><button type="button" className="ghost compact" onClick={loadSettings}>{de?"Erneut laden":"Retry"}</button></div>:!settings?<div className="map-state">{de?"Karten-Einstellungen werden geladen…":"Loading map settings…"}</div>:googleActive?<div className="map-state">{de?"Nach dem Schließen der Straßenansicht erscheint die Streckenkarte wieder.":"Close street-level view to return to the route map."}</div>:settings.map_enabled?<>
-        <ActivityRouteMap data={filtered} index={current} colorMetric={colorMetric} onSelect={pick} onHover={setHover} de={de} annotations={mapAnnotations} overlay={readoutCard}/>
-        <div className="route-map-controls"><label>{de?"Streckenfarbe":"Route colour"}<select value={colorKey} onChange={e=>setColorKey(e.target.value)}><option value="">{de?"Einheitlich":"Single colour"}</option>{available.map(metric=><option value={metric.key} key={metric.key}>{de?metric.de:metric.en}</option>)}</select></label><ClientLink prefetch={false} className="text-link" href="/settings/maps">{de?"Karten-Einstellungen":"Map settings"}</ClientLink></div>
+        {view==="3d"&&!view3dError?<ActivityRouteMap3D data={filtered} index={current} colorMetric={colorMetric} onSelect={pick} onHover={setHover} de={de} annotations={mapAnnotations} overlay={readoutCard} onUnavailable={reason=>{setView3dError(reason)}}/>
+          :<ActivityRouteMap data={filtered} index={current} colorMetric={colorMetric} onSelect={pick} onHover={setHover} de={de} annotations={mapAnnotations} overlay={readoutCard}/>}
+        {view3dError&&<p className="map-status" role="status">{view3dError==="NO_WEBGL"?(de?"3D braucht WebGL – dieser Browser oder das Gerät bietet es gerade nicht an. Die Standardkarte wird angezeigt.":"3D needs WebGL, which this browser or device does not offer right now. Showing the standard map."):(de?"Die 3D-Karte konnte nicht starten. Die Standardkarte wird angezeigt.":"The 3D map could not start. Showing the standard map.")}</p>}
+        <div className="route-map-controls"><div className="chart-segmented map-view-switch" role="radiogroup" aria-label={de?"Kartenansicht":"Map view"}><button type="button" role="radio" aria-checked={view==="2d"||!!view3dError} className={view==="2d"||view3dError?"active":""} onClick={()=>chooseView("2d")}>{de?"Standard":"Standard"}</button><button type="button" role="radio" aria-checked={view==="3d"&&!view3dError} className={view==="3d"&&!view3dError?"active":""} disabled={view3dError==="NO_WEBGL"} title={view3dError==="NO_WEBGL"?(de?"WebGL ist nicht verfügbar":"WebGL is not available"):undefined} onClick={()=>chooseView("3d")}>3D</button></div><label>{de?"Streckenfarbe":"Route colour"}<select value={colorKey} onChange={e=>setColorKey(e.target.value)}><option value="">{de?"Einheitlich":"Single colour"}</option>{available.map(metric=><option value={metric.key} key={metric.key}>{de?metric.de:metric.en}</option>)}</select></label><ClientLink prefetch={false} className="text-link" href="/settings/maps">{de?"Karten-Einstellungen":"Map settings"}</ClientLink></div>
       </>:<div className="map-state">{de?"Die Streckenkarte ist in deinen Einstellungen deaktiviert.":"The route map is disabled in your settings."}</div>}
       </div><ActivityPanorama settings={settings} point={routePoint} points={routePoints} de={de} onGoogleActive={setGoogleActive}/></div>
     </section>}
