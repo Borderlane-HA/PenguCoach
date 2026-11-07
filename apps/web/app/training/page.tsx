@@ -1,4 +1,5 @@
 "use client";
+import {withBase} from "../../lib/basePath";
 import ClientLink from "next/link";
 
 import NumberInput from "../../components/NumberInput";
@@ -184,7 +185,7 @@ export default function Training(){
   function openLatest(){if(history[0])openPlan(history[0])}
   function showRunningJob(){setPlanOpen(false);setPlannerOpen(true);setWizardStep(4);setTimeout(()=>document.getElementById("training-planner")?.scrollIntoView({behavior:"smooth",block:"start"}),60)}
   function startPlanner(){if(busy){showRunningJob();return}setPlanOpen(false);setPlannerOpen(true);setWizardStep(1);setTimeout(()=>document.getElementById("training-planner")?.scrollIntoView({behavior:"smooth",block:"start"}),60)}
-  function goCoach(){const q=de?"Prüfe meinen aktuellen Trainingsplan anhand meiner aktuellen Readiness, der letzten Trainings, meines Profils und des Wetters. Schlage nur Änderungen vor, wenn sie sinnvoll sind.":"Review my current training plan using my current readiness, recent training, profile and weather. Only suggest changes when they are useful.";window.location.href=`/coach?prompt=${encodeURIComponent(q)}`}
+  function goCoach(){const q=de?"Prüfe meinen aktuellen Trainingsplan anhand meiner aktuellen Readiness, der letzten Trainings, meines Profils und des Wetters. Schlage nur Änderungen vor, wenn sie sinnvoll sind.":"Review my current training plan using my current readiness, recent training, profile and weather. Only suggest changes when they are useful.";window.location.href=withBase(`/coach?prompt=${encodeURIComponent(q)}`)}
 
   const stepLabels=[bi(lang,"Ziel","Goal"),bi(lang,"Rahmen","Framework"),bi(lang,"Daten","Data"),bi(lang,"Prüfen","Review")];
   const latest=history[0]??null;

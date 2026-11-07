@@ -1,0 +1,1454 @@
+{
+"recorded": "2026-11-07",
+"entries": {
+"/activities/0067d941-f877-44db-a674-0d96d31d3d6c": "activities-1.json",
+"/activities/0067d941-f877-44db-a674-0d96d31d3d6c/analysis": "activities-1.json",
+"/activities/0067d941-f877-44db-a674-0d96d31d3d6c/goal-review?offset_s=0": "activities-1.json",
+"/activities/0067d941-f877-44db-a674-0d96d31d3d6c/series?limit=5000": "activities-1.json",
+"/activities/0240c7ce-2823-429d-82e9-8cecfb6b6bb7": "activities-1.json",
+"/activities/0240c7ce-2823-429d-82e9-8cecfb6b6bb7/analysis": "activities-1.json",
+"/activities/0240c7ce-2823-429d-82e9-8cecfb6b6bb7/goal-review?offset_s=0": "activities-1.json",
+"/activities/0240c7ce-2823-429d-82e9-8cecfb6b6bb7/series?limit=5000": "activities-1.json",
+"/activities/0260283a-1103-4712-beed-8c84d4528aba": "activities-1.json",
+"/activities/0260283a-1103-4712-beed-8c84d4528aba/analysis": "activities-1.json",
+"/activities/0260283a-1103-4712-beed-8c84d4528aba/goal-review?offset_s=0": "activities-1.json",
+"/activities/0260283a-1103-4712-beed-8c84d4528aba/series?limit=5000": "activities-1.json",
+"/activities/16238096-295b-49a8-80af-e05884fbe113": "activities-1.json",
+"/activities/16238096-295b-49a8-80af-e05884fbe113/analysis": "activities-1.json",
+"/activities/16238096-295b-49a8-80af-e05884fbe113/goal-review?offset_s=0": "activities-1.json",
+"/activities/16238096-295b-49a8-80af-e05884fbe113/series?limit=5000": "activities-1.json",
+"/activities/1a318798-d808-4b6a-bdeb-e6f603656922": "activities-1.json",
+"/activities/1a318798-d808-4b6a-bdeb-e6f603656922/analysis": "activities-1.json",
+"/activities/1a318798-d808-4b6a-bdeb-e6f603656922/goal-review?offset_s=0": "activities-1.json",
+"/activities/1a318798-d808-4b6a-bdeb-e6f603656922/series?limit=5000": "activities-1.json",
+"/activities/1ae06f67-d62e-4454-b8f4-8349f30ae8ec": "activities-1.json",
+"/activities/1ae06f67-d62e-4454-b8f4-8349f30ae8ec/analysis": "activities-1.json",
+"/activities/1ae06f67-d62e-4454-b8f4-8349f30ae8ec/goal-review?offset_s=0": "activities-1.json",
+"/activities/1ae06f67-d62e-4454-b8f4-8349f30ae8ec/series?limit=5000": "activities-1.json",
+"/activities/1e8ef20f-04bf-488d-a057-bd5c69cbc58c": "activities-1.json",
+"/activities/1e8ef20f-04bf-488d-a057-bd5c69cbc58c/analysis": "activities-1.json",
+"/activities/1e8ef20f-04bf-488d-a057-bd5c69cbc58c/goal-review?offset_s=0": "activities-1.json",
+"/activities/1e8ef20f-04bf-488d-a057-bd5c69cbc58c/series?limit=5000": "activities-1.json",
+"/activities/1f1cccaa-ae72-40b0-af83-e6095fb0adb0": "activities-1.json",
+"/activities/1f1cccaa-ae72-40b0-af83-e6095fb0adb0/analysis": "activities-1.json",
+"/activities/1f1cccaa-ae72-40b0-af83-e6095fb0adb0/goal-review?offset_s=0": "activities-1.json",
+"/activities/1f1cccaa-ae72-40b0-af83-e6095fb0adb0/series?limit=5000": "activities-1.json",
+"/activities/2159a5d4-4685-45f7-acd5-178358131574": "activities-1.json",
+"/activities/2159a5d4-4685-45f7-acd5-178358131574/analysis": "activities-1.json",
+"/activities/2159a5d4-4685-45f7-acd5-178358131574/goal-review?offset_s=0": "activities-1.json",
+"/activities/2159a5d4-4685-45f7-acd5-178358131574/series?limit=5000": "activities-1.json",
+"/activities/21be9193-0487-4f56-8866-48d462648265": "activities-1.json",
+"/activities/21be9193-0487-4f56-8866-48d462648265/analysis": "activities-1.json",
+"/activities/21be9193-0487-4f56-8866-48d462648265/goal-review?offset_s=0": "activities-1.json",
+"/activities/21be9193-0487-4f56-8866-48d462648265/series?limit=5000": "activities-1.json",
+"/activities/259d54ae-83b8-4ffc-ba62-5b1fd9bead04": "activities-2.json",
+"/activities/259d54ae-83b8-4ffc-ba62-5b1fd9bead04/analysis": "activities-2.json",
+"/activities/259d54ae-83b8-4ffc-ba62-5b1fd9bead04/goal-review?offset_s=0": "activities-2.json",
+"/activities/259d54ae-83b8-4ffc-ba62-5b1fd9bead04/series?limit=5000": "activities-2.json",
+"/activities/26b04fbd-feef-47a7-951f-71d6fd9b44bf": "activities-2.json",
+"/activities/26b04fbd-feef-47a7-951f-71d6fd9b44bf/analysis": "activities-2.json",
+"/activities/26b04fbd-feef-47a7-951f-71d6fd9b44bf/goal-review?offset_s=0": "activities-2.json",
+"/activities/26b04fbd-feef-47a7-951f-71d6fd9b44bf/series?limit=5000": "activities-2.json",
+"/activities/2c1f1874-30c3-4206-bc42-09255b929bcd": "activities-2.json",
+"/activities/2c1f1874-30c3-4206-bc42-09255b929bcd/analysis": "activities-2.json",
+"/activities/2c1f1874-30c3-4206-bc42-09255b929bcd/goal-review?offset_s=0": "activities-2.json",
+"/activities/2c1f1874-30c3-4206-bc42-09255b929bcd/series?limit=5000": "activities-2.json",
+"/activities/30baa686-4fe8-4904-aa28-32f2ba5093ea": "activities-2.json",
+"/activities/30baa686-4fe8-4904-aa28-32f2ba5093ea/analysis": "activities-2.json",
+"/activities/30baa686-4fe8-4904-aa28-32f2ba5093ea/goal-review?offset_s=0": "activities-2.json",
+"/activities/30baa686-4fe8-4904-aa28-32f2ba5093ea/route-comparison?axis=time&end=100&start=0": "activities-2.json",
+"/activities/30baa686-4fe8-4904-aa28-32f2ba5093ea/series?limit=5000": "activities-2.json",
+"/activities/338048dd-1bea-4a3e-9124-63be22d3c3c8": "activities-2.json",
+"/activities/338048dd-1bea-4a3e-9124-63be22d3c3c8/analysis": "activities-2.json",
+"/activities/338048dd-1bea-4a3e-9124-63be22d3c3c8/goal-review?offset_s=0": "activities-2.json",
+"/activities/338048dd-1bea-4a3e-9124-63be22d3c3c8/series?limit=5000": "activities-2.json",
+"/activities/3a376e35-811a-4494-b776-a17ffd764597": "activities-2.json",
+"/activities/3a376e35-811a-4494-b776-a17ffd764597/analysis": "activities-2.json",
+"/activities/3a376e35-811a-4494-b776-a17ffd764597/goal-review?offset_s=0": "activities-2.json",
+"/activities/3a376e35-811a-4494-b776-a17ffd764597/series?limit=5000": "activities-2.json",
+"/activities/3b043aea-e31d-4784-8bb1-cffeea2ac730": "activities-2.json",
+"/activities/3b043aea-e31d-4784-8bb1-cffeea2ac730/analysis": "activities-2.json",
+"/activities/3b043aea-e31d-4784-8bb1-cffeea2ac730/goal-review?offset_s=0": "activities-2.json",
+"/activities/3b043aea-e31d-4784-8bb1-cffeea2ac730/series?limit=5000": "activities-2.json",
+"/activities/41096ac4-1ea0-4077-a69d-e78b2632ccc2": "activities-2.json",
+"/activities/41096ac4-1ea0-4077-a69d-e78b2632ccc2/analysis": "activities-2.json",
+"/activities/41096ac4-1ea0-4077-a69d-e78b2632ccc2/goal-review?offset_s=0": "activities-2.json",
+"/activities/41096ac4-1ea0-4077-a69d-e78b2632ccc2/route-comparison?axis=time&end=100&start=0": "activities-2.json",
+"/activities/41096ac4-1ea0-4077-a69d-e78b2632ccc2/series?limit=5000": "activities-2.json",
+"/activities/412ed382-1764-43e7-88bc-835a9b85de3d": "activities-2.json",
+"/activities/412ed382-1764-43e7-88bc-835a9b85de3d/analysis": "activities-2.json",
+"/activities/412ed382-1764-43e7-88bc-835a9b85de3d/goal-review?offset_s=0": "activities-2.json",
+"/activities/412ed382-1764-43e7-88bc-835a9b85de3d/route-comparison?axis=time&end=100&start=0": "activities-2.json",
+"/activities/412ed382-1764-43e7-88bc-835a9b85de3d/series?limit=5000": "activities-2.json",
+"/activities/50bc933f-ba32-44fd-9ffd-92b40ef570bc": "activities-2.json",
+"/activities/50bc933f-ba32-44fd-9ffd-92b40ef570bc/analysis": "activities-2.json",
+"/activities/50bc933f-ba32-44fd-9ffd-92b40ef570bc/goal-review?offset_s=0": "activities-2.json",
+"/activities/50bc933f-ba32-44fd-9ffd-92b40ef570bc/route-comparison?axis=time&end=100&start=0": "activities-2.json",
+"/activities/50bc933f-ba32-44fd-9ffd-92b40ef570bc/series?limit=5000": "activities-2.json",
+"/activities/58689a9e-5d56-485c-9cb9-5b23ab6a2e67": "activities-3.json",
+"/activities/58689a9e-5d56-485c-9cb9-5b23ab6a2e67/analysis": "activities-3.json",
+"/activities/58689a9e-5d56-485c-9cb9-5b23ab6a2e67/goal-review?offset_s=0": "activities-3.json",
+"/activities/58689a9e-5d56-485c-9cb9-5b23ab6a2e67/series?limit=5000": "activities-3.json",
+"/activities/5a341f0a-1828-4a9e-bf91-edf6053a6399": "activities-3.json",
+"/activities/5a341f0a-1828-4a9e-bf91-edf6053a6399/analysis": "activities-3.json",
+"/activities/5a341f0a-1828-4a9e-bf91-edf6053a6399/goal-review?offset_s=0": "activities-3.json",
+"/activities/5a341f0a-1828-4a9e-bf91-edf6053a6399/route-comparison?axis=time&end=100&start=0": "activities-3.json",
+"/activities/5a341f0a-1828-4a9e-bf91-edf6053a6399/series?limit=5000": "activities-3.json",
+"/activities/5e231f10-a714-4f23-9b84-98c5fca8e860": "activities-3.json",
+"/activities/5e231f10-a714-4f23-9b84-98c5fca8e860/analysis": "activities-3.json",
+"/activities/5e231f10-a714-4f23-9b84-98c5fca8e860/goal-review?offset_s=0": "activities-3.json",
+"/activities/5e231f10-a714-4f23-9b84-98c5fca8e860/series?limit=5000": "activities-3.json",
+"/activities/5ea72a52-0022-4222-bdb8-8ebef6fafafa": "activities-3.json",
+"/activities/5ea72a52-0022-4222-bdb8-8ebef6fafafa/analysis": "activities-3.json",
+"/activities/5ea72a52-0022-4222-bdb8-8ebef6fafafa/goal-review?offset_s=0": "activities-3.json",
+"/activities/5ea72a52-0022-4222-bdb8-8ebef6fafafa/series?limit=5000": "activities-3.json",
+"/activities/64a3f641-fa20-4d54-b72d-d56cae37f3e9": "activities-3.json",
+"/activities/64a3f641-fa20-4d54-b72d-d56cae37f3e9/analysis": "activities-3.json",
+"/activities/64a3f641-fa20-4d54-b72d-d56cae37f3e9/goal-review?offset_s=0": "activities-3.json",
+"/activities/64a3f641-fa20-4d54-b72d-d56cae37f3e9/series?limit=5000": "activities-3.json",
+"/activities/65a10f1f-2171-40da-9f1e-9b7ed4f07312": "activities-3.json",
+"/activities/65a10f1f-2171-40da-9f1e-9b7ed4f07312/analysis": "activities-3.json",
+"/activities/65a10f1f-2171-40da-9f1e-9b7ed4f07312/goal-review?offset_s=0": "activities-3.json",
+"/activities/65a10f1f-2171-40da-9f1e-9b7ed4f07312/series?limit=5000": "activities-3.json",
+"/activities/6849938e-81b9-4e01-b787-3cf7702e9155": "activities-3.json",
+"/activities/6849938e-81b9-4e01-b787-3cf7702e9155/analysis": "activities-3.json",
+"/activities/6849938e-81b9-4e01-b787-3cf7702e9155/goal-review?offset_s=0": "activities-3.json",
+"/activities/6849938e-81b9-4e01-b787-3cf7702e9155/series?limit=5000": "activities-3.json",
+"/activities/6e77b306-bfe7-4b58-b8f4-f234eb1e5bb8": "activities-3.json",
+"/activities/6e77b306-bfe7-4b58-b8f4-f234eb1e5bb8/analysis": "activities-3.json",
+"/activities/6e77b306-bfe7-4b58-b8f4-f234eb1e5bb8/goal-review?offset_s=0": "activities-3.json",
+"/activities/6e77b306-bfe7-4b58-b8f4-f234eb1e5bb8/series?limit=5000": "activities-3.json",
+"/activities/745ddea5-d541-48a8-b49c-efbe54ebc905": "activities-3.json",
+"/activities/745ddea5-d541-48a8-b49c-efbe54ebc905/analysis": "activities-3.json",
+"/activities/745ddea5-d541-48a8-b49c-efbe54ebc905/goal-review?offset_s=0": "activities-3.json",
+"/activities/745ddea5-d541-48a8-b49c-efbe54ebc905/series?limit=5000": "activities-3.json",
+"/activities/7624e388-de8a-4771-aaf1-30384352eec8": "activities-3.json",
+"/activities/7624e388-de8a-4771-aaf1-30384352eec8/analysis": "activities-3.json",
+"/activities/7624e388-de8a-4771-aaf1-30384352eec8/goal-review?offset_s=0": "activities-3.json",
+"/activities/7624e388-de8a-4771-aaf1-30384352eec8/series?limit=5000": "activities-3.json",
+"/activities/772de87c-c214-47a5-8085-35590f9b43d5": "activities-4.json",
+"/activities/772de87c-c214-47a5-8085-35590f9b43d5/analysis": "activities-4.json",
+"/activities/772de87c-c214-47a5-8085-35590f9b43d5/goal-review?offset_s=0": "activities-4.json",
+"/activities/772de87c-c214-47a5-8085-35590f9b43d5/series?limit=5000": "activities-4.json",
+"/activities/7a979346-2e24-4c97-a9f1-c02f282d7a38": "activities-4.json",
+"/activities/7a979346-2e24-4c97-a9f1-c02f282d7a38/analysis": "activities-4.json",
+"/activities/7a979346-2e24-4c97-a9f1-c02f282d7a38/goal-review?offset_s=0": "activities-4.json",
+"/activities/7a979346-2e24-4c97-a9f1-c02f282d7a38/series?limit=5000": "activities-4.json",
+"/activities/804baf6c-5574-4e11-8578-729cf1f5328c": "activities-4.json",
+"/activities/804baf6c-5574-4e11-8578-729cf1f5328c/analysis": "activities-4.json",
+"/activities/804baf6c-5574-4e11-8578-729cf1f5328c/goal-review?offset_s=0": "activities-4.json",
+"/activities/804baf6c-5574-4e11-8578-729cf1f5328c/series?limit=5000": "activities-4.json",
+"/activities/88045836-c843-4ef5-90f8-50a03f3adaa8": "activities-4.json",
+"/activities/88045836-c843-4ef5-90f8-50a03f3adaa8/analysis": "activities-4.json",
+"/activities/88045836-c843-4ef5-90f8-50a03f3adaa8/goal-review?offset_s=0": "activities-4.json",
+"/activities/88045836-c843-4ef5-90f8-50a03f3adaa8/series?limit=5000": "activities-4.json",
+"/activities/88a4f734-c25b-4273-bc56-56cce864777a": "activities-4.json",
+"/activities/88a4f734-c25b-4273-bc56-56cce864777a/analysis": "activities-4.json",
+"/activities/88a4f734-c25b-4273-bc56-56cce864777a/goal-review?offset_s=0": "activities-4.json",
+"/activities/88a4f734-c25b-4273-bc56-56cce864777a/series?limit=5000": "activities-4.json",
+"/activities/89652be6-2cd3-43b3-aeee-5c492ea4237b": "activities-4.json",
+"/activities/89652be6-2cd3-43b3-aeee-5c492ea4237b/analysis": "activities-4.json",
+"/activities/89652be6-2cd3-43b3-aeee-5c492ea4237b/goal-review?offset_s=0": "activities-4.json",
+"/activities/89652be6-2cd3-43b3-aeee-5c492ea4237b/route-comparison?axis=time&end=100&start=0": "activities-4.json",
+"/activities/89652be6-2cd3-43b3-aeee-5c492ea4237b/series?limit=5000": "activities-4.json",
+"/activities/99c85ba8-d117-4e77-a275-a798596426e3": "activities-4.json",
+"/activities/99c85ba8-d117-4e77-a275-a798596426e3/analysis": "activities-4.json",
+"/activities/99c85ba8-d117-4e77-a275-a798596426e3/goal-review?offset_s=0": "activities-4.json",
+"/activities/99c85ba8-d117-4e77-a275-a798596426e3/series?limit=5000": "activities-4.json",
+"/activities/9b666e06-9565-44fc-b7e1-b6a4ed44e682": "activities-4.json",
+"/activities/9b666e06-9565-44fc-b7e1-b6a4ed44e682/analysis": "activities-4.json",
+"/activities/9b666e06-9565-44fc-b7e1-b6a4ed44e682/goal-review?offset_s=0": "activities-4.json",
+"/activities/9b666e06-9565-44fc-b7e1-b6a4ed44e682/series?limit=5000": "activities-4.json",
+"/activities/b39a5ac2-27ba-4519-b683-d1378fb7bad6": "activities-4.json",
+"/activities/b39a5ac2-27ba-4519-b683-d1378fb7bad6/analysis": "activities-4.json",
+"/activities/b39a5ac2-27ba-4519-b683-d1378fb7bad6/goal-review?offset_s=0": "activities-4.json",
+"/activities/b39a5ac2-27ba-4519-b683-d1378fb7bad6/series?limit=5000": "activities-4.json",
+"/activities/b55c672d-a144-433e-a375-1c1390b4b8fd": "activities-4.json",
+"/activities/b55c672d-a144-433e-a375-1c1390b4b8fd/analysis": "activities-4.json",
+"/activities/b55c672d-a144-433e-a375-1c1390b4b8fd/goal-review?offset_s=0": "activities-4.json",
+"/activities/b55c672d-a144-433e-a375-1c1390b4b8fd/series?limit=5000": "activities-4.json",
+"/activities/b823ce21-dfe6-466e-a936-80fa1a07290e": "activities-5.json",
+"/activities/b823ce21-dfe6-466e-a936-80fa1a07290e/analysis": "activities-5.json",
+"/activities/b823ce21-dfe6-466e-a936-80fa1a07290e/goal-review?offset_s=0": "activities-5.json",
+"/activities/b823ce21-dfe6-466e-a936-80fa1a07290e/series?limit=5000": "activities-5.json",
+"/activities/b8364e4d-8b5e-45bb-8873-986486e807fd": "activities-5.json",
+"/activities/b8364e4d-8b5e-45bb-8873-986486e807fd/analysis": "activities-5.json",
+"/activities/b8364e4d-8b5e-45bb-8873-986486e807fd/goal-review?offset_s=0": "activities-5.json",
+"/activities/b8364e4d-8b5e-45bb-8873-986486e807fd/series?limit=5000": "activities-5.json",
+"/activities/ca109c71-410f-49fd-9719-411022408d9a": "activities-5.json",
+"/activities/ca109c71-410f-49fd-9719-411022408d9a/analysis": "activities-5.json",
+"/activities/ca109c71-410f-49fd-9719-411022408d9a/goal-review?offset_s=0": "activities-5.json",
+"/activities/ca109c71-410f-49fd-9719-411022408d9a/series?limit=5000": "activities-5.json",
+"/activities/d68a4fbd-7eeb-4175-b71e-0e77456b1d49": "activities-5.json",
+"/activities/d68a4fbd-7eeb-4175-b71e-0e77456b1d49/analysis": "activities-5.json",
+"/activities/d68a4fbd-7eeb-4175-b71e-0e77456b1d49/goal-review?offset_s=0": "activities-5.json",
+"/activities/d68a4fbd-7eeb-4175-b71e-0e77456b1d49/series?limit=5000": "activities-5.json",
+"/activities/d68f5b00-e596-4be7-9a16-2dc5a32346e9": "activities-5.json",
+"/activities/d68f5b00-e596-4be7-9a16-2dc5a32346e9/analysis": "activities-5.json",
+"/activities/d68f5b00-e596-4be7-9a16-2dc5a32346e9/goal-review?offset_s=0": "activities-5.json",
+"/activities/d68f5b00-e596-4be7-9a16-2dc5a32346e9/series?limit=5000": "activities-5.json",
+"/activities/db8f0d15-5dcd-445d-a503-25a4c5a2cb49": "activities-5.json",
+"/activities/db8f0d15-5dcd-445d-a503-25a4c5a2cb49/analysis": "activities-5.json",
+"/activities/db8f0d15-5dcd-445d-a503-25a4c5a2cb49/goal-review?offset_s=0": "activities-5.json",
+"/activities/db8f0d15-5dcd-445d-a503-25a4c5a2cb49/route-comparison?axis=time&end=100&start=0": "activities-5.json",
+"/activities/db8f0d15-5dcd-445d-a503-25a4c5a2cb49/series?limit=5000": "activities-5.json",
+"/activities/e72cbaa9-5220-49ad-92a9-028011ee8df8": "activities-5.json",
+"/activities/e72cbaa9-5220-49ad-92a9-028011ee8df8/analysis": "activities-5.json",
+"/activities/e72cbaa9-5220-49ad-92a9-028011ee8df8/goal-review?offset_s=0": "activities-5.json",
+"/activities/e72cbaa9-5220-49ad-92a9-028011ee8df8/series?limit=5000": "activities-5.json",
+"/activities/eee6e493-8156-43a6-bf10-a78d64319754": "activities-5.json",
+"/activities/eee6e493-8156-43a6-bf10-a78d64319754/analysis": "activities-5.json",
+"/activities/eee6e493-8156-43a6-bf10-a78d64319754/goal-review?offset_s=0": "activities-5.json",
+"/activities/eee6e493-8156-43a6-bf10-a78d64319754/series?limit=5000": "activities-5.json",
+"/activities/f4f9551a-274d-40d5-a73c-738229fb10f1": "activities-5.json",
+"/activities/f4f9551a-274d-40d5-a73c-738229fb10f1/analysis": "activities-5.json",
+"/activities/f4f9551a-274d-40d5-a73c-738229fb10f1/goal-review?offset_s=0": "activities-5.json",
+"/activities/f4f9551a-274d-40d5-a73c-738229fb10f1/series?limit=5000": "activities-5.json",
+"/activities/f4ffa67f-cbe0-4b43-b548-3e234a5e5de0": "activities-5.json",
+"/activities/f4ffa67f-cbe0-4b43-b548-3e234a5e5de0/analysis": "activities-5.json",
+"/activities/f4ffa67f-cbe0-4b43-b548-3e234a5e5de0/goal-review?offset_s=0": "activities-5.json",
+"/activities/f4ffa67f-cbe0-4b43-b548-3e234a5e5de0/series?limit=5000": "activities-5.json",
+"/activities/recap?period=all": "core.json",
+"/activities/recap?period=month": "core.json",
+"/activities/recap?period=today": "core.json",
+"/activities/recap?period=week": "core.json",
+"/activities/recap?period=year": "core.json",
+"/activities/stats": "core.json",
+"/activities?include_stats=false&limit=4": "core.json",
+"/activities?include_stats=false&page=1&per_page=50": "core.json",
+"/auth/me": "core.json",
+"/calendar/month?end=2026-10-04&start=2026-08-31": "core.json",
+"/calendar/month?end=2026-11-01&start=2026-09-28": "core.json",
+"/calendar/month?end=2026-12-06&start=2026-10-26": "core.json",
+"/calendar/month?end=2027-01-03&start=2026-11-30": "core.json",
+"/calendar/month?end=2027-01-31&start=2026-12-28": "core.json",
+"/calendar/overview?year=2026": "core.json",
+"/coach/activity-analysis/0067d941-f877-44db-a674-0d96d31d3d6c?limit=20": "core.json",
+"/coach/activity-analysis/0240c7ce-2823-429d-82e9-8cecfb6b6bb7?limit=20": "core.json",
+"/coach/activity-analysis/0260283a-1103-4712-beed-8c84d4528aba?limit=20": "core.json",
+"/coach/activity-analysis/16238096-295b-49a8-80af-e05884fbe113?limit=20": "core.json",
+"/coach/activity-analysis/1a318798-d808-4b6a-bdeb-e6f603656922?limit=20": "core.json",
+"/coach/activity-analysis/1ae06f67-d62e-4454-b8f4-8349f30ae8ec?limit=20": "core.json",
+"/coach/activity-analysis/1e8ef20f-04bf-488d-a057-bd5c69cbc58c?limit=20": "core.json",
+"/coach/activity-analysis/1f1cccaa-ae72-40b0-af83-e6095fb0adb0?limit=20": "core.json",
+"/coach/activity-analysis/2159a5d4-4685-45f7-acd5-178358131574?limit=20": "core.json",
+"/coach/activity-analysis/21be9193-0487-4f56-8866-48d462648265?limit=20": "core.json",
+"/coach/activity-analysis/259d54ae-83b8-4ffc-ba62-5b1fd9bead04?limit=20": "core.json",
+"/coach/activity-analysis/26b04fbd-feef-47a7-951f-71d6fd9b44bf?limit=20": "core.json",
+"/coach/activity-analysis/2c1f1874-30c3-4206-bc42-09255b929bcd?limit=20": "core.json",
+"/coach/activity-analysis/30baa686-4fe8-4904-aa28-32f2ba5093ea?limit=20": "core.json",
+"/coach/activity-analysis/338048dd-1bea-4a3e-9124-63be22d3c3c8?limit=20": "core.json",
+"/coach/activity-analysis/3a376e35-811a-4494-b776-a17ffd764597?limit=20": "core.json",
+"/coach/activity-analysis/3b043aea-e31d-4784-8bb1-cffeea2ac730?limit=20": "core.json",
+"/coach/activity-analysis/41096ac4-1ea0-4077-a69d-e78b2632ccc2?limit=20": "core.json",
+"/coach/activity-analysis/412ed382-1764-43e7-88bc-835a9b85de3d?limit=20": "core.json",
+"/coach/activity-analysis/50bc933f-ba32-44fd-9ffd-92b40ef570bc?limit=20": "core.json",
+"/coach/activity-analysis/58689a9e-5d56-485c-9cb9-5b23ab6a2e67?limit=20": "core.json",
+"/coach/activity-analysis/5a341f0a-1828-4a9e-bf91-edf6053a6399?limit=20": "core.json",
+"/coach/activity-analysis/5e231f10-a714-4f23-9b84-98c5fca8e860?limit=20": "core.json",
+"/coach/activity-analysis/5ea72a52-0022-4222-bdb8-8ebef6fafafa?limit=20": "core.json",
+"/coach/activity-analysis/64a3f641-fa20-4d54-b72d-d56cae37f3e9?limit=20": "core.json",
+"/coach/activity-analysis/65a10f1f-2171-40da-9f1e-9b7ed4f07312?limit=20": "core.json",
+"/coach/activity-analysis/6849938e-81b9-4e01-b787-3cf7702e9155?limit=20": "core.json",
+"/coach/activity-analysis/6e77b306-bfe7-4b58-b8f4-f234eb1e5bb8?limit=20": "core.json",
+"/coach/activity-analysis/745ddea5-d541-48a8-b49c-efbe54ebc905?limit=20": "core.json",
+"/coach/activity-analysis/7624e388-de8a-4771-aaf1-30384352eec8?limit=20": "core.json",
+"/coach/activity-analysis/772de87c-c214-47a5-8085-35590f9b43d5?limit=20": "core.json",
+"/coach/activity-analysis/7a979346-2e24-4c97-a9f1-c02f282d7a38?limit=20": "core.json",
+"/coach/activity-analysis/804baf6c-5574-4e11-8578-729cf1f5328c?limit=20": "core.json",
+"/coach/activity-analysis/88045836-c843-4ef5-90f8-50a03f3adaa8?limit=20": "core.json",
+"/coach/activity-analysis/88a4f734-c25b-4273-bc56-56cce864777a?limit=20": "core.json",
+"/coach/activity-analysis/89652be6-2cd3-43b3-aeee-5c492ea4237b?limit=20": "core.json",
+"/coach/activity-analysis/99c85ba8-d117-4e77-a275-a798596426e3?limit=20": "core.json",
+"/coach/activity-analysis/9b666e06-9565-44fc-b7e1-b6a4ed44e682?limit=20": "core.json",
+"/coach/activity-analysis/b39a5ac2-27ba-4519-b683-d1378fb7bad6?limit=20": "core.json",
+"/coach/activity-analysis/b55c672d-a144-433e-a375-1c1390b4b8fd?limit=20": "core.json",
+"/coach/activity-analysis/b823ce21-dfe6-466e-a936-80fa1a07290e?limit=20": "core.json",
+"/coach/activity-analysis/b8364e4d-8b5e-45bb-8873-986486e807fd?limit=20": "core.json",
+"/coach/activity-analysis/ca109c71-410f-49fd-9719-411022408d9a?limit=20": "core.json",
+"/coach/activity-analysis/d68a4fbd-7eeb-4175-b71e-0e77456b1d49?limit=20": "core.json",
+"/coach/activity-analysis/d68f5b00-e596-4be7-9a16-2dc5a32346e9?limit=20": "core.json",
+"/coach/activity-analysis/db8f0d15-5dcd-445d-a503-25a4c5a2cb49?limit=20": "core.json",
+"/coach/activity-analysis/e72cbaa9-5220-49ad-92a9-028011ee8df8?limit=20": "core.json",
+"/coach/activity-analysis/eee6e493-8156-43a6-bf10-a78d64319754?limit=20": "core.json",
+"/coach/activity-analysis/f4f9551a-274d-40d5-a73c-738229fb10f1?limit=20": "core.json",
+"/coach/activity-analysis/f4ffa67f-cbe0-4b43-b548-3e234a5e5de0?limit=20": "core.json",
+"/coach/briefing": "core.json",
+"/coach/capabilities?locale=de": "core.json",
+"/coach/capabilities?locale=en": "core.json",
+"/coach/context-preview?days=7": "core.json",
+"/coach/conversations/0d194358-d76b-46f4-8a4e-6fb4a9015522": "core.json",
+"/coach/conversations?limit=30&offset=0": "core.json",
+"/coach/experiences": "core.json",
+"/coach/feedback/0067d941-f877-44db-a674-0d96d31d3d6c": "core.json",
+"/coach/feedback/0240c7ce-2823-429d-82e9-8cecfb6b6bb7": "core.json",
+"/coach/feedback/0260283a-1103-4712-beed-8c84d4528aba": "core.json",
+"/coach/feedback/16238096-295b-49a8-80af-e05884fbe113": "core.json",
+"/coach/feedback/1a318798-d808-4b6a-bdeb-e6f603656922": "core.json",
+"/coach/feedback/1ae06f67-d62e-4454-b8f4-8349f30ae8ec": "core.json",
+"/coach/feedback/1e8ef20f-04bf-488d-a057-bd5c69cbc58c": "core.json",
+"/coach/feedback/1f1cccaa-ae72-40b0-af83-e6095fb0adb0": "core.json",
+"/coach/feedback/2159a5d4-4685-45f7-acd5-178358131574": "core.json",
+"/coach/feedback/21be9193-0487-4f56-8866-48d462648265": "core.json",
+"/coach/feedback/259d54ae-83b8-4ffc-ba62-5b1fd9bead04": "core.json",
+"/coach/feedback/26b04fbd-feef-47a7-951f-71d6fd9b44bf": "core.json",
+"/coach/feedback/2c1f1874-30c3-4206-bc42-09255b929bcd": "core.json",
+"/coach/feedback/30baa686-4fe8-4904-aa28-32f2ba5093ea": "core.json",
+"/coach/feedback/338048dd-1bea-4a3e-9124-63be22d3c3c8": "core.json",
+"/coach/feedback/3a376e35-811a-4494-b776-a17ffd764597": "core.json",
+"/coach/feedback/3b043aea-e31d-4784-8bb1-cffeea2ac730": "core.json",
+"/coach/feedback/41096ac4-1ea0-4077-a69d-e78b2632ccc2": "core.json",
+"/coach/feedback/412ed382-1764-43e7-88bc-835a9b85de3d": "core.json",
+"/coach/feedback/50bc933f-ba32-44fd-9ffd-92b40ef570bc": "core.json",
+"/coach/feedback/58689a9e-5d56-485c-9cb9-5b23ab6a2e67": "core.json",
+"/coach/feedback/5a341f0a-1828-4a9e-bf91-edf6053a6399": "core.json",
+"/coach/feedback/5e231f10-a714-4f23-9b84-98c5fca8e860": "core.json",
+"/coach/feedback/5ea72a52-0022-4222-bdb8-8ebef6fafafa": "core.json",
+"/coach/feedback/64a3f641-fa20-4d54-b72d-d56cae37f3e9": "core.json",
+"/coach/feedback/65a10f1f-2171-40da-9f1e-9b7ed4f07312": "core.json",
+"/coach/feedback/6849938e-81b9-4e01-b787-3cf7702e9155": "core.json",
+"/coach/feedback/6e77b306-bfe7-4b58-b8f4-f234eb1e5bb8": "core.json",
+"/coach/feedback/745ddea5-d541-48a8-b49c-efbe54ebc905": "core.json",
+"/coach/feedback/7624e388-de8a-4771-aaf1-30384352eec8": "core.json",
+"/coach/feedback/772de87c-c214-47a5-8085-35590f9b43d5": "core.json",
+"/coach/feedback/7a979346-2e24-4c97-a9f1-c02f282d7a38": "core.json",
+"/coach/feedback/804baf6c-5574-4e11-8578-729cf1f5328c": "core.json",
+"/coach/feedback/88045836-c843-4ef5-90f8-50a03f3adaa8": "core.json",
+"/coach/feedback/88a4f734-c25b-4273-bc56-56cce864777a": "core.json",
+"/coach/feedback/89652be6-2cd3-43b3-aeee-5c492ea4237b": "core.json",
+"/coach/feedback/99c85ba8-d117-4e77-a275-a798596426e3": "core.json",
+"/coach/feedback/9b666e06-9565-44fc-b7e1-b6a4ed44e682": "core.json",
+"/coach/feedback/b39a5ac2-27ba-4519-b683-d1378fb7bad6": "core.json",
+"/coach/feedback/b55c672d-a144-433e-a375-1c1390b4b8fd": "core.json",
+"/coach/feedback/b823ce21-dfe6-466e-a936-80fa1a07290e": "core.json",
+"/coach/feedback/b8364e4d-8b5e-45bb-8873-986486e807fd": "core.json",
+"/coach/feedback/ca109c71-410f-49fd-9719-411022408d9a": "core.json",
+"/coach/feedback/d68a4fbd-7eeb-4175-b71e-0e77456b1d49": "core.json",
+"/coach/feedback/d68f5b00-e596-4be7-9a16-2dc5a32346e9": "core.json",
+"/coach/feedback/db8f0d15-5dcd-445d-a503-25a4c5a2cb49": "core.json",
+"/coach/feedback/e72cbaa9-5220-49ad-92a9-028011ee8df8": "core.json",
+"/coach/feedback/eee6e493-8156-43a6-bf10-a78d64319754": "core.json",
+"/coach/feedback/f4f9551a-274d-40d5-a73c-738229fb10f1": "core.json",
+"/coach/feedback/f4ffa67f-cbe0-4b43-b548-3e234a5e5de0": "core.json",
+"/coach/goal-journey": "core.json",
+"/coach/memories": "core.json",
+"/coach/memory-suggestions": "core.json",
+"/coach/plans/48249812-1c5f-4741-ba4d-59e1909f3407/workspace": "core.json",
+"/coach/profile": "core.json",
+"/coach/progress?days=7": "core.json",
+"/coach/readiness": "core.json",
+"/coach/training-load": "core.json",
+"/coach/training-plans?limit=30": "core.json",
+"/garmin/status": "core.json",
+"/garmin/zones": "core.json",
+"/health/development?all=true": "core.json",
+"/health/development?days=180": "core.json",
+"/health/development?days=30": "core.json",
+"/health/development?days=365": "core.json",
+"/health/development?days=7": "core.json",
+"/health/development?days=90": "core.json",
+"/health/range?all=true": "core.json",
+"/health/range?days=180": "core.json",
+"/health/range?days=30": "core.json",
+"/health/range?days=365": "core.json",
+"/health/range?days=60": "core.json",
+"/health/range?days=7": "core.json",
+"/health/range?days=90": "core.json",
+"/health/resting-hr?days=14": "core.json",
+"/health/sources": "core.json",
+"/health/today?include_vo2=false": "core.json",
+"/races": "core.json",
+"/races/next": "core.json",
+"/settings/appearance": "core.json",
+"/settings/health-layout": "core.json",
+"/settings/maps": "core.json",
+"/settings/privacy": "core.json",
+"/settings/today": "core.json",
+"/settings/update-status": "core.json",
+"/setup/status": "core.json",
+"/sparkyfitness/status": "core.json",
+"/tours": "core.json",
+"/tours/00000000-0000-4000-8000-000000000001": "core.json",
+"/tours/00000000-0000-4000-8000-000000000002": "core.json",
+"/tours/options": "core.json",
+"/weather/settings": "core.json",
+"/weather/windows?minutes=75": "core.json",
+"POST /tours/plan": "core.json"
+},
+"paths": {
+"/activities/0067d941-f877-44db-a674-0d96d31d3d6c": [
+"/activities/0067d941-f877-44db-a674-0d96d31d3d6c"
+],
+"/activities/0067d941-f877-44db-a674-0d96d31d3d6c/analysis": [
+"/activities/0067d941-f877-44db-a674-0d96d31d3d6c/analysis"
+],
+"/activities/0067d941-f877-44db-a674-0d96d31d3d6c/goal-review": [
+"/activities/0067d941-f877-44db-a674-0d96d31d3d6c/goal-review?offset_s=0"
+],
+"/activities/0067d941-f877-44db-a674-0d96d31d3d6c/series": [
+"/activities/0067d941-f877-44db-a674-0d96d31d3d6c/series?limit=5000"
+],
+"/activities/0240c7ce-2823-429d-82e9-8cecfb6b6bb7": [
+"/activities/0240c7ce-2823-429d-82e9-8cecfb6b6bb7"
+],
+"/activities/0240c7ce-2823-429d-82e9-8cecfb6b6bb7/analysis": [
+"/activities/0240c7ce-2823-429d-82e9-8cecfb6b6bb7/analysis"
+],
+"/activities/0240c7ce-2823-429d-82e9-8cecfb6b6bb7/goal-review": [
+"/activities/0240c7ce-2823-429d-82e9-8cecfb6b6bb7/goal-review?offset_s=0"
+],
+"/activities/0240c7ce-2823-429d-82e9-8cecfb6b6bb7/series": [
+"/activities/0240c7ce-2823-429d-82e9-8cecfb6b6bb7/series?limit=5000"
+],
+"/activities/0260283a-1103-4712-beed-8c84d4528aba": [
+"/activities/0260283a-1103-4712-beed-8c84d4528aba"
+],
+"/activities/0260283a-1103-4712-beed-8c84d4528aba/analysis": [
+"/activities/0260283a-1103-4712-beed-8c84d4528aba/analysis"
+],
+"/activities/0260283a-1103-4712-beed-8c84d4528aba/goal-review": [
+"/activities/0260283a-1103-4712-beed-8c84d4528aba/goal-review?offset_s=0"
+],
+"/activities/0260283a-1103-4712-beed-8c84d4528aba/series": [
+"/activities/0260283a-1103-4712-beed-8c84d4528aba/series?limit=5000"
+],
+"/activities/16238096-295b-49a8-80af-e05884fbe113": [
+"/activities/16238096-295b-49a8-80af-e05884fbe113"
+],
+"/activities/16238096-295b-49a8-80af-e05884fbe113/analysis": [
+"/activities/16238096-295b-49a8-80af-e05884fbe113/analysis"
+],
+"/activities/16238096-295b-49a8-80af-e05884fbe113/goal-review": [
+"/activities/16238096-295b-49a8-80af-e05884fbe113/goal-review?offset_s=0"
+],
+"/activities/16238096-295b-49a8-80af-e05884fbe113/series": [
+"/activities/16238096-295b-49a8-80af-e05884fbe113/series?limit=5000"
+],
+"/activities/1a318798-d808-4b6a-bdeb-e6f603656922": [
+"/activities/1a318798-d808-4b6a-bdeb-e6f603656922"
+],
+"/activities/1a318798-d808-4b6a-bdeb-e6f603656922/analysis": [
+"/activities/1a318798-d808-4b6a-bdeb-e6f603656922/analysis"
+],
+"/activities/1a318798-d808-4b6a-bdeb-e6f603656922/goal-review": [
+"/activities/1a318798-d808-4b6a-bdeb-e6f603656922/goal-review?offset_s=0"
+],
+"/activities/1a318798-d808-4b6a-bdeb-e6f603656922/series": [
+"/activities/1a318798-d808-4b6a-bdeb-e6f603656922/series?limit=5000"
+],
+"/activities/1ae06f67-d62e-4454-b8f4-8349f30ae8ec": [
+"/activities/1ae06f67-d62e-4454-b8f4-8349f30ae8ec"
+],
+"/activities/1ae06f67-d62e-4454-b8f4-8349f30ae8ec/analysis": [
+"/activities/1ae06f67-d62e-4454-b8f4-8349f30ae8ec/analysis"
+],
+"/activities/1ae06f67-d62e-4454-b8f4-8349f30ae8ec/goal-review": [
+"/activities/1ae06f67-d62e-4454-b8f4-8349f30ae8ec/goal-review?offset_s=0"
+],
+"/activities/1ae06f67-d62e-4454-b8f4-8349f30ae8ec/series": [
+"/activities/1ae06f67-d62e-4454-b8f4-8349f30ae8ec/series?limit=5000"
+],
+"/activities/1e8ef20f-04bf-488d-a057-bd5c69cbc58c": [
+"/activities/1e8ef20f-04bf-488d-a057-bd5c69cbc58c"
+],
+"/activities/1e8ef20f-04bf-488d-a057-bd5c69cbc58c/analysis": [
+"/activities/1e8ef20f-04bf-488d-a057-bd5c69cbc58c/analysis"
+],
+"/activities/1e8ef20f-04bf-488d-a057-bd5c69cbc58c/goal-review": [
+"/activities/1e8ef20f-04bf-488d-a057-bd5c69cbc58c/goal-review?offset_s=0"
+],
+"/activities/1e8ef20f-04bf-488d-a057-bd5c69cbc58c/series": [
+"/activities/1e8ef20f-04bf-488d-a057-bd5c69cbc58c/series?limit=5000"
+],
+"/activities/1f1cccaa-ae72-40b0-af83-e6095fb0adb0": [
+"/activities/1f1cccaa-ae72-40b0-af83-e6095fb0adb0"
+],
+"/activities/1f1cccaa-ae72-40b0-af83-e6095fb0adb0/analysis": [
+"/activities/1f1cccaa-ae72-40b0-af83-e6095fb0adb0/analysis"
+],
+"/activities/1f1cccaa-ae72-40b0-af83-e6095fb0adb0/goal-review": [
+"/activities/1f1cccaa-ae72-40b0-af83-e6095fb0adb0/goal-review?offset_s=0"
+],
+"/activities/1f1cccaa-ae72-40b0-af83-e6095fb0adb0/series": [
+"/activities/1f1cccaa-ae72-40b0-af83-e6095fb0adb0/series?limit=5000"
+],
+"/activities/2159a5d4-4685-45f7-acd5-178358131574": [
+"/activities/2159a5d4-4685-45f7-acd5-178358131574"
+],
+"/activities/2159a5d4-4685-45f7-acd5-178358131574/analysis": [
+"/activities/2159a5d4-4685-45f7-acd5-178358131574/analysis"
+],
+"/activities/2159a5d4-4685-45f7-acd5-178358131574/goal-review": [
+"/activities/2159a5d4-4685-45f7-acd5-178358131574/goal-review?offset_s=0"
+],
+"/activities/2159a5d4-4685-45f7-acd5-178358131574/series": [
+"/activities/2159a5d4-4685-45f7-acd5-178358131574/series?limit=5000"
+],
+"/activities/21be9193-0487-4f56-8866-48d462648265": [
+"/activities/21be9193-0487-4f56-8866-48d462648265"
+],
+"/activities/21be9193-0487-4f56-8866-48d462648265/analysis": [
+"/activities/21be9193-0487-4f56-8866-48d462648265/analysis"
+],
+"/activities/21be9193-0487-4f56-8866-48d462648265/goal-review": [
+"/activities/21be9193-0487-4f56-8866-48d462648265/goal-review?offset_s=0"
+],
+"/activities/21be9193-0487-4f56-8866-48d462648265/series": [
+"/activities/21be9193-0487-4f56-8866-48d462648265/series?limit=5000"
+],
+"/activities/259d54ae-83b8-4ffc-ba62-5b1fd9bead04": [
+"/activities/259d54ae-83b8-4ffc-ba62-5b1fd9bead04"
+],
+"/activities/259d54ae-83b8-4ffc-ba62-5b1fd9bead04/analysis": [
+"/activities/259d54ae-83b8-4ffc-ba62-5b1fd9bead04/analysis"
+],
+"/activities/259d54ae-83b8-4ffc-ba62-5b1fd9bead04/goal-review": [
+"/activities/259d54ae-83b8-4ffc-ba62-5b1fd9bead04/goal-review?offset_s=0"
+],
+"/activities/259d54ae-83b8-4ffc-ba62-5b1fd9bead04/series": [
+"/activities/259d54ae-83b8-4ffc-ba62-5b1fd9bead04/series?limit=5000"
+],
+"/activities/26b04fbd-feef-47a7-951f-71d6fd9b44bf": [
+"/activities/26b04fbd-feef-47a7-951f-71d6fd9b44bf"
+],
+"/activities/26b04fbd-feef-47a7-951f-71d6fd9b44bf/analysis": [
+"/activities/26b04fbd-feef-47a7-951f-71d6fd9b44bf/analysis"
+],
+"/activities/26b04fbd-feef-47a7-951f-71d6fd9b44bf/goal-review": [
+"/activities/26b04fbd-feef-47a7-951f-71d6fd9b44bf/goal-review?offset_s=0"
+],
+"/activities/26b04fbd-feef-47a7-951f-71d6fd9b44bf/series": [
+"/activities/26b04fbd-feef-47a7-951f-71d6fd9b44bf/series?limit=5000"
+],
+"/activities/2c1f1874-30c3-4206-bc42-09255b929bcd": [
+"/activities/2c1f1874-30c3-4206-bc42-09255b929bcd"
+],
+"/activities/2c1f1874-30c3-4206-bc42-09255b929bcd/analysis": [
+"/activities/2c1f1874-30c3-4206-bc42-09255b929bcd/analysis"
+],
+"/activities/2c1f1874-30c3-4206-bc42-09255b929bcd/goal-review": [
+"/activities/2c1f1874-30c3-4206-bc42-09255b929bcd/goal-review?offset_s=0"
+],
+"/activities/2c1f1874-30c3-4206-bc42-09255b929bcd/series": [
+"/activities/2c1f1874-30c3-4206-bc42-09255b929bcd/series?limit=5000"
+],
+"/activities/30baa686-4fe8-4904-aa28-32f2ba5093ea": [
+"/activities/30baa686-4fe8-4904-aa28-32f2ba5093ea"
+],
+"/activities/30baa686-4fe8-4904-aa28-32f2ba5093ea/analysis": [
+"/activities/30baa686-4fe8-4904-aa28-32f2ba5093ea/analysis"
+],
+"/activities/30baa686-4fe8-4904-aa28-32f2ba5093ea/goal-review": [
+"/activities/30baa686-4fe8-4904-aa28-32f2ba5093ea/goal-review?offset_s=0"
+],
+"/activities/30baa686-4fe8-4904-aa28-32f2ba5093ea/route-comparison": [
+"/activities/30baa686-4fe8-4904-aa28-32f2ba5093ea/route-comparison?axis=time&end=100&start=0"
+],
+"/activities/30baa686-4fe8-4904-aa28-32f2ba5093ea/series": [
+"/activities/30baa686-4fe8-4904-aa28-32f2ba5093ea/series?limit=5000"
+],
+"/activities/338048dd-1bea-4a3e-9124-63be22d3c3c8": [
+"/activities/338048dd-1bea-4a3e-9124-63be22d3c3c8"
+],
+"/activities/338048dd-1bea-4a3e-9124-63be22d3c3c8/analysis": [
+"/activities/338048dd-1bea-4a3e-9124-63be22d3c3c8/analysis"
+],
+"/activities/338048dd-1bea-4a3e-9124-63be22d3c3c8/goal-review": [
+"/activities/338048dd-1bea-4a3e-9124-63be22d3c3c8/goal-review?offset_s=0"
+],
+"/activities/338048dd-1bea-4a3e-9124-63be22d3c3c8/series": [
+"/activities/338048dd-1bea-4a3e-9124-63be22d3c3c8/series?limit=5000"
+],
+"/activities/3a376e35-811a-4494-b776-a17ffd764597": [
+"/activities/3a376e35-811a-4494-b776-a17ffd764597"
+],
+"/activities/3a376e35-811a-4494-b776-a17ffd764597/analysis": [
+"/activities/3a376e35-811a-4494-b776-a17ffd764597/analysis"
+],
+"/activities/3a376e35-811a-4494-b776-a17ffd764597/goal-review": [
+"/activities/3a376e35-811a-4494-b776-a17ffd764597/goal-review?offset_s=0"
+],
+"/activities/3a376e35-811a-4494-b776-a17ffd764597/series": [
+"/activities/3a376e35-811a-4494-b776-a17ffd764597/series?limit=5000"
+],
+"/activities/3b043aea-e31d-4784-8bb1-cffeea2ac730": [
+"/activities/3b043aea-e31d-4784-8bb1-cffeea2ac730"
+],
+"/activities/3b043aea-e31d-4784-8bb1-cffeea2ac730/analysis": [
+"/activities/3b043aea-e31d-4784-8bb1-cffeea2ac730/analysis"
+],
+"/activities/3b043aea-e31d-4784-8bb1-cffeea2ac730/goal-review": [
+"/activities/3b043aea-e31d-4784-8bb1-cffeea2ac730/goal-review?offset_s=0"
+],
+"/activities/3b043aea-e31d-4784-8bb1-cffeea2ac730/series": [
+"/activities/3b043aea-e31d-4784-8bb1-cffeea2ac730/series?limit=5000"
+],
+"/activities/41096ac4-1ea0-4077-a69d-e78b2632ccc2": [
+"/activities/41096ac4-1ea0-4077-a69d-e78b2632ccc2"
+],
+"/activities/41096ac4-1ea0-4077-a69d-e78b2632ccc2/analysis": [
+"/activities/41096ac4-1ea0-4077-a69d-e78b2632ccc2/analysis"
+],
+"/activities/41096ac4-1ea0-4077-a69d-e78b2632ccc2/goal-review": [
+"/activities/41096ac4-1ea0-4077-a69d-e78b2632ccc2/goal-review?offset_s=0"
+],
+"/activities/41096ac4-1ea0-4077-a69d-e78b2632ccc2/route-comparison": [
+"/activities/41096ac4-1ea0-4077-a69d-e78b2632ccc2/route-comparison?axis=time&end=100&start=0"
+],
+"/activities/41096ac4-1ea0-4077-a69d-e78b2632ccc2/series": [
+"/activities/41096ac4-1ea0-4077-a69d-e78b2632ccc2/series?limit=5000"
+],
+"/activities/412ed382-1764-43e7-88bc-835a9b85de3d": [
+"/activities/412ed382-1764-43e7-88bc-835a9b85de3d"
+],
+"/activities/412ed382-1764-43e7-88bc-835a9b85de3d/analysis": [
+"/activities/412ed382-1764-43e7-88bc-835a9b85de3d/analysis"
+],
+"/activities/412ed382-1764-43e7-88bc-835a9b85de3d/goal-review": [
+"/activities/412ed382-1764-43e7-88bc-835a9b85de3d/goal-review?offset_s=0"
+],
+"/activities/412ed382-1764-43e7-88bc-835a9b85de3d/route-comparison": [
+"/activities/412ed382-1764-43e7-88bc-835a9b85de3d/route-comparison?axis=time&end=100&start=0"
+],
+"/activities/412ed382-1764-43e7-88bc-835a9b85de3d/series": [
+"/activities/412ed382-1764-43e7-88bc-835a9b85de3d/series?limit=5000"
+],
+"/activities/50bc933f-ba32-44fd-9ffd-92b40ef570bc": [
+"/activities/50bc933f-ba32-44fd-9ffd-92b40ef570bc"
+],
+"/activities/50bc933f-ba32-44fd-9ffd-92b40ef570bc/analysis": [
+"/activities/50bc933f-ba32-44fd-9ffd-92b40ef570bc/analysis"
+],
+"/activities/50bc933f-ba32-44fd-9ffd-92b40ef570bc/goal-review": [
+"/activities/50bc933f-ba32-44fd-9ffd-92b40ef570bc/goal-review?offset_s=0"
+],
+"/activities/50bc933f-ba32-44fd-9ffd-92b40ef570bc/route-comparison": [
+"/activities/50bc933f-ba32-44fd-9ffd-92b40ef570bc/route-comparison?axis=time&end=100&start=0"
+],
+"/activities/50bc933f-ba32-44fd-9ffd-92b40ef570bc/series": [
+"/activities/50bc933f-ba32-44fd-9ffd-92b40ef570bc/series?limit=5000"
+],
+"/activities/58689a9e-5d56-485c-9cb9-5b23ab6a2e67": [
+"/activities/58689a9e-5d56-485c-9cb9-5b23ab6a2e67"
+],
+"/activities/58689a9e-5d56-485c-9cb9-5b23ab6a2e67/analysis": [
+"/activities/58689a9e-5d56-485c-9cb9-5b23ab6a2e67/analysis"
+],
+"/activities/58689a9e-5d56-485c-9cb9-5b23ab6a2e67/goal-review": [
+"/activities/58689a9e-5d56-485c-9cb9-5b23ab6a2e67/goal-review?offset_s=0"
+],
+"/activities/58689a9e-5d56-485c-9cb9-5b23ab6a2e67/series": [
+"/activities/58689a9e-5d56-485c-9cb9-5b23ab6a2e67/series?limit=5000"
+],
+"/activities/5a341f0a-1828-4a9e-bf91-edf6053a6399": [
+"/activities/5a341f0a-1828-4a9e-bf91-edf6053a6399"
+],
+"/activities/5a341f0a-1828-4a9e-bf91-edf6053a6399/analysis": [
+"/activities/5a341f0a-1828-4a9e-bf91-edf6053a6399/analysis"
+],
+"/activities/5a341f0a-1828-4a9e-bf91-edf6053a6399/goal-review": [
+"/activities/5a341f0a-1828-4a9e-bf91-edf6053a6399/goal-review?offset_s=0"
+],
+"/activities/5a341f0a-1828-4a9e-bf91-edf6053a6399/route-comparison": [
+"/activities/5a341f0a-1828-4a9e-bf91-edf6053a6399/route-comparison?axis=time&end=100&start=0"
+],
+"/activities/5a341f0a-1828-4a9e-bf91-edf6053a6399/series": [
+"/activities/5a341f0a-1828-4a9e-bf91-edf6053a6399/series?limit=5000"
+],
+"/activities/5e231f10-a714-4f23-9b84-98c5fca8e860": [
+"/activities/5e231f10-a714-4f23-9b84-98c5fca8e860"
+],
+"/activities/5e231f10-a714-4f23-9b84-98c5fca8e860/analysis": [
+"/activities/5e231f10-a714-4f23-9b84-98c5fca8e860/analysis"
+],
+"/activities/5e231f10-a714-4f23-9b84-98c5fca8e860/goal-review": [
+"/activities/5e231f10-a714-4f23-9b84-98c5fca8e860/goal-review?offset_s=0"
+],
+"/activities/5e231f10-a714-4f23-9b84-98c5fca8e860/series": [
+"/activities/5e231f10-a714-4f23-9b84-98c5fca8e860/series?limit=5000"
+],
+"/activities/5ea72a52-0022-4222-bdb8-8ebef6fafafa": [
+"/activities/5ea72a52-0022-4222-bdb8-8ebef6fafafa"
+],
+"/activities/5ea72a52-0022-4222-bdb8-8ebef6fafafa/analysis": [
+"/activities/5ea72a52-0022-4222-bdb8-8ebef6fafafa/analysis"
+],
+"/activities/5ea72a52-0022-4222-bdb8-8ebef6fafafa/goal-review": [
+"/activities/5ea72a52-0022-4222-bdb8-8ebef6fafafa/goal-review?offset_s=0"
+],
+"/activities/5ea72a52-0022-4222-bdb8-8ebef6fafafa/series": [
+"/activities/5ea72a52-0022-4222-bdb8-8ebef6fafafa/series?limit=5000"
+],
+"/activities/64a3f641-fa20-4d54-b72d-d56cae37f3e9": [
+"/activities/64a3f641-fa20-4d54-b72d-d56cae37f3e9"
+],
+"/activities/64a3f641-fa20-4d54-b72d-d56cae37f3e9/analysis": [
+"/activities/64a3f641-fa20-4d54-b72d-d56cae37f3e9/analysis"
+],
+"/activities/64a3f641-fa20-4d54-b72d-d56cae37f3e9/goal-review": [
+"/activities/64a3f641-fa20-4d54-b72d-d56cae37f3e9/goal-review?offset_s=0"
+],
+"/activities/64a3f641-fa20-4d54-b72d-d56cae37f3e9/series": [
+"/activities/64a3f641-fa20-4d54-b72d-d56cae37f3e9/series?limit=5000"
+],
+"/activities/65a10f1f-2171-40da-9f1e-9b7ed4f07312": [
+"/activities/65a10f1f-2171-40da-9f1e-9b7ed4f07312"
+],
+"/activities/65a10f1f-2171-40da-9f1e-9b7ed4f07312/analysis": [
+"/activities/65a10f1f-2171-40da-9f1e-9b7ed4f07312/analysis"
+],
+"/activities/65a10f1f-2171-40da-9f1e-9b7ed4f07312/goal-review": [
+"/activities/65a10f1f-2171-40da-9f1e-9b7ed4f07312/goal-review?offset_s=0"
+],
+"/activities/65a10f1f-2171-40da-9f1e-9b7ed4f07312/series": [
+"/activities/65a10f1f-2171-40da-9f1e-9b7ed4f07312/series?limit=5000"
+],
+"/activities/6849938e-81b9-4e01-b787-3cf7702e9155": [
+"/activities/6849938e-81b9-4e01-b787-3cf7702e9155"
+],
+"/activities/6849938e-81b9-4e01-b787-3cf7702e9155/analysis": [
+"/activities/6849938e-81b9-4e01-b787-3cf7702e9155/analysis"
+],
+"/activities/6849938e-81b9-4e01-b787-3cf7702e9155/goal-review": [
+"/activities/6849938e-81b9-4e01-b787-3cf7702e9155/goal-review?offset_s=0"
+],
+"/activities/6849938e-81b9-4e01-b787-3cf7702e9155/series": [
+"/activities/6849938e-81b9-4e01-b787-3cf7702e9155/series?limit=5000"
+],
+"/activities/6e77b306-bfe7-4b58-b8f4-f234eb1e5bb8": [
+"/activities/6e77b306-bfe7-4b58-b8f4-f234eb1e5bb8"
+],
+"/activities/6e77b306-bfe7-4b58-b8f4-f234eb1e5bb8/analysis": [
+"/activities/6e77b306-bfe7-4b58-b8f4-f234eb1e5bb8/analysis"
+],
+"/activities/6e77b306-bfe7-4b58-b8f4-f234eb1e5bb8/goal-review": [
+"/activities/6e77b306-bfe7-4b58-b8f4-f234eb1e5bb8/goal-review?offset_s=0"
+],
+"/activities/6e77b306-bfe7-4b58-b8f4-f234eb1e5bb8/series": [
+"/activities/6e77b306-bfe7-4b58-b8f4-f234eb1e5bb8/series?limit=5000"
+],
+"/activities/745ddea5-d541-48a8-b49c-efbe54ebc905": [
+"/activities/745ddea5-d541-48a8-b49c-efbe54ebc905"
+],
+"/activities/745ddea5-d541-48a8-b49c-efbe54ebc905/analysis": [
+"/activities/745ddea5-d541-48a8-b49c-efbe54ebc905/analysis"
+],
+"/activities/745ddea5-d541-48a8-b49c-efbe54ebc905/goal-review": [
+"/activities/745ddea5-d541-48a8-b49c-efbe54ebc905/goal-review?offset_s=0"
+],
+"/activities/745ddea5-d541-48a8-b49c-efbe54ebc905/series": [
+"/activities/745ddea5-d541-48a8-b49c-efbe54ebc905/series?limit=5000"
+],
+"/activities/7624e388-de8a-4771-aaf1-30384352eec8": [
+"/activities/7624e388-de8a-4771-aaf1-30384352eec8"
+],
+"/activities/7624e388-de8a-4771-aaf1-30384352eec8/analysis": [
+"/activities/7624e388-de8a-4771-aaf1-30384352eec8/analysis"
+],
+"/activities/7624e388-de8a-4771-aaf1-30384352eec8/goal-review": [
+"/activities/7624e388-de8a-4771-aaf1-30384352eec8/goal-review?offset_s=0"
+],
+"/activities/7624e388-de8a-4771-aaf1-30384352eec8/series": [
+"/activities/7624e388-de8a-4771-aaf1-30384352eec8/series?limit=5000"
+],
+"/activities/772de87c-c214-47a5-8085-35590f9b43d5": [
+"/activities/772de87c-c214-47a5-8085-35590f9b43d5"
+],
+"/activities/772de87c-c214-47a5-8085-35590f9b43d5/analysis": [
+"/activities/772de87c-c214-47a5-8085-35590f9b43d5/analysis"
+],
+"/activities/772de87c-c214-47a5-8085-35590f9b43d5/goal-review": [
+"/activities/772de87c-c214-47a5-8085-35590f9b43d5/goal-review?offset_s=0"
+],
+"/activities/772de87c-c214-47a5-8085-35590f9b43d5/series": [
+"/activities/772de87c-c214-47a5-8085-35590f9b43d5/series?limit=5000"
+],
+"/activities/7a979346-2e24-4c97-a9f1-c02f282d7a38": [
+"/activities/7a979346-2e24-4c97-a9f1-c02f282d7a38"
+],
+"/activities/7a979346-2e24-4c97-a9f1-c02f282d7a38/analysis": [
+"/activities/7a979346-2e24-4c97-a9f1-c02f282d7a38/analysis"
+],
+"/activities/7a979346-2e24-4c97-a9f1-c02f282d7a38/goal-review": [
+"/activities/7a979346-2e24-4c97-a9f1-c02f282d7a38/goal-review?offset_s=0"
+],
+"/activities/7a979346-2e24-4c97-a9f1-c02f282d7a38/series": [
+"/activities/7a979346-2e24-4c97-a9f1-c02f282d7a38/series?limit=5000"
+],
+"/activities/804baf6c-5574-4e11-8578-729cf1f5328c": [
+"/activities/804baf6c-5574-4e11-8578-729cf1f5328c"
+],
+"/activities/804baf6c-5574-4e11-8578-729cf1f5328c/analysis": [
+"/activities/804baf6c-5574-4e11-8578-729cf1f5328c/analysis"
+],
+"/activities/804baf6c-5574-4e11-8578-729cf1f5328c/goal-review": [
+"/activities/804baf6c-5574-4e11-8578-729cf1f5328c/goal-review?offset_s=0"
+],
+"/activities/804baf6c-5574-4e11-8578-729cf1f5328c/series": [
+"/activities/804baf6c-5574-4e11-8578-729cf1f5328c/series?limit=5000"
+],
+"/activities/88045836-c843-4ef5-90f8-50a03f3adaa8": [
+"/activities/88045836-c843-4ef5-90f8-50a03f3adaa8"
+],
+"/activities/88045836-c843-4ef5-90f8-50a03f3adaa8/analysis": [
+"/activities/88045836-c843-4ef5-90f8-50a03f3adaa8/analysis"
+],
+"/activities/88045836-c843-4ef5-90f8-50a03f3adaa8/goal-review": [
+"/activities/88045836-c843-4ef5-90f8-50a03f3adaa8/goal-review?offset_s=0"
+],
+"/activities/88045836-c843-4ef5-90f8-50a03f3adaa8/series": [
+"/activities/88045836-c843-4ef5-90f8-50a03f3adaa8/series?limit=5000"
+],
+"/activities/88a4f734-c25b-4273-bc56-56cce864777a": [
+"/activities/88a4f734-c25b-4273-bc56-56cce864777a"
+],
+"/activities/88a4f734-c25b-4273-bc56-56cce864777a/analysis": [
+"/activities/88a4f734-c25b-4273-bc56-56cce864777a/analysis"
+],
+"/activities/88a4f734-c25b-4273-bc56-56cce864777a/goal-review": [
+"/activities/88a4f734-c25b-4273-bc56-56cce864777a/goal-review?offset_s=0"
+],
+"/activities/88a4f734-c25b-4273-bc56-56cce864777a/series": [
+"/activities/88a4f734-c25b-4273-bc56-56cce864777a/series?limit=5000"
+],
+"/activities/89652be6-2cd3-43b3-aeee-5c492ea4237b": [
+"/activities/89652be6-2cd3-43b3-aeee-5c492ea4237b"
+],
+"/activities/89652be6-2cd3-43b3-aeee-5c492ea4237b/analysis": [
+"/activities/89652be6-2cd3-43b3-aeee-5c492ea4237b/analysis"
+],
+"/activities/89652be6-2cd3-43b3-aeee-5c492ea4237b/goal-review": [
+"/activities/89652be6-2cd3-43b3-aeee-5c492ea4237b/goal-review?offset_s=0"
+],
+"/activities/89652be6-2cd3-43b3-aeee-5c492ea4237b/route-comparison": [
+"/activities/89652be6-2cd3-43b3-aeee-5c492ea4237b/route-comparison?axis=time&end=100&start=0"
+],
+"/activities/89652be6-2cd3-43b3-aeee-5c492ea4237b/series": [
+"/activities/89652be6-2cd3-43b3-aeee-5c492ea4237b/series?limit=5000"
+],
+"/activities/99c85ba8-d117-4e77-a275-a798596426e3": [
+"/activities/99c85ba8-d117-4e77-a275-a798596426e3"
+],
+"/activities/99c85ba8-d117-4e77-a275-a798596426e3/analysis": [
+"/activities/99c85ba8-d117-4e77-a275-a798596426e3/analysis"
+],
+"/activities/99c85ba8-d117-4e77-a275-a798596426e3/goal-review": [
+"/activities/99c85ba8-d117-4e77-a275-a798596426e3/goal-review?offset_s=0"
+],
+"/activities/99c85ba8-d117-4e77-a275-a798596426e3/series": [
+"/activities/99c85ba8-d117-4e77-a275-a798596426e3/series?limit=5000"
+],
+"/activities/9b666e06-9565-44fc-b7e1-b6a4ed44e682": [
+"/activities/9b666e06-9565-44fc-b7e1-b6a4ed44e682"
+],
+"/activities/9b666e06-9565-44fc-b7e1-b6a4ed44e682/analysis": [
+"/activities/9b666e06-9565-44fc-b7e1-b6a4ed44e682/analysis"
+],
+"/activities/9b666e06-9565-44fc-b7e1-b6a4ed44e682/goal-review": [
+"/activities/9b666e06-9565-44fc-b7e1-b6a4ed44e682/goal-review?offset_s=0"
+],
+"/activities/9b666e06-9565-44fc-b7e1-b6a4ed44e682/series": [
+"/activities/9b666e06-9565-44fc-b7e1-b6a4ed44e682/series?limit=5000"
+],
+"/activities/b39a5ac2-27ba-4519-b683-d1378fb7bad6": [
+"/activities/b39a5ac2-27ba-4519-b683-d1378fb7bad6"
+],
+"/activities/b39a5ac2-27ba-4519-b683-d1378fb7bad6/analysis": [
+"/activities/b39a5ac2-27ba-4519-b683-d1378fb7bad6/analysis"
+],
+"/activities/b39a5ac2-27ba-4519-b683-d1378fb7bad6/goal-review": [
+"/activities/b39a5ac2-27ba-4519-b683-d1378fb7bad6/goal-review?offset_s=0"
+],
+"/activities/b39a5ac2-27ba-4519-b683-d1378fb7bad6/series": [
+"/activities/b39a5ac2-27ba-4519-b683-d1378fb7bad6/series?limit=5000"
+],
+"/activities/b55c672d-a144-433e-a375-1c1390b4b8fd": [
+"/activities/b55c672d-a144-433e-a375-1c1390b4b8fd"
+],
+"/activities/b55c672d-a144-433e-a375-1c1390b4b8fd/analysis": [
+"/activities/b55c672d-a144-433e-a375-1c1390b4b8fd/analysis"
+],
+"/activities/b55c672d-a144-433e-a375-1c1390b4b8fd/goal-review": [
+"/activities/b55c672d-a144-433e-a375-1c1390b4b8fd/goal-review?offset_s=0"
+],
+"/activities/b55c672d-a144-433e-a375-1c1390b4b8fd/series": [
+"/activities/b55c672d-a144-433e-a375-1c1390b4b8fd/series?limit=5000"
+],
+"/activities/b823ce21-dfe6-466e-a936-80fa1a07290e": [
+"/activities/b823ce21-dfe6-466e-a936-80fa1a07290e"
+],
+"/activities/b823ce21-dfe6-466e-a936-80fa1a07290e/analysis": [
+"/activities/b823ce21-dfe6-466e-a936-80fa1a07290e/analysis"
+],
+"/activities/b823ce21-dfe6-466e-a936-80fa1a07290e/goal-review": [
+"/activities/b823ce21-dfe6-466e-a936-80fa1a07290e/goal-review?offset_s=0"
+],
+"/activities/b823ce21-dfe6-466e-a936-80fa1a07290e/series": [
+"/activities/b823ce21-dfe6-466e-a936-80fa1a07290e/series?limit=5000"
+],
+"/activities/b8364e4d-8b5e-45bb-8873-986486e807fd": [
+"/activities/b8364e4d-8b5e-45bb-8873-986486e807fd"
+],
+"/activities/b8364e4d-8b5e-45bb-8873-986486e807fd/analysis": [
+"/activities/b8364e4d-8b5e-45bb-8873-986486e807fd/analysis"
+],
+"/activities/b8364e4d-8b5e-45bb-8873-986486e807fd/goal-review": [
+"/activities/b8364e4d-8b5e-45bb-8873-986486e807fd/goal-review?offset_s=0"
+],
+"/activities/b8364e4d-8b5e-45bb-8873-986486e807fd/series": [
+"/activities/b8364e4d-8b5e-45bb-8873-986486e807fd/series?limit=5000"
+],
+"/activities/ca109c71-410f-49fd-9719-411022408d9a": [
+"/activities/ca109c71-410f-49fd-9719-411022408d9a"
+],
+"/activities/ca109c71-410f-49fd-9719-411022408d9a/analysis": [
+"/activities/ca109c71-410f-49fd-9719-411022408d9a/analysis"
+],
+"/activities/ca109c71-410f-49fd-9719-411022408d9a/goal-review": [
+"/activities/ca109c71-410f-49fd-9719-411022408d9a/goal-review?offset_s=0"
+],
+"/activities/ca109c71-410f-49fd-9719-411022408d9a/series": [
+"/activities/ca109c71-410f-49fd-9719-411022408d9a/series?limit=5000"
+],
+"/activities/d68a4fbd-7eeb-4175-b71e-0e77456b1d49": [
+"/activities/d68a4fbd-7eeb-4175-b71e-0e77456b1d49"
+],
+"/activities/d68a4fbd-7eeb-4175-b71e-0e77456b1d49/analysis": [
+"/activities/d68a4fbd-7eeb-4175-b71e-0e77456b1d49/analysis"
+],
+"/activities/d68a4fbd-7eeb-4175-b71e-0e77456b1d49/goal-review": [
+"/activities/d68a4fbd-7eeb-4175-b71e-0e77456b1d49/goal-review?offset_s=0"
+],
+"/activities/d68a4fbd-7eeb-4175-b71e-0e77456b1d49/series": [
+"/activities/d68a4fbd-7eeb-4175-b71e-0e77456b1d49/series?limit=5000"
+],
+"/activities/d68f5b00-e596-4be7-9a16-2dc5a32346e9": [
+"/activities/d68f5b00-e596-4be7-9a16-2dc5a32346e9"
+],
+"/activities/d68f5b00-e596-4be7-9a16-2dc5a32346e9/analysis": [
+"/activities/d68f5b00-e596-4be7-9a16-2dc5a32346e9/analysis"
+],
+"/activities/d68f5b00-e596-4be7-9a16-2dc5a32346e9/goal-review": [
+"/activities/d68f5b00-e596-4be7-9a16-2dc5a32346e9/goal-review?offset_s=0"
+],
+"/activities/d68f5b00-e596-4be7-9a16-2dc5a32346e9/series": [
+"/activities/d68f5b00-e596-4be7-9a16-2dc5a32346e9/series?limit=5000"
+],
+"/activities/db8f0d15-5dcd-445d-a503-25a4c5a2cb49": [
+"/activities/db8f0d15-5dcd-445d-a503-25a4c5a2cb49"
+],
+"/activities/db8f0d15-5dcd-445d-a503-25a4c5a2cb49/analysis": [
+"/activities/db8f0d15-5dcd-445d-a503-25a4c5a2cb49/analysis"
+],
+"/activities/db8f0d15-5dcd-445d-a503-25a4c5a2cb49/goal-review": [
+"/activities/db8f0d15-5dcd-445d-a503-25a4c5a2cb49/goal-review?offset_s=0"
+],
+"/activities/db8f0d15-5dcd-445d-a503-25a4c5a2cb49/route-comparison": [
+"/activities/db8f0d15-5dcd-445d-a503-25a4c5a2cb49/route-comparison?axis=time&end=100&start=0"
+],
+"/activities/db8f0d15-5dcd-445d-a503-25a4c5a2cb49/series": [
+"/activities/db8f0d15-5dcd-445d-a503-25a4c5a2cb49/series?limit=5000"
+],
+"/activities/e72cbaa9-5220-49ad-92a9-028011ee8df8": [
+"/activities/e72cbaa9-5220-49ad-92a9-028011ee8df8"
+],
+"/activities/e72cbaa9-5220-49ad-92a9-028011ee8df8/analysis": [
+"/activities/e72cbaa9-5220-49ad-92a9-028011ee8df8/analysis"
+],
+"/activities/e72cbaa9-5220-49ad-92a9-028011ee8df8/goal-review": [
+"/activities/e72cbaa9-5220-49ad-92a9-028011ee8df8/goal-review?offset_s=0"
+],
+"/activities/e72cbaa9-5220-49ad-92a9-028011ee8df8/series": [
+"/activities/e72cbaa9-5220-49ad-92a9-028011ee8df8/series?limit=5000"
+],
+"/activities/eee6e493-8156-43a6-bf10-a78d64319754": [
+"/activities/eee6e493-8156-43a6-bf10-a78d64319754"
+],
+"/activities/eee6e493-8156-43a6-bf10-a78d64319754/analysis": [
+"/activities/eee6e493-8156-43a6-bf10-a78d64319754/analysis"
+],
+"/activities/eee6e493-8156-43a6-bf10-a78d64319754/goal-review": [
+"/activities/eee6e493-8156-43a6-bf10-a78d64319754/goal-review?offset_s=0"
+],
+"/activities/eee6e493-8156-43a6-bf10-a78d64319754/series": [
+"/activities/eee6e493-8156-43a6-bf10-a78d64319754/series?limit=5000"
+],
+"/activities/f4f9551a-274d-40d5-a73c-738229fb10f1": [
+"/activities/f4f9551a-274d-40d5-a73c-738229fb10f1"
+],
+"/activities/f4f9551a-274d-40d5-a73c-738229fb10f1/analysis": [
+"/activities/f4f9551a-274d-40d5-a73c-738229fb10f1/analysis"
+],
+"/activities/f4f9551a-274d-40d5-a73c-738229fb10f1/goal-review": [
+"/activities/f4f9551a-274d-40d5-a73c-738229fb10f1/goal-review?offset_s=0"
+],
+"/activities/f4f9551a-274d-40d5-a73c-738229fb10f1/series": [
+"/activities/f4f9551a-274d-40d5-a73c-738229fb10f1/series?limit=5000"
+],
+"/activities/f4ffa67f-cbe0-4b43-b548-3e234a5e5de0": [
+"/activities/f4ffa67f-cbe0-4b43-b548-3e234a5e5de0"
+],
+"/activities/f4ffa67f-cbe0-4b43-b548-3e234a5e5de0/analysis": [
+"/activities/f4ffa67f-cbe0-4b43-b548-3e234a5e5de0/analysis"
+],
+"/activities/f4ffa67f-cbe0-4b43-b548-3e234a5e5de0/goal-review": [
+"/activities/f4ffa67f-cbe0-4b43-b548-3e234a5e5de0/goal-review?offset_s=0"
+],
+"/activities/f4ffa67f-cbe0-4b43-b548-3e234a5e5de0/series": [
+"/activities/f4ffa67f-cbe0-4b43-b548-3e234a5e5de0/series?limit=5000"
+],
+"/activities/recap": [
+"/activities/recap?period=all",
+"/activities/recap?period=month",
+"/activities/recap?period=today",
+"/activities/recap?period=week",
+"/activities/recap?period=year"
+],
+"/activities/stats": [
+"/activities/stats"
+],
+"/activities": [
+"/activities?include_stats=false&limit=4",
+"/activities?include_stats=false&page=1&per_page=50"
+],
+"/auth/me": [
+"/auth/me"
+],
+"/calendar/month": [
+"/calendar/month?end=2026-10-04&start=2026-08-31",
+"/calendar/month?end=2026-11-01&start=2026-09-28",
+"/calendar/month?end=2026-12-06&start=2026-10-26",
+"/calendar/month?end=2027-01-03&start=2026-11-30",
+"/calendar/month?end=2027-01-31&start=2026-12-28"
+],
+"/calendar/overview": [
+"/calendar/overview?year=2026"
+],
+"/coach/activity-analysis/0067d941-f877-44db-a674-0d96d31d3d6c": [
+"/coach/activity-analysis/0067d941-f877-44db-a674-0d96d31d3d6c?limit=20"
+],
+"/coach/activity-analysis/0240c7ce-2823-429d-82e9-8cecfb6b6bb7": [
+"/coach/activity-analysis/0240c7ce-2823-429d-82e9-8cecfb6b6bb7?limit=20"
+],
+"/coach/activity-analysis/0260283a-1103-4712-beed-8c84d4528aba": [
+"/coach/activity-analysis/0260283a-1103-4712-beed-8c84d4528aba?limit=20"
+],
+"/coach/activity-analysis/16238096-295b-49a8-80af-e05884fbe113": [
+"/coach/activity-analysis/16238096-295b-49a8-80af-e05884fbe113?limit=20"
+],
+"/coach/activity-analysis/1a318798-d808-4b6a-bdeb-e6f603656922": [
+"/coach/activity-analysis/1a318798-d808-4b6a-bdeb-e6f603656922?limit=20"
+],
+"/coach/activity-analysis/1ae06f67-d62e-4454-b8f4-8349f30ae8ec": [
+"/coach/activity-analysis/1ae06f67-d62e-4454-b8f4-8349f30ae8ec?limit=20"
+],
+"/coach/activity-analysis/1e8ef20f-04bf-488d-a057-bd5c69cbc58c": [
+"/coach/activity-analysis/1e8ef20f-04bf-488d-a057-bd5c69cbc58c?limit=20"
+],
+"/coach/activity-analysis/1f1cccaa-ae72-40b0-af83-e6095fb0adb0": [
+"/coach/activity-analysis/1f1cccaa-ae72-40b0-af83-e6095fb0adb0?limit=20"
+],
+"/coach/activity-analysis/2159a5d4-4685-45f7-acd5-178358131574": [
+"/coach/activity-analysis/2159a5d4-4685-45f7-acd5-178358131574?limit=20"
+],
+"/coach/activity-analysis/21be9193-0487-4f56-8866-48d462648265": [
+"/coach/activity-analysis/21be9193-0487-4f56-8866-48d462648265?limit=20"
+],
+"/coach/activity-analysis/259d54ae-83b8-4ffc-ba62-5b1fd9bead04": [
+"/coach/activity-analysis/259d54ae-83b8-4ffc-ba62-5b1fd9bead04?limit=20"
+],
+"/coach/activity-analysis/26b04fbd-feef-47a7-951f-71d6fd9b44bf": [
+"/coach/activity-analysis/26b04fbd-feef-47a7-951f-71d6fd9b44bf?limit=20"
+],
+"/coach/activity-analysis/2c1f1874-30c3-4206-bc42-09255b929bcd": [
+"/coach/activity-analysis/2c1f1874-30c3-4206-bc42-09255b929bcd?limit=20"
+],
+"/coach/activity-analysis/30baa686-4fe8-4904-aa28-32f2ba5093ea": [
+"/coach/activity-analysis/30baa686-4fe8-4904-aa28-32f2ba5093ea?limit=20"
+],
+"/coach/activity-analysis/338048dd-1bea-4a3e-9124-63be22d3c3c8": [
+"/coach/activity-analysis/338048dd-1bea-4a3e-9124-63be22d3c3c8?limit=20"
+],
+"/coach/activity-analysis/3a376e35-811a-4494-b776-a17ffd764597": [
+"/coach/activity-analysis/3a376e35-811a-4494-b776-a17ffd764597?limit=20"
+],
+"/coach/activity-analysis/3b043aea-e31d-4784-8bb1-cffeea2ac730": [
+"/coach/activity-analysis/3b043aea-e31d-4784-8bb1-cffeea2ac730?limit=20"
+],
+"/coach/activity-analysis/41096ac4-1ea0-4077-a69d-e78b2632ccc2": [
+"/coach/activity-analysis/41096ac4-1ea0-4077-a69d-e78b2632ccc2?limit=20"
+],
+"/coach/activity-analysis/412ed382-1764-43e7-88bc-835a9b85de3d": [
+"/coach/activity-analysis/412ed382-1764-43e7-88bc-835a9b85de3d?limit=20"
+],
+"/coach/activity-analysis/50bc933f-ba32-44fd-9ffd-92b40ef570bc": [
+"/coach/activity-analysis/50bc933f-ba32-44fd-9ffd-92b40ef570bc?limit=20"
+],
+"/coach/activity-analysis/58689a9e-5d56-485c-9cb9-5b23ab6a2e67": [
+"/coach/activity-analysis/58689a9e-5d56-485c-9cb9-5b23ab6a2e67?limit=20"
+],
+"/coach/activity-analysis/5a341f0a-1828-4a9e-bf91-edf6053a6399": [
+"/coach/activity-analysis/5a341f0a-1828-4a9e-bf91-edf6053a6399?limit=20"
+],
+"/coach/activity-analysis/5e231f10-a714-4f23-9b84-98c5fca8e860": [
+"/coach/activity-analysis/5e231f10-a714-4f23-9b84-98c5fca8e860?limit=20"
+],
+"/coach/activity-analysis/5ea72a52-0022-4222-bdb8-8ebef6fafafa": [
+"/coach/activity-analysis/5ea72a52-0022-4222-bdb8-8ebef6fafafa?limit=20"
+],
+"/coach/activity-analysis/64a3f641-fa20-4d54-b72d-d56cae37f3e9": [
+"/coach/activity-analysis/64a3f641-fa20-4d54-b72d-d56cae37f3e9?limit=20"
+],
+"/coach/activity-analysis/65a10f1f-2171-40da-9f1e-9b7ed4f07312": [
+"/coach/activity-analysis/65a10f1f-2171-40da-9f1e-9b7ed4f07312?limit=20"
+],
+"/coach/activity-analysis/6849938e-81b9-4e01-b787-3cf7702e9155": [
+"/coach/activity-analysis/6849938e-81b9-4e01-b787-3cf7702e9155?limit=20"
+],
+"/coach/activity-analysis/6e77b306-bfe7-4b58-b8f4-f234eb1e5bb8": [
+"/coach/activity-analysis/6e77b306-bfe7-4b58-b8f4-f234eb1e5bb8?limit=20"
+],
+"/coach/activity-analysis/745ddea5-d541-48a8-b49c-efbe54ebc905": [
+"/coach/activity-analysis/745ddea5-d541-48a8-b49c-efbe54ebc905?limit=20"
+],
+"/coach/activity-analysis/7624e388-de8a-4771-aaf1-30384352eec8": [
+"/coach/activity-analysis/7624e388-de8a-4771-aaf1-30384352eec8?limit=20"
+],
+"/coach/activity-analysis/772de87c-c214-47a5-8085-35590f9b43d5": [
+"/coach/activity-analysis/772de87c-c214-47a5-8085-35590f9b43d5?limit=20"
+],
+"/coach/activity-analysis/7a979346-2e24-4c97-a9f1-c02f282d7a38": [
+"/coach/activity-analysis/7a979346-2e24-4c97-a9f1-c02f282d7a38?limit=20"
+],
+"/coach/activity-analysis/804baf6c-5574-4e11-8578-729cf1f5328c": [
+"/coach/activity-analysis/804baf6c-5574-4e11-8578-729cf1f5328c?limit=20"
+],
+"/coach/activity-analysis/88045836-c843-4ef5-90f8-50a03f3adaa8": [
+"/coach/activity-analysis/88045836-c843-4ef5-90f8-50a03f3adaa8?limit=20"
+],
+"/coach/activity-analysis/88a4f734-c25b-4273-bc56-56cce864777a": [
+"/coach/activity-analysis/88a4f734-c25b-4273-bc56-56cce864777a?limit=20"
+],
+"/coach/activity-analysis/89652be6-2cd3-43b3-aeee-5c492ea4237b": [
+"/coach/activity-analysis/89652be6-2cd3-43b3-aeee-5c492ea4237b?limit=20"
+],
+"/coach/activity-analysis/99c85ba8-d117-4e77-a275-a798596426e3": [
+"/coach/activity-analysis/99c85ba8-d117-4e77-a275-a798596426e3?limit=20"
+],
+"/coach/activity-analysis/9b666e06-9565-44fc-b7e1-b6a4ed44e682": [
+"/coach/activity-analysis/9b666e06-9565-44fc-b7e1-b6a4ed44e682?limit=20"
+],
+"/coach/activity-analysis/b39a5ac2-27ba-4519-b683-d1378fb7bad6": [
+"/coach/activity-analysis/b39a5ac2-27ba-4519-b683-d1378fb7bad6?limit=20"
+],
+"/coach/activity-analysis/b55c672d-a144-433e-a375-1c1390b4b8fd": [
+"/coach/activity-analysis/b55c672d-a144-433e-a375-1c1390b4b8fd?limit=20"
+],
+"/coach/activity-analysis/b823ce21-dfe6-466e-a936-80fa1a07290e": [
+"/coach/activity-analysis/b823ce21-dfe6-466e-a936-80fa1a07290e?limit=20"
+],
+"/coach/activity-analysis/b8364e4d-8b5e-45bb-8873-986486e807fd": [
+"/coach/activity-analysis/b8364e4d-8b5e-45bb-8873-986486e807fd?limit=20"
+],
+"/coach/activity-analysis/ca109c71-410f-49fd-9719-411022408d9a": [
+"/coach/activity-analysis/ca109c71-410f-49fd-9719-411022408d9a?limit=20"
+],
+"/coach/activity-analysis/d68a4fbd-7eeb-4175-b71e-0e77456b1d49": [
+"/coach/activity-analysis/d68a4fbd-7eeb-4175-b71e-0e77456b1d49?limit=20"
+],
+"/coach/activity-analysis/d68f5b00-e596-4be7-9a16-2dc5a32346e9": [
+"/coach/activity-analysis/d68f5b00-e596-4be7-9a16-2dc5a32346e9?limit=20"
+],
+"/coach/activity-analysis/db8f0d15-5dcd-445d-a503-25a4c5a2cb49": [
+"/coach/activity-analysis/db8f0d15-5dcd-445d-a503-25a4c5a2cb49?limit=20"
+],
+"/coach/activity-analysis/e72cbaa9-5220-49ad-92a9-028011ee8df8": [
+"/coach/activity-analysis/e72cbaa9-5220-49ad-92a9-028011ee8df8?limit=20"
+],
+"/coach/activity-analysis/eee6e493-8156-43a6-bf10-a78d64319754": [
+"/coach/activity-analysis/eee6e493-8156-43a6-bf10-a78d64319754?limit=20"
+],
+"/coach/activity-analysis/f4f9551a-274d-40d5-a73c-738229fb10f1": [
+"/coach/activity-analysis/f4f9551a-274d-40d5-a73c-738229fb10f1?limit=20"
+],
+"/coach/activity-analysis/f4ffa67f-cbe0-4b43-b548-3e234a5e5de0": [
+"/coach/activity-analysis/f4ffa67f-cbe0-4b43-b548-3e234a5e5de0?limit=20"
+],
+"/coach/briefing": [
+"/coach/briefing"
+],
+"/coach/capabilities": [
+"/coach/capabilities?locale=de",
+"/coach/capabilities?locale=en"
+],
+"/coach/context-preview": [
+"/coach/context-preview?days=7"
+],
+"/coach/conversations/0d194358-d76b-46f4-8a4e-6fb4a9015522": [
+"/coach/conversations/0d194358-d76b-46f4-8a4e-6fb4a9015522"
+],
+"/coach/conversations": [
+"/coach/conversations?limit=30&offset=0"
+],
+"/coach/experiences": [
+"/coach/experiences"
+],
+"/coach/feedback/0067d941-f877-44db-a674-0d96d31d3d6c": [
+"/coach/feedback/0067d941-f877-44db-a674-0d96d31d3d6c"
+],
+"/coach/feedback/0240c7ce-2823-429d-82e9-8cecfb6b6bb7": [
+"/coach/feedback/0240c7ce-2823-429d-82e9-8cecfb6b6bb7"
+],
+"/coach/feedback/0260283a-1103-4712-beed-8c84d4528aba": [
+"/coach/feedback/0260283a-1103-4712-beed-8c84d4528aba"
+],
+"/coach/feedback/16238096-295b-49a8-80af-e05884fbe113": [
+"/coach/feedback/16238096-295b-49a8-80af-e05884fbe113"
+],
+"/coach/feedback/1a318798-d808-4b6a-bdeb-e6f603656922": [
+"/coach/feedback/1a318798-d808-4b6a-bdeb-e6f603656922"
+],
+"/coach/feedback/1ae06f67-d62e-4454-b8f4-8349f30ae8ec": [
+"/coach/feedback/1ae06f67-d62e-4454-b8f4-8349f30ae8ec"
+],
+"/coach/feedback/1e8ef20f-04bf-488d-a057-bd5c69cbc58c": [
+"/coach/feedback/1e8ef20f-04bf-488d-a057-bd5c69cbc58c"
+],
+"/coach/feedback/1f1cccaa-ae72-40b0-af83-e6095fb0adb0": [
+"/coach/feedback/1f1cccaa-ae72-40b0-af83-e6095fb0adb0"
+],
+"/coach/feedback/2159a5d4-4685-45f7-acd5-178358131574": [
+"/coach/feedback/2159a5d4-4685-45f7-acd5-178358131574"
+],
+"/coach/feedback/21be9193-0487-4f56-8866-48d462648265": [
+"/coach/feedback/21be9193-0487-4f56-8866-48d462648265"
+],
+"/coach/feedback/259d54ae-83b8-4ffc-ba62-5b1fd9bead04": [
+"/coach/feedback/259d54ae-83b8-4ffc-ba62-5b1fd9bead04"
+],
+"/coach/feedback/26b04fbd-feef-47a7-951f-71d6fd9b44bf": [
+"/coach/feedback/26b04fbd-feef-47a7-951f-71d6fd9b44bf"
+],
+"/coach/feedback/2c1f1874-30c3-4206-bc42-09255b929bcd": [
+"/coach/feedback/2c1f1874-30c3-4206-bc42-09255b929bcd"
+],
+"/coach/feedback/30baa686-4fe8-4904-aa28-32f2ba5093ea": [
+"/coach/feedback/30baa686-4fe8-4904-aa28-32f2ba5093ea"
+],
+"/coach/feedback/338048dd-1bea-4a3e-9124-63be22d3c3c8": [
+"/coach/feedback/338048dd-1bea-4a3e-9124-63be22d3c3c8"
+],
+"/coach/feedback/3a376e35-811a-4494-b776-a17ffd764597": [
+"/coach/feedback/3a376e35-811a-4494-b776-a17ffd764597"
+],
+"/coach/feedback/3b043aea-e31d-4784-8bb1-cffeea2ac730": [
+"/coach/feedback/3b043aea-e31d-4784-8bb1-cffeea2ac730"
+],
+"/coach/feedback/41096ac4-1ea0-4077-a69d-e78b2632ccc2": [
+"/coach/feedback/41096ac4-1ea0-4077-a69d-e78b2632ccc2"
+],
+"/coach/feedback/412ed382-1764-43e7-88bc-835a9b85de3d": [
+"/coach/feedback/412ed382-1764-43e7-88bc-835a9b85de3d"
+],
+"/coach/feedback/50bc933f-ba32-44fd-9ffd-92b40ef570bc": [
+"/coach/feedback/50bc933f-ba32-44fd-9ffd-92b40ef570bc"
+],
+"/coach/feedback/58689a9e-5d56-485c-9cb9-5b23ab6a2e67": [
+"/coach/feedback/58689a9e-5d56-485c-9cb9-5b23ab6a2e67"
+],
+"/coach/feedback/5a341f0a-1828-4a9e-bf91-edf6053a6399": [
+"/coach/feedback/5a341f0a-1828-4a9e-bf91-edf6053a6399"
+],
+"/coach/feedback/5e231f10-a714-4f23-9b84-98c5fca8e860": [
+"/coach/feedback/5e231f10-a714-4f23-9b84-98c5fca8e860"
+],
+"/coach/feedback/5ea72a52-0022-4222-bdb8-8ebef6fafafa": [
+"/coach/feedback/5ea72a52-0022-4222-bdb8-8ebef6fafafa"
+],
+"/coach/feedback/64a3f641-fa20-4d54-b72d-d56cae37f3e9": [
+"/coach/feedback/64a3f641-fa20-4d54-b72d-d56cae37f3e9"
+],
+"/coach/feedback/65a10f1f-2171-40da-9f1e-9b7ed4f07312": [
+"/coach/feedback/65a10f1f-2171-40da-9f1e-9b7ed4f07312"
+],
+"/coach/feedback/6849938e-81b9-4e01-b787-3cf7702e9155": [
+"/coach/feedback/6849938e-81b9-4e01-b787-3cf7702e9155"
+],
+"/coach/feedback/6e77b306-bfe7-4b58-b8f4-f234eb1e5bb8": [
+"/coach/feedback/6e77b306-bfe7-4b58-b8f4-f234eb1e5bb8"
+],
+"/coach/feedback/745ddea5-d541-48a8-b49c-efbe54ebc905": [
+"/coach/feedback/745ddea5-d541-48a8-b49c-efbe54ebc905"
+],
+"/coach/feedback/7624e388-de8a-4771-aaf1-30384352eec8": [
+"/coach/feedback/7624e388-de8a-4771-aaf1-30384352eec8"
+],
+"/coach/feedback/772de87c-c214-47a5-8085-35590f9b43d5": [
+"/coach/feedback/772de87c-c214-47a5-8085-35590f9b43d5"
+],
+"/coach/feedback/7a979346-2e24-4c97-a9f1-c02f282d7a38": [
+"/coach/feedback/7a979346-2e24-4c97-a9f1-c02f282d7a38"
+],
+"/coach/feedback/804baf6c-5574-4e11-8578-729cf1f5328c": [
+"/coach/feedback/804baf6c-5574-4e11-8578-729cf1f5328c"
+],
+"/coach/feedback/88045836-c843-4ef5-90f8-50a03f3adaa8": [
+"/coach/feedback/88045836-c843-4ef5-90f8-50a03f3adaa8"
+],
+"/coach/feedback/88a4f734-c25b-4273-bc56-56cce864777a": [
+"/coach/feedback/88a4f734-c25b-4273-bc56-56cce864777a"
+],
+"/coach/feedback/89652be6-2cd3-43b3-aeee-5c492ea4237b": [
+"/coach/feedback/89652be6-2cd3-43b3-aeee-5c492ea4237b"
+],
+"/coach/feedback/99c85ba8-d117-4e77-a275-a798596426e3": [
+"/coach/feedback/99c85ba8-d117-4e77-a275-a798596426e3"
+],
+"/coach/feedback/9b666e06-9565-44fc-b7e1-b6a4ed44e682": [
+"/coach/feedback/9b666e06-9565-44fc-b7e1-b6a4ed44e682"
+],
+"/coach/feedback/b39a5ac2-27ba-4519-b683-d1378fb7bad6": [
+"/coach/feedback/b39a5ac2-27ba-4519-b683-d1378fb7bad6"
+],
+"/coach/feedback/b55c672d-a144-433e-a375-1c1390b4b8fd": [
+"/coach/feedback/b55c672d-a144-433e-a375-1c1390b4b8fd"
+],
+"/coach/feedback/b823ce21-dfe6-466e-a936-80fa1a07290e": [
+"/coach/feedback/b823ce21-dfe6-466e-a936-80fa1a07290e"
+],
+"/coach/feedback/b8364e4d-8b5e-45bb-8873-986486e807fd": [
+"/coach/feedback/b8364e4d-8b5e-45bb-8873-986486e807fd"
+],
+"/coach/feedback/ca109c71-410f-49fd-9719-411022408d9a": [
+"/coach/feedback/ca109c71-410f-49fd-9719-411022408d9a"
+],
+"/coach/feedback/d68a4fbd-7eeb-4175-b71e-0e77456b1d49": [
+"/coach/feedback/d68a4fbd-7eeb-4175-b71e-0e77456b1d49"
+],
+"/coach/feedback/d68f5b00-e596-4be7-9a16-2dc5a32346e9": [
+"/coach/feedback/d68f5b00-e596-4be7-9a16-2dc5a32346e9"
+],
+"/coach/feedback/db8f0d15-5dcd-445d-a503-25a4c5a2cb49": [
+"/coach/feedback/db8f0d15-5dcd-445d-a503-25a4c5a2cb49"
+],
+"/coach/feedback/e72cbaa9-5220-49ad-92a9-028011ee8df8": [
+"/coach/feedback/e72cbaa9-5220-49ad-92a9-028011ee8df8"
+],
+"/coach/feedback/eee6e493-8156-43a6-bf10-a78d64319754": [
+"/coach/feedback/eee6e493-8156-43a6-bf10-a78d64319754"
+],
+"/coach/feedback/f4f9551a-274d-40d5-a73c-738229fb10f1": [
+"/coach/feedback/f4f9551a-274d-40d5-a73c-738229fb10f1"
+],
+"/coach/feedback/f4ffa67f-cbe0-4b43-b548-3e234a5e5de0": [
+"/coach/feedback/f4ffa67f-cbe0-4b43-b548-3e234a5e5de0"
+],
+"/coach/goal-journey": [
+"/coach/goal-journey"
+],
+"/coach/memories": [
+"/coach/memories"
+],
+"/coach/memory-suggestions": [
+"/coach/memory-suggestions"
+],
+"/coach/plans/48249812-1c5f-4741-ba4d-59e1909f3407/workspace": [
+"/coach/plans/48249812-1c5f-4741-ba4d-59e1909f3407/workspace"
+],
+"/coach/profile": [
+"/coach/profile"
+],
+"/coach/progress": [
+"/coach/progress?days=7"
+],
+"/coach/readiness": [
+"/coach/readiness"
+],
+"/coach/training-load": [
+"/coach/training-load"
+],
+"/coach/training-plans": [
+"/coach/training-plans?limit=30"
+],
+"/garmin/status": [
+"/garmin/status"
+],
+"/garmin/zones": [
+"/garmin/zones"
+],
+"/health/development": [
+"/health/development?all=true",
+"/health/development?days=180",
+"/health/development?days=30",
+"/health/development?days=365",
+"/health/development?days=7",
+"/health/development?days=90"
+],
+"/health/range": [
+"/health/range?all=true",
+"/health/range?days=180",
+"/health/range?days=30",
+"/health/range?days=365",
+"/health/range?days=60",
+"/health/range?days=7",
+"/health/range?days=90"
+],
+"/health/resting-hr": [
+"/health/resting-hr?days=14"
+],
+"/health/sources": [
+"/health/sources"
+],
+"/health/today": [
+"/health/today?include_vo2=false"
+],
+"/races": [
+"/races"
+],
+"/races/next": [
+"/races/next"
+],
+"/settings/appearance": [
+"/settings/appearance"
+],
+"/settings/health-layout": [
+"/settings/health-layout"
+],
+"/settings/maps": [
+"/settings/maps"
+],
+"/settings/privacy": [
+"/settings/privacy"
+],
+"/settings/today": [
+"/settings/today"
+],
+"/settings/update-status": [
+"/settings/update-status"
+],
+"/setup/status": [
+"/setup/status"
+],
+"/sparkyfitness/status": [
+"/sparkyfitness/status"
+],
+"/tours": [
+"/tours"
+],
+"/tours/00000000-0000-4000-8000-000000000001": [
+"/tours/00000000-0000-4000-8000-000000000001"
+],
+"/tours/00000000-0000-4000-8000-000000000002": [
+"/tours/00000000-0000-4000-8000-000000000002"
+],
+"/tours/options": [
+"/tours/options"
+],
+"/weather/settings": [
+"/weather/settings"
+],
+"/weather/windows": [
+"/weather/windows?minutes=75"
+]
+}
+}

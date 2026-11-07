@@ -1,4 +1,5 @@
 "use client";
+import {withBase} from "../lib/basePath";
 // alpha.86: 3D route map – real terrain, tilt/rotate, exaggeration, topo or street map,
 // live marker synced with chart and slider, and a camera flyover along the tour.
 // MapLibre GL is loaded only when 3D is switched on, so the normal page stays light.
@@ -9,7 +10,7 @@ import {routeSegments,type Metric,type Sample} from "../lib/activityExplorer";
 import {along,colouredRoute,lookAhead,mainHeading,nearestOnScreen,positionAt,TILES,turnTowards} from "../lib/map3d";
 
 type Base="topo"|"osm";
-const WORKER=`/vendor/maplibre-gl-worker.mjs`;
+const WORKER=withBase("/vendor/maplibre-gl-worker.mjs");
 const read=(key:string,fallback:string)=>{try{return localStorage.getItem(key)??fallback}catch{return fallback}};
 const write=(key:string,value:string)=>{try{localStorage.setItem(key,value)}catch{}};
 

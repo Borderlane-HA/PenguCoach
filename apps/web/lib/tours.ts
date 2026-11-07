@@ -119,7 +119,10 @@ export const ERRORS:Record<string,{de:string;en:string}>={
   BROUTER_URL_INVALID:{de:"Die Adresse ist ungültig. Beispiel: http://192.168.1.50:17777",en:"The address is invalid. Example: http://192.168.1.50:17777"},
   ROUTING_FAILED:{de:"Für diese Vorgaben wurde keine Tour gefunden.",en:"No tour was found for these settings."},
 };
-export function errorText(code:string,de:boolean){const e=ERRORS[code];return e?(de?e.de:e.en):(de?`Tour konnte nicht geplant werden (${code}).`:`Could not plan the tour (${code}).`)}
+export function errorText(code:string,de:boolean){const e=ERRORS[code];if(e)return de?e.de:e.en;
+  // A full sentence (e.g. the demo's read-only notice) is shown as it is.
+  if(code.includes(" "))return code;
+  return de?`Tour konnte nicht geplant werden (${code}).`:`Could not plan the tour (${code}).`}
 
 /** Surface bar segments in a fixed order. */
 export function surfaceBar(surface:Record<string,number>){

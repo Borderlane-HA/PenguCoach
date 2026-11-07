@@ -10,7 +10,7 @@
 
 PenguCoach runs on your own server (Proxmox LXC or Docker). It reads Garmin Connect and/or SparkyFitness, imports FIT/GPX/TCX files, calculates its numbers deterministically and only then lets a local or cloud AI interpret them – with cloud access to health data switched off until you allow it.
 
-What changed in each version: **[CHANGELOG](CHANGELOG.md)** · in the app under *Admin → System & updates*.
+**▶ [Try the live demo](https://borderlane-ha.github.io/PenguCoach/)** – the real app with made-up data, nothing to install. · What changed in each version: **[CHANGELOG](CHANGELOG.md)**
 
 ## Highlights
 
@@ -78,7 +78,7 @@ See [`SECURITY.md`](SECURITY.md).
 
 ## Documentation
 
-[Today](docs/TODAY_FLOW.md) · [Health](docs/HEALTH_DEVELOPMENT.md) · [Activity detail](docs/ACTIVITY_DETAIL_V2.md) · [Route explorer & 3D](docs/ACTIVITY_ROUTE_EXPLORER.md) · [Tour planner](docs/TOUR_PLANNER.md) · [Showcase](docs/SHOWCASE.md) · [Recap](docs/RECAP.md) · [Training workspace](docs/TRAINING_WORKSPACE.md) · [Execution review](docs/TRAINING_EXECUTION.md) · [AI analysis & planning](docs/AI_ANALYSIS_AND_PLANNING.md) · [AI Studio](docs/AI_STUDIO.md) · [OpenRouter](docs/OPENROUTER.md) · [Unified data](docs/UNIFIED_DATA.md) · [Local training features](docs/LOCAL_TRAINING_FEATURES.md) · [Personalization](docs/PERSONALIZATION.md) · [GitHub upload](docs/GITHUB_UPLOAD.md) · [Roadmap](docs/ROADMAP.md)
+[Today](docs/TODAY_FLOW.md) · [Health](docs/HEALTH_DEVELOPMENT.md) · [Activity detail](docs/ACTIVITY_DETAIL_V2.md) · [Route explorer & 3D](docs/ACTIVITY_ROUTE_EXPLORER.md) · [Tour planner](docs/TOUR_PLANNER.md) · [Showcase](docs/SHOWCASE.md) · [Recap](docs/RECAP.md) · [Training workspace](docs/TRAINING_WORKSPACE.md) · [Execution review](docs/TRAINING_EXECUTION.md) · [AI analysis & planning](docs/AI_ANALYSIS_AND_PLANNING.md) · [AI Studio](docs/AI_STUDIO.md) · [OpenRouter](docs/OPENROUTER.md) · [Unified data](docs/UNIFIED_DATA.md) · [Local training features](docs/LOCAL_TRAINING_FEATURES.md) · [Personalization](docs/PERSONALIZATION.md) · [GitHub upload](docs/GITHUB_UPLOAD.md) · [Live demo](docs/DEMO.md) · [Roadmap](docs/ROADMAP.md)
 
 ## Repository layout
 

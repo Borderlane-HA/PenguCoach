@@ -1,6 +1,6 @@
 {
   "name": "pengucoach-web",
-  "version": "0.1.0-alpha.87",
+  "version": "0.1.0-alpha.88",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -9,7 +9,9 @@
     "test:explorer": "node --test tests/activityExplorer.test.cjs",
     "test:numbers": "node --test tests/numberInput.test.cjs",
     "test:personalization": "node --test tests/personalization.test.cjs",
-    "test:map3d": "node --test tests/map3d.test.cjs"
+    "test:map3d": "node --test tests/map3d.test.cjs",
+    "build:demo": "node scripts/build-demo.mjs",
+    "test:demo": "node --test tests/demo.test.cjs"
   },
   "dependencies": {
     "@fontsource-variable/inter": "5.2.8",

@@ -1679,3 +1679,9 @@ p.tour-variant-stats{margin:0;justify-content:flex-start}
 .tour-export .row button{width:auto}
 @media(max-width:1000px){.tour-layout{grid-template-columns:1fr}.tour-main{position:static}.tour-map,.tour-main .activity-route-map.map3d{height:420px;min-height:0}}
 @media(max-width:550px){.tour-map,.tour-main .activity-route-map.map3d{height:340px}.tour-sports{grid-template-columns:1fr 1fr}.tour-saved li{grid-template-columns:40px minmax(0,1fr)}.tour-thumb{width:40px;height:40px}.tour-saved-actions{grid-column:1/-1;justify-content:flex-start}.tour-variant-pick{flex-wrap:wrap}.tour-variant-stats{margin-left:21px;justify-content:flex-start;width:100%}.activities-head .activity-tour-link{width:100%}}
+/* alpha.88: public demo */
+.demo-banner{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:9px 18px;background:linear-gradient(90deg,color-mix(in srgb,var(--accent) 18%,var(--panel)),var(--panel));border-bottom:1px solid var(--border);font-size:.84rem}
+.demo-banner strong{padding:2px 9px;border-radius:999px;background:var(--accent);color:var(--primary-ink,#fff);font-size:.72rem;letter-spacing:.06em;text-transform:uppercase}
+.demo-banner span{color:var(--muted)}
+.demo-banner a{margin-left:auto;font-weight:750;color:var(--accent-strong,var(--accent))}
+@media(max-width:640px){.demo-banner{padding:8px 12px;font-size:.76rem}.demo-banner a{margin-left:0}}

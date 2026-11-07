@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.0-alpha.88
+
+- **Live demo on GitHub Pages:** https://borderlane-ha.github.io/PenguCoach/ – the real PenguCoach interface with made-up data, nothing to install. Visitors can click through Today, Health, Activities (charts, 3D map, flyover), Training, Calendar, the AI Coach (example conversation), Tours (example suggestions, 3D, GPX) and switch themes and language. Dates move along with the calendar, so the demo always looks current. Saving, sync and new AI answers say clearly that they need a real installation.
+  - Built and published automatically by the new workflow `.github/workflows/demo-pages.yml` on every upload that changes the web app. One-time setup: Settings → Pages → Source "GitHub Actions".
+  - `npm run build:demo` builds it locally (static export into `apps/web/out`).
+  - The demo account "Pia" and all her values are invented; GPS tracks are synthetic loops in the Franconian Switzerland. A test checks that the demo data contains no personal values.
+- The app now also works under a sub path (needed for the demo); normal installations are unchanged.
+- README links the live demo; new `docs/DEMO.md`; help updated.
+- No database migration.
+
 ## 0.1.0-alpha.87
 
 - **New page "Tours" (tour planner):** plan a tour per sport – road bike, gravel, MTB, bike tour, running, trail running, hiking.

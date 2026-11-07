@@ -1,4 +1,8 @@
+import {DEMO} from "./basePath";
+import {installDemo} from "./demo";
 export const API=process.env.NEXT_PUBLIC_API_BASE_URL??"/api/v1";
+// alpha.88: in the static demo every API call is answered from recorded fake data.
+if(DEMO&&typeof window!=="undefined")installDemo();
 export class ApiError extends Error{
   constructor(message:string,readonly status:number){super(message);this.name="ApiError"}
 }

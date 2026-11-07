@@ -1,4 +1,5 @@
 "use client";
+import {withBase} from "./basePath";
 import {createContext,Fragment,useContext,useEffect,useRef,useState} from "react";
 import {usePathname} from "next/navigation";
 import {api,ApiError} from "./api";
@@ -28,7 +29,7 @@ export default function SessionProvider({children}:{children:React.ReactNode}){
    try{
     const user=await api<Me>("/auth/me",{cache:"no-store",signal:controller.signal});
     if(!active)return;
-    if(user.safety_required){location.replace("/safety");return}
+    if(user.safety_required){location.replace(withBase("/safety"));return}
     const changed=identity.current!==user.id;identity.current=user.id;
     setCacheScope(user.id,user.timezone||"Europe/Berlin");setMe(user);authAt.current=Date.now();
     setUnavailable(false);setPaused(false);retries=0;
@@ -48,7 +49,7 @@ export default function SessionProvider({children}:{children:React.ReactNode}){
   if(!loaded.current)void auth();
   const focus=()=>{if(document.visibilityState==="visible"&&Date.now()-authAt.current>60000)retry()};
   const changed=()=>invalidateDataCache();
-  const expired=()=>{clearRetry();retries=MAX_AUTO_RETRIES;clearDataCache();setMe(null);location.replace("/")};
+  const expired=()=>{clearRetry();retries=MAX_AUTO_RETRIES;clearDataCache();setMe(null);location.replace(withBase("/"))};
   window.addEventListener("focus",focus);window.addEventListener("online",retry);document.addEventListener("visibilitychange",focus);
   window.addEventListener("pengucoach-appearance-changed",appearance);window.addEventListener("pengucoach-data-changed",changed);window.addEventListener("pengucoach-today-refresh",changed);window.addEventListener("pengucoach-feedback-updated",changed);window.addEventListener("pengucoach-session-expired",expired);
   return()=>{
@@ -58,5 +59,5 @@ export default function SessionProvider({children}:{children:React.ReactNode}){
   };
  },[protectedPage]);
  useEffect(()=>{if(!protectedPage){loaded.current=false;identity.current="";clearDataCache();setMe(null);setAppearance(null);setUnavailable(false);setChecking(false);setPaused(false)}},[protectedPage]);
- return <Session.Provider value={{me,appearance}}>{protectedPage&&!me?<main className="auth-loading"><div className="loading-mark"><img src="/pengucoach-icon.svg" alt=""/></div><p role="status">{unavailable?bi(lang,"PenguCoach ist momentan nicht erreichbar. Dein Anmeldestatus konnte noch nicht geprüft werden.","PenguCoach is temporarily unavailable. Your sign-in status could not be checked yet."):bi(lang,"PenguCoach wird geladen…","Loading PenguCoach…")}</p>{unavailable&&<><small>{paused?bi(lang,"Die automatische Prüfung ist pausiert. Du kannst sie jederzeit erneut starten.","Automatic checks are paused. You can restart them at any time."):bi(lang,"Die Verbindung wird automatisch erneut geprüft.","The connection is checked again automatically.")}</small><button type="button" className="ghost" disabled={checking} onClick={()=>retryAuth.current()}>{checking?bi(lang,"Prüfe …","Checking …"):bi(lang,"Erneut prüfen","Try again")}</button></>}</main>:<Fragment key={me?.id||"public"}>{children}</Fragment>}</Session.Provider>;
+ return <Session.Provider value={{me,appearance}}>{protectedPage&&!me?<main className="auth-loading"><div className="loading-mark"><img src={withBase("/pengucoach-icon.svg")} alt=""/></div><p role="status">{unavailable?bi(lang,"PenguCoach ist momentan nicht erreichbar. Dein Anmeldestatus konnte noch nicht geprüft werden.","PenguCoach is temporarily unavailable. Your sign-in status could not be checked yet."):bi(lang,"PenguCoach wird geladen…","Loading PenguCoach…")}</p>{unavailable&&<><small>{paused?bi(lang,"Die automatische Prüfung ist pausiert. Du kannst sie jederzeit erneut starten.","Automatic checks are paused. You can restart them at any time."):bi(lang,"Die Verbindung wird automatisch erneut geprüft.","The connection is checked again automatically.")}</small><button type="button" className="ghost" disabled={checking} onClick={()=>retryAuth.current()}>{checking?bi(lang,"Prüfe …","Checking …"):bi(lang,"Erneut prüfen","Try again")}</button></>}</main>:<Fragment key={me?.id||"public"}>{children}</Fragment>}</Session.Provider>;
 }

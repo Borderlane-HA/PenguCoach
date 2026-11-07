@@ -1,5 +1,6 @@
 "use client";
 import ClientLink from "next/link";
+import {withBase} from "../lib/basePath";
 
 
 import {useEffect,useMemo,useRef,useState} from "react";
@@ -76,7 +77,7 @@ export default function ActivityPanorama({settings,point,points,de,onGoogleActiv
     {open&&credential&&<>
       <div className="panorama-controls"><span className="badge">{provider==="google"?"Google Street View":"Apple Look Around"}</span><label className="checkline"><input type="checkbox" checked={follow} onChange={e=>setFollow(e.target.checked)}/>{de?"Diagramm folgen":"Follow chart"}</label><button className="ghost compact" type="button" disabled={!point} onClick={()=>setTarget(point)}>{de?"Diese Stelle laden":"Load this point"}</button></div>
       {!target?<div className="panorama-empty">{de?"Für diese Stelle fehlen GPS-Koordinaten.":"GPS coordinates are missing at this point."}</div>:provider==="google"?<iframe className="panorama-frame" title="Google Street View" src={googleUrl} referrerPolicy="strict-origin-when-cross-origin" allowFullScreen/>:<div className="apple-panorama-wrap">
-        <iframe ref={frame} className="panorama-frame" title="Apple Look Around" src="/panorama/apple" onLoad={sendApple} referrerPolicy="strict-origin-when-cross-origin" allowFullScreen/>
+        <iframe ref={frame} className="panorama-frame" title="Apple Look Around" src={withBase("/panorama/apple")} onLoad={sendApple} referrerPolicy="strict-origin-when-cross-origin" allowFullScreen/>
         {appleStatus!=="loaded"&&<div className="panorama-empty" role="status">{appleStatus==="loading"?(de?"Look Around wird geladen…":"Loading Look Around…"):appleStatus==="unavailable"?(de?"Hier ist keine Look-Around-Aufnahme verfügbar.":"No Look Around imagery is available here."):appleStatus==="browser-error"?(de?"Dieser Browser unterstützt Look Around nicht.":"This browser does not support Look Around."):(de?"Look Around konnte nicht geladen werden. Token und erlaubte Website prüfen.":"Look Around could not load. Check the token and allowed website.")}</div>}
       </div>}
       <small className="panorama-note">{de?"Aufnahmen des Anbieters, nicht vom Zeitpunkt deines Trainings. Die nächste verfügbare Aufnahme kann neben deiner tatsächlichen Position liegen. Ohne Abdeckung zeigt Google einen Hinweis im Fenster.":"Provider imagery, not from the time of your workout. The nearest available image may be beside your actual position. Google displays a notice in the viewer where imagery is unavailable."}</small>

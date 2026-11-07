@@ -1,4 +1,5 @@
 "use client";
+import {withBase} from "../lib/basePath";
 
 import {FormEvent,useEffect,useState} from "react";
 import {api} from "../lib/api";
@@ -6,11 +7,11 @@ import {bi,useI18n} from "../lib/i18n";
 
 export default function Home(){
   const{lang,setLang}=useI18n();const[username,setUsername]=useState("");const[password,setPassword]=useState("");const[error,setError]=useState("");
-  useEffect(()=>{api<{setup_required:boolean}>("/setup/status").then(s=>{if(s.setup_required){location.replace("/setup");return}api<{safety_required:boolean}>("/auth/me").then(me=>location.replace(me.safety_required?"/safety":"/today")).catch(()=>undefined)}).catch(()=>undefined)},[]);
-  async function submit(e:FormEvent){e.preventDefault();setError("");try{await api("/auth/login",{method:"POST",body:JSON.stringify({username,password})});location.replace("/safety")}catch(e){setError(e instanceof Error?e.message:"Login failed")}}
+  useEffect(()=>{api<{setup_required:boolean}>("/setup/status").then(s=>{if(s.setup_required){location.replace(withBase("/setup"));return}api<{safety_required:boolean}>("/auth/me").then(me=>location.replace(withBase(me.safety_required?"/safety":"/today"))).catch(()=>undefined)}).catch(()=>undefined)},[]);
+  async function submit(e:FormEvent){e.preventDefault();setError("");try{await api("/auth/login",{method:"POST",body:JSON.stringify({username,password})});location.replace(withBase("/safety"))}catch(e){setError(e instanceof Error?e.message:"Login failed")}}
   return <main className="login-page">
     <section className="login-brand-panel">
-      <div className="login-brand"><span className="brand-mark large custom"><img src="/pengucoach-icon.svg" alt=""/></span><span><strong>PenguCoach</strong><small>Training & Health</small></span></div>
+      <div className="login-brand"><span className="brand-mark large custom"><img src={withBase("/pengucoach-icon.svg")} alt=""/></span><span><strong>PenguCoach</strong><small>Training & Health</small></span></div>
       <div className="login-message"><span className="eyebrow">SELF-HOSTED · PRIVATE · YOUR DATA</span><h1>{bi(lang,"Training verstehen. Gesundheit im Blick behalten.","Understand training. Keep health in view.")}</h1><p>{bi(lang,"Garmin-Daten, FIT-Tiefenanalyse und dein persönlicher AI Coach – lokal kontrolliert und übersichtlich aufbereitet.","Garmin data, deep FIT analytics and your personal AI Coach — locally controlled and clearly presented.")}</p></div>
       <div className="login-feature-row"><span>✓ Garmin & FIT</span><span>✓ AI Coach</span><span>✓ {bi(lang,"Lokale Daten","Local data")}</span></div>
     </section>

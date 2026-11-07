@@ -1,4 +1,5 @@
 "use client";
+import {DEMO,withBase} from "../lib/basePath";
 
 import {useEffect,useMemo,useRef,useState} from "react";
 import {usePathname} from "next/navigation";
@@ -103,7 +104,7 @@ export default function AppShell({children,title}:{children:React.ReactNode;titl
   const current=[...nav,...settings,...admin,help].find(x=>active(x.href));
   const initials=(me?.username||"PC").slice(0,2).toUpperCase();
   const avatar=appearance?.has_avatar?`/api/v1/settings/avatar?v=${appearance.avatar_version??0}`:null;
-  const appIcon=appearance?.has_app_icon?`/api/v1/settings/app-icon?v=${appearance.app_icon_version??0}`:"/pengucoach-icon.svg";
+  const appIcon=appearance?.has_app_icon?`/api/v1/settings/app-icon?v=${appearance.app_icon_version??0}`:withBase("/pengucoach-icon.svg");
 
   async function logout(){
     if(loggingOut)return;
@@ -114,11 +115,11 @@ export default function AppShell({children,title}:{children:React.ReactNode;titl
         const key=localStorage.key(i);
         if(key?.startsWith("pengucoach_")&&key!=="pengucoach_lang")localStorage.removeItem(key);
       }
-      location.replace("/");
+      location.replace(withBase("/"));
     }
   }
 
-  if(!me)return <main className="auth-loading"><div className="loading-mark"><img src="/pengucoach-icon.svg" alt=""/></div><p>{bi(lang,"PenguCoach wird geladen…","Loading PenguCoach…")}</p></main>;
+  if(!me)return <main className="auth-loading"><div className="loading-mark"><img src={withBase("/pengucoach-icon.svg")} alt=""/></div><p>{bi(lang,"PenguCoach wird geladen…","Loading PenguCoach…")}</p></main>;
 
   const settingsLabel=bi(lang,"Einstellungen","Settings");
   const toggleLabel=sidebar.collapsed?bi(lang,"Seitenleiste ausklappen","Expand sidebar"):bi(lang,"Seitenleiste einklappen","Collapse sidebar");
@@ -156,7 +157,7 @@ export default function AppShell({children,title}:{children:React.ReactNode;titl
       </div>
     </aside>
 
-    <section className="app-main"><UpdateBanner/><header className="topbar"><div className="top-heading"><div className="top-context"><span className="top-kicker">PenguCoach</span><strong>{title??current?.label??bi(lang,"Übersicht","Overview")}</strong></div></div><div className="top-actions"><details ref={mobileMenu} className="mobile-more"><summary aria-label={bi(lang,"Navigationsmenü öffnen","Open navigation menu")} title={settingsLabel}><Icon name="settings"/></summary><nav aria-label={settingsLabel}>{group("settings",true)}{me.role==="admin"&&group("admin",true)}<div className="mobile-nav-group">{link(help,true)}</div><UpdateNotice version={me.app_version} mobile/></nav></details><StatusMenu/><button className="language-switch" onClick={()=>setLang(lang==="de"?"en":"de")} aria-label={bi(lang,"Sprache wechseln","Change language")}>{lang==="de"?"DE":"EN"}<span>⌄</span></button><Link prefetch={false} className={`top-avatar ${avatar?"photo":""}`} href="/settings/appearance" title={me.username}>{avatar?<img src={avatar} alt=""/>:initials}</Link><button className="top-logout" type="button" onClick={()=>void logout()} disabled={loggingOut} title={bi(lang,"Abmelden","Sign out")} aria-label={bi(lang,"Abmelden","Sign out")}><Icon name="logout"/></button></div></header><main className="stack page">{title&&<div className="page-title"><h1>{title}</h1></div>}{children}</main></section>
+    <section className="app-main">{DEMO?<div className="demo-banner" role="note"><strong>{bi(lang,"Demo","Demo")}</strong><span>{bi(lang,"Erfundene Daten · Änderungen werden nicht gespeichert","Made-up data · changes are not saved")}</span><a href="https://github.com/Borderlane-HA/PenguCoach" target="_blank" rel="noopener">{bi(lang,"PenguCoach selbst installieren →","Install PenguCoach yourself →")}</a></div>:<UpdateBanner/>}<header className="topbar"><div className="top-heading"><div className="top-context"><span className="top-kicker">PenguCoach</span><strong>{title??current?.label??bi(lang,"Übersicht","Overview")}</strong></div></div><div className="top-actions"><details ref={mobileMenu} className="mobile-more"><summary aria-label={bi(lang,"Navigationsmenü öffnen","Open navigation menu")} title={settingsLabel}><Icon name="settings"/></summary><nav aria-label={settingsLabel}>{group("settings",true)}{me.role==="admin"&&group("admin",true)}<div className="mobile-nav-group">{link(help,true)}</div><UpdateNotice version={me.app_version} mobile/></nav></details><StatusMenu/><button className="language-switch" onClick={()=>setLang(lang==="de"?"en":"de")} aria-label={bi(lang,"Sprache wechseln","Change language")}>{lang==="de"?"DE":"EN"}<span>⌄</span></button><Link prefetch={false} className={`top-avatar ${avatar?"photo":""}`} href="/settings/appearance" title={me.username}>{avatar?<img src={avatar} alt=""/>:initials}</Link><button className="top-logout" type="button" onClick={()=>void logout()} disabled={loggingOut} title={bi(lang,"Abmelden","Sign out")} aria-label={bi(lang,"Abmelden","Sign out")}><Icon name="logout"/></button></div></header><main className="stack page">{title&&<div className="page-title"><h1>{title}</h1></div>}{children}</main></section>
 
     <nav className="mobile-dock" aria-label={bi(lang,"Mobile Navigation","Mobile navigation")}>{nav.filter(x=>x.dock!==false).map(x=><Link prefetch={false} className={active(x.href)?"active":""} href={x.href} key={x.href} aria-current={active(x.href)?"page":undefined}><Icon name={x.icon}/><span>{x.label}</span></Link>)}</nav>
   </div>;
